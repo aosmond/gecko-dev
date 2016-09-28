@@ -463,5 +463,11 @@ nsWebPDecoder::FinishedData()
   return Transition::TerminateFailure();
 }
 
+Maybe<Telemetry::HistogramID>
+nsWebPDecoder::SpeedHistogram() const
+{
+  return Some(Telemetry::IMAGE_DECODE_SPEED_WEBP);
+}
+
 } // namespace image
 } // namespace mozilla

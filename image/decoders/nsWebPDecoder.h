@@ -16,7 +16,7 @@ namespace mozilla {
 namespace image {
 class RasterImage;
 
-class nsWebPDecoder : public Decoder
+class nsWebPDecoder final : public Decoder
 {
 public:
   virtual ~nsWebPDecoder();
@@ -24,6 +24,7 @@ public:
 protected:
   LexerResult DoDecode(SourceBufferIterator& aIterator,
                        IResumable* aOnResume) override;
+  Maybe<Telemetry::HistogramID> SpeedHistogram() const override;
 
 private:
   friend class DecoderFactory;

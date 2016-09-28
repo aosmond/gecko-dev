@@ -69,7 +69,6 @@ DecoderFactory::GetDecoderType(const char* aMimeType)
   // Icon
   } else if (!strcmp(aMimeType, IMAGE_ICON_MS)) {
     type = DecoderType::ICON;
-  }
 
   // WebP
   } else if (!strcmp(aMimeType, IMAGE_WEBP) &&
