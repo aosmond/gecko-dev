@@ -20,6 +20,7 @@
 #include "mozilla/Maybe.h"
 #include "mozilla/UniquePtr.h"
 #include "mozilla/gfx/2D.h"
+#include "skia/src/core/SkBlitRow.h"
 
 #include "DownscalingFilter.h"
 #include "SurfaceCache.h"
@@ -127,6 +128,11 @@ public:
   Maybe<SurfaceInvalidRect> TakeInvalidRect() override
   {
     return mNext.TakeInvalidRect();
+  }
+
+  gfx::IntRect DirtyRect() const override
+  {
+    return mNext.DirtyRect();
   }
 
 protected:
@@ -328,6 +334,421 @@ private:
                                  /// progressive display.
 };
 
+//////////////////////////////////////////////////////////////////////////////
+// BlendAnimationFilter
+//////////////////////////////////////////////////////////////////////////////
+
+template <typename Next> class BlendAnimationFilter;
+
+/**
+ * A configuration struct for BlendAnimationFilter.
+ */
+struct BlendAnimationConfig
+{
+  template <typename Next> using Filter = BlendAnimationFilter<Next>;
+  gfx::IntRect mFrameRect;     /// The surface subrect which contains data.
+  BlendMethod mBlendMethod;    /// The blend method.
+  imgFrame* mCurrentFrame;     /// The current frame in the animation.
+  imgFrame* mRestoreFrame;     /// The previous frame in the animation for the
+                               /// purposes of disposing RESTORE_PREVIOUS.
+};
+
+/**
+ * BlendAnimationFilter turns a partial image as part of an animation into a
+ * complete frame given its frame rect, blend method, and the base image's
+ * data buffer, frame rect and disposal method. Any excess data caused by a
+ * frame rect not being contained by the output size will be discarded.
+ *
+ * The 'Next' template parameter specifies the next filter in the chain.
+ */
+template <typename Next>
+class BlendAnimationFilter final : public SurfaceFilter
+{
+public:
+  BlendAnimationFilter()
+    : mRow(0)
+    , mRowLength(0)
+    , mOverProc(nullptr)
+    , mBaseFrameRowPtr(nullptr)
+  { }
+
+  template <typename... Rest>
+  nsresult Configure(BlendAnimationConfig& aConfig, Rest... aRest)
+  {
+    nsresult rv = mNext.Configure(aRest...);
+    if (NS_FAILED(rv)) {
+      return rv;
+    }
+
+    mFrameRect = mUnclampedFrameRect = aConfig.mFrameRect;
+    gfx::IntSize outputSize = mNext.InputSize();
+    mRowLength = outputSize.width * sizeof(uint32_t);
+
+    // Forbid frame rects with negative size.
+    if (aConfig.mFrameRect.width < 0 || aConfig.mFrameRect.height < 0) {
+      return NS_ERROR_INVALID_ARG;
+    }
+
+    // Clamp mFrameRect to the output size.
+    gfx::IntRect outputRect(0, 0, outputSize.width, outputSize.height);
+    mFrameRect = mFrameRect.Intersect(outputRect);
+    bool fullFrame = outputRect.IsEqualEdges(mFrameRect);
+
+    // If there's no intersection, |mFrameRect| will be an empty rect positioned
+    // at the maximum of |inputRect|'s and |aFrameRect|'s coordinates, which is
+    // not what we want. Force it to (0, 0) in that case.
+    if (mFrameRect.IsEmpty()) {
+      mFrameRect.MoveTo(0, 0);
+    }
+
+    BlendMethod blendMethod = aConfig.mBlendMethod;
+    switch (blendMethod) {
+      default:
+        blendMethod = BlendMethod::SOURCE;
+        MOZ_FALLTHROUGH_ASSERT("Unexpected blend method!");
+      case BlendMethod::SOURCE:
+        // Default, overwrites base frame data (if any) with new.
+        break;
+      case BlendMethod::OVER:
+        // OVER only has an impact on the output if we have new data to blend
+        // with.
+        if (mFrameRect.IsEmpty()) {
+          blendMethod = BlendMethod::SOURCE;
+        }
+        break;
+    }
+
+    // Determine what we need to clear and what we need to copy. If this frame
+    // is a full frame and uses source blending, there is no need to consider
+    // the disposal method of the previous frame.
+    if (fullFrame && blendMethod == BlendMethod::SOURCE) {
+      mDirtyRect = outputRect;
+    } else if (aConfig.mCurrentFrame) {
+      gfx::IntRect currRect;
+      auto disposalMethod = GetAnimationState(aConfig.mCurrentFrame, currRect);
+      switch (disposalMethod) {
+        default:
+          MOZ_FALLTHROUGH_ASSERT("Unexpected DisposalMethod");
+        case DisposalMethod::NOT_SPECIFIED:
+        case DisposalMethod::KEEP:
+          mBaseFrame = aConfig.mCurrentFrame->RawAccessRef();
+          MOZ_ASSERT(mBaseFrame);
+          mDirtyRect = mFrameRect;
+          break;
+        case DisposalMethod::RESTORE_PREVIOUS:
+          if (aConfig.mRestoreFrame) {
+            gfx::IntRect prevRect;
+            disposalMethod = GetAnimationState(aConfig.mRestoreFrame,
+                                               prevRect);
+
+            // The restore frame is not necessarily adjacent to the current
+            // frame, because the disposal methods chain together.
+            // RESTORE_PREVIOUS is the only recursive disposal method that we
+            // should have already handled.
+            MOZ_ASSERT(disposalMethod != DisposalMethod::RESTORE_PREVIOUS);
+
+            // We are restored to the post-disposal state, but we have the
+            // complete frame.
+            if (disposalMethod == DisposalMethod::CLEAR) {
+              ConfigureBaseFrame(aConfig.mRestoreFrame, blendMethod,
+                                 outputRect, prevRect);
+            } else {
+              mBaseFrame = aConfig.mRestoreFrame->RawAccessRef();
+              MOZ_ASSERT(mBaseFrame);
+            }
+
+            // We don't know what the aggregate impact of the frame rects are
+            // so for now we just reset the whole image.
+            mDirtyRect = outputRect;
+            break;
+          }
+          // If we are told to use the previous frame, but there is none (i.e.
+          // we only have the first frame and are making the second), we need
+          // to treat it the same as clear according to the APNG specification.
+          MOZ_FALLTHROUGH;
+        case DisposalMethod::CLEAR:
+          ConfigureBaseFrame(aConfig.mCurrentFrame, blendMethod,
+                             outputRect, currRect);
+
+          // Calculate the area which has changed from the current frame.
+          {
+            Maybe<gfx::IntRect> dirtyRect = mFrameRect.SafeUnion(currRect);
+            mDirtyRect = dirtyRect ? dirtyRect->Intersect(outputRect)
+                                   : outputRect;
+          }
+          break;
+      }
+    } else {
+      if (!fullFrame) {
+        // This is the first frame, clear everything.
+        mClearRect = outputRect;
+      }
+      mDirtyRect = outputRect;
+    }
+
+    if (mBaseFrame) {
+      MOZ_ASSERT(mBaseFrame->GetImageSize() == outputSize);
+      MOZ_ASSERT(mBaseFrame->IsFinished());
+    } else {
+      // Switch to SOURCE if no base frame to ensure we don't allocate an
+      // intermediate buffer below. OVER does nothing without the base frame
+      // data.
+      blendMethod = BlendMethod::SOURCE;
+    }
+
+    // Skia provides arch-specific accelerated methods to perform blending.
+    // Note that this is an internal Skia API and may be prone to change,
+    // but we avoid the overhead of setting up Skia objects.
+    if (blendMethod == BlendMethod::OVER) {
+      mOverProc = SkBlitRow::Factory32(SkBlitRow::kSrcPixelAlpha_Flag32);
+      MOZ_ASSERT(mOverProc);
+    }
+
+    // We don't need an intermediate buffer unless the unclamped frame rect
+    // width is larger than the clamped frame rect width. In that case, the
+    // caller will end up writing data that won't end up in the final image at
+    // all, and we'll need a buffer to give that data a place to go.
+    if (mFrameRect.width < mUnclampedFrameRect.width || mOverProc) {
+      mBuffer.reset(new (fallible) uint8_t[mUnclampedFrameRect.width *
+                                           sizeof(uint32_t)]);
+      if (MOZ_UNLIKELY(!mBuffer)) {
+        return NS_ERROR_OUT_OF_MEMORY;
+      }
+
+      memset(mBuffer.get(), 0, mUnclampedFrameRect.width * sizeof(uint32_t));
+    }
+
+    ConfigureFilter(mUnclampedFrameRect.Size(), sizeof(uint32_t));
+    return NS_OK;
+  }
+
+  Maybe<SurfaceInvalidRect> TakeInvalidRect() override
+  {
+    return mNext.TakeInvalidRect();
+  }
+
+  gfx::IntRect DirtyRect() const override
+  {
+    return mDirtyRect;
+  }
+
+protected:
+  uint8_t* DoResetToFirstRow() override
+  {
+    uint8_t* rowPtr = mNext.ResetToFirstRow();
+    if (rowPtr == nullptr) {
+      mRow = mFrameRect.YMost();
+      return nullptr;
+    }
+
+    mRow = 0;
+    if (mBaseFrame) {
+      mBaseFrameRowPtr = mBaseFrame->GetImageData();
+      MOZ_ASSERT(mBaseFrameRowPtr);
+    }
+
+    while (mRow < mFrameRect.y) {
+      WriteBaseFrameRow();
+      AdvanceRowOutsideFrameRect();
+    }
+
+    // We're at the beginning of the frame rect now, so return if we're either
+    // ready for input or we're already done.
+    rowPtr = mBuffer ? mBuffer.get() : mNext.CurrentRowPointer();
+    if (!mFrameRect.IsEmpty() || rowPtr == nullptr) {
+      // Note that the pointer we're returning is for the next row we're
+      // actually going to write to, but we may discard writes before that point
+      // if mRow < mFrameRect.y.
+      mRow = mUnclampedFrameRect.y;
+      WriteBaseFrameRow();
+      return AdjustRowPointer(rowPtr);
+    }
+
+    // We've finished the region specified by the frame rect, but the frame rect
+    // is empty, so we need to output the rest of the image immediately. Advance
+    // to the end of the next pipeline stage's buffer, outputting rows that are
+    // copied from the base frame and/or cleared.
+    WriteBaseFrameRowsUntilComplete();
+
+    mRow = mFrameRect.YMost();
+    return nullptr;  // We're done.
+  }
+
+  uint8_t* DoAdvanceRow() override
+  {
+    uint8_t* rowPtr = nullptr;
+
+    const int32_t currentRow = mRow;
+    mRow++;
+
+    // The unclamped frame rect has a negative offset which means -y rows from
+    // the decoder need to be discarded before we advance properly.
+    if (currentRow >= 0 && mBaseFrameRowPtr) {
+      mBaseFrameRowPtr += mRowLength;
+    }
+
+    if (currentRow < mFrameRect.y) {
+      // This row is outside of the frame rect, so just drop it on the floor.
+      rowPtr = mBuffer ? mBuffer.get() : mNext.CurrentRowPointer();
+      return AdjustRowPointer(rowPtr);
+    } else if (NS_WARN_IF(currentRow >= mFrameRect.YMost())) {
+      return nullptr;
+    }
+
+    // If we had to buffer, merge the data into the row. Otherwise we had the
+    // decoder write directly to the next stage's buffer.
+    if (mBuffer) {
+      int32_t width = mFrameRect.width;
+      uint32_t* dst = reinterpret_cast<uint32_t*>(mNext.CurrentRowPointer());
+      uint32_t* src = reinterpret_cast<uint32_t*>(mBuffer.get()) -
+                      std::min(mUnclampedFrameRect.x, 0);
+      dst += mFrameRect.x;
+      if (mOverProc) {
+        mOverProc(dst, src, width, 0xFF);
+      } else {
+        memcpy(dst, src, width * sizeof(uint32_t));
+      }
+      rowPtr = mNext.AdvanceRow() ? mBuffer.get() : nullptr;
+    } else {
+      MOZ_ASSERT(!mOverProc);
+      rowPtr = mNext.AdvanceRow();
+    }
+
+    // If there's still more data coming or we're already done, just adjust the
+    // pointer and return.
+    if (mRow < mFrameRect.YMost() || rowPtr == nullptr) {
+      WriteBaseFrameRow();
+      return AdjustRowPointer(rowPtr);
+    }
+
+    // We've finished the region specified by the frame rect. Advance to the end
+    // of the next pipeline stage's buffer, outputting rows that are copied from
+    // the base frame and/or cleared.
+    WriteBaseFrameRowsUntilComplete();
+
+    return nullptr;  // We're done.
+  }
+
+private:
+  DisposalMethod GetAnimationState(imgFrame* aBaseFrame,
+                                   gfx::IntRect& aFrameRect) const
+  {
+      AnimationData animData = aBaseFrame->GetAnimationData();
+      aFrameRect = animData.mBlendRect
+                 ? animData.mRect.Intersect(*animData.mBlendRect)
+                 : animData.mRect;
+      return animData.mDisposalMethod;
+  }
+
+  void ConfigureBaseFrame(imgFrame* aBaseFrame,
+                          BlendMethod aBlendMethod,
+                          const gfx::IntRect& aOutputRect,
+                          const gfx::IntRect& aBaseRect)
+  {
+    // We only need to clear if the rect is outside the frame rect (i.e.
+    // overwrites a non-overlapping area) or the blend method may cause us
+    // to combine old data and new.
+    if (!mFrameRect.Contains(aBaseRect) ||
+        aBlendMethod == BlendMethod::OVER) {
+      mClearRect = aBaseRect;
+    }
+
+    // If we are clearing the whole frame, we do not need to retain a
+    // reference to the base frame buffer.
+    if (!aOutputRect.IsEqualEdges(mClearRect)) {
+      mBaseFrame = aBaseFrame->RawAccessRef();
+      MOZ_ASSERT(mBaseFrame);
+    }
+  }
+
+  void WriteBaseFrameRowsUntilComplete()
+  {
+    do {
+      WriteBaseFrameRow();
+    } while (AdvanceRowOutsideFrameRect());
+  }
+
+  void WriteBaseFrameRow()
+  {
+    uint8_t* dest = mNext.CurrentRowPointer();
+    if (!dest) {
+      return;
+    }
+
+    if (!mBaseFrameRowPtr) {
+      // No base frame, so we are clearing everything.
+      memset(dest, 0, mRowLength);
+    } else if (mClearRect.height > 0 &&
+               mClearRect.y <= mRow &&
+               mClearRect.YMost() > mRow) {
+      // We have a base frame, but we are inside the area to be cleared.
+      // Only copy the data we need from the source.
+      size_t prefixLength = mClearRect.x * sizeof(uint32_t);
+      size_t clearLength = mClearRect.width * sizeof(uint32_t);
+      size_t postfixOffset = prefixLength + clearLength;
+      size_t postfixLength = mRowLength - postfixOffset;
+      MOZ_ASSERT(prefixLength + clearLength + postfixLength == mRowLength);
+      memcpy(dest, mBaseFrameRowPtr, prefixLength);
+      memset(dest + prefixLength, 0, clearLength);
+      memcpy(dest + postfixOffset, mBaseFrameRowPtr + postfixOffset, postfixLength);
+    } else {
+      memcpy(dest, mBaseFrameRowPtr, mRowLength);
+    }
+  }
+
+  bool AdvanceRowOutsideFrameRect()
+  {
+    // The unclamped frame rect may have a negative offset however we should
+    // never be advancing the row via this path (otherwise mBaseFrameRowPtr
+    // will be wrong.
+    MOZ_ASSERT(mRow >= 0);
+    MOZ_ASSERT(mRow < mFrameRect.y || mRow >= mFrameRect.YMost());
+
+    mRow++;
+    if (mBaseFrameRowPtr) {
+      mBaseFrameRowPtr += mRowLength;
+    }
+
+    return mNext.AdvanceRow() != nullptr;
+  }
+
+  uint8_t* AdjustRowPointer(uint8_t* aNextRowPointer) const
+  {
+    if (mBuffer) {
+      MOZ_ASSERT(aNextRowPointer == mBuffer.get() || aNextRowPointer == nullptr);
+      return aNextRowPointer;  // No adjustment needed for an intermediate buffer.
+    }
+
+    if (mFrameRect.IsEmpty() ||
+        mRow >= mFrameRect.YMost() ||
+        aNextRowPointer == nullptr) {
+      return nullptr;  // Nothing left to write.
+    }
+
+    MOZ_ASSERT(!mOverProc);
+    return aNextRowPointer + mFrameRect.x * sizeof(uint32_t);
+  }
+
+  Next mNext;                          /// The next SurfaceFilter in the chain.
+
+  gfx::IntRect mFrameRect;             /// The surface subrect which contains data,
+                                       /// clamped to the image size.
+  gfx::IntRect mUnclampedFrameRect;    /// The frame rect before clamping.
+  UniquePtr<uint8_t[]> mBuffer;        /// The intermediate buffer, if one is
+                                       /// necessary because the frame rect width
+                                       /// is larger than the image's logical width.
+  int32_t  mRow;                       /// The row in unclamped frame rect space
+                                       /// that we're currently writing.
+  size_t mRowLength;                   /// Length in bytes of a row.
+  SkBlitRow::Proc32 mOverProc;         /// Function pointer to perform over blending.
+  RawAccessFrameRef mBaseFrame;        /// The base frame that we need to copy
+                                       /// pixel data from.
+  const uint8_t* mBaseFrameRowPtr;     /// Current row pointer to the base frame
+                                       /// data.
+  gfx::IntRect mClearRect;             /// The frame area to clear.
+  gfx::IntRect mDirtyRect;             /// The frame area which has changed from
+                                       /// the previous frame.
+};
 
 //////////////////////////////////////////////////////////////////////////////
 // RemoveFrameRectFilter
@@ -412,6 +833,11 @@ public:
   Maybe<SurfaceInvalidRect> TakeInvalidRect() override
   {
     return mNext.TakeInvalidRect();
+  }
+
+  gfx::IntRect DirtyRect() const override
+  {
+    return mNext.DirtyRect();
   }
 
 protected:
@@ -626,6 +1052,11 @@ public:
   Maybe<SurfaceInvalidRect> TakeInvalidRect() override
   {
     return mNext.TakeInvalidRect();
+  }
+
+  gfx::IntRect DirtyRect() const override
+  {
+    return mNext.DirtyRect();
   }
 
 protected:
