@@ -75,6 +75,8 @@ public:
     return NS_ERROR_FAILURE;
   }
 
+  gfx::IntRect DirtyRect() const override { return gfx::IntRect(); }
+
 protected:
   uint8_t* DoResetToFirstRow() override { MOZ_CRASH(); return nullptr; }
   uint8_t* DoAdvanceRow() override { MOZ_CRASH(); return nullptr; }
@@ -198,6 +200,11 @@ public:
     }
 
     return invalidRect;
+  }
+
+  gfx::IntRect DirtyRect() const override
+  {
+    return mNext.DirtyRect();
   }
 
 protected:

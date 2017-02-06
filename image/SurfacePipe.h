@@ -405,6 +405,13 @@ public:
    */
   virtual Maybe<SurfaceInvalidRect> TakeInvalidRect() = 0;
 
+  /**
+   * @return an IntRect representing the region of the surface that has changed
+   *         from the previous frame. If there is no previous frame, it should
+   *         be the entire region.
+   */
+  virtual gfx::IntRect DirtyRect() const = 0;
+
 protected:
 
   /**
@@ -513,6 +520,7 @@ private:
   int32_t mCol;             /// The current column we're writing to. (0-indexed)
   uint8_t  mPixelSize;      /// How large each pixel in the surface is, in bytes.
 };
+
 
 /**
  * SurfacePipe is the public API that decoders should use to interact with a
@@ -629,6 +637,12 @@ public:
     return mHead->TakeInvalidRect();
   }
 
+  /// @see SurfaceFilter::DirtyRect() for the canonical documentation.
+  gfx::IntRect DirtyRect() const
+  {
+    return mHead->DirtyRect();
+  }
+
 private:
   friend class SurfacePipeFactory;
   friend class TestSurfacePipeFactory;
@@ -658,6 +672,11 @@ public:
   { }
 
   Maybe<SurfaceInvalidRect> TakeInvalidRect() final;
+
+  gfx::IntRect DirtyRect() const final
+  {
+    return gfx::IntRect(gfx::IntPoint(0, 0), InputSize());
+  }
 
 protected:
   uint8_t* DoResetToFirstRow() final;
