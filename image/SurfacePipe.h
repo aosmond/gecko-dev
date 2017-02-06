@@ -405,6 +405,13 @@ public:
    */
   virtual Maybe<SurfaceInvalidRect> TakeInvalidRect() = 0;
 
+  /**
+   * @return an IntRect representing the region of the surface that has changed
+   *         from the previous frame. If there is no previous frame, it should
+   *         be the entire region.
+   */
+  virtual gfx::IntRect DirtyRect() const = 0;
+
 protected:
 
   /**
@@ -629,6 +636,13 @@ public:
     return mHead->TakeInvalidRect();
   }
 
+  /// @see SurfaceFilter::DirtyRect() for the canonical documentation.
+  gfx::IntRect DirtyRect() const
+  {
+    MOZ_ASSERT(mHead, "Use before configured!");
+    return mHead->DirtyRect();
+  }
+
 private:
   friend class SurfacePipeFactory;
   friend class TestSurfacePipeFactory;
@@ -658,6 +672,11 @@ public:
   { }
 
   Maybe<SurfaceInvalidRect> TakeInvalidRect() override final;
+
+  gfx::IntRect DirtyRect() const override final
+  {
+    return gfx::IntRect(gfx::IntPoint(0, 0), InputSize());
+  }
 
 protected:
   uint8_t* DoResetToFirstRow() override final;
