@@ -667,3 +667,12 @@ nsSVGImageListener::Notify(imgIRequest *aRequest, int32_t aType, const nsIntRect
   return NS_OK;
 }
 
+nsIDocument*
+nsSVGImageListener::NotifyDocument()
+{
+  if (!mFrame)
+    return nullptr;
+
+  return mFrame->PresContext()->Document();
+}
+

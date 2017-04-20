@@ -262,6 +262,13 @@ AlertImageRequest::Notify(imgIRequest* aRequest, int32_t aType,
   return NS_OK;
 }
 
+nsIDocument*
+AlertImageRequest::NotifyDocument()
+{
+  // FIXME: we have a document, but we don't have access at this layer yet
+  return nullptr;
+}
+
 NS_IMETHODIMP
 AlertImageRequest::Notify(nsITimer* aTimer)
 {

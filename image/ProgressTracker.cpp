@@ -14,6 +14,8 @@
 #include "nsNetUtil.h"
 #include "nsIObserverService.h"
 
+#include "mozilla/dom/DocGroup.h"
+#include "mozilla/dom/TabGroup.h"
 #include "mozilla/Assertions.h"
 #include "mozilla/Services.h"
 
@@ -68,6 +70,19 @@ CheckProgressConsistency(Progress aOldProgress, Progress aNewProgress, bool aIsM
     // No preconditions.
   }
 }
+
+ProgressTracker::ProgressTracker()
+  : mImageMutex("ProgressTracker::mImage")
+  , mImage(nullptr)
+  , mObservers(new ObserverTable)
+  , mProgress(NoProgress)
+  , mIsMultipart(false)
+  , mEventTargetState(EventTargetState::Default)
+  , mEventTarget(do_GetMainThread())
+{ }
+
+ProgressTracker::~ProgressTracker()
+{ }
 
 void
 ProgressTracker::SetImage(Image* aImage)
@@ -193,7 +208,7 @@ ProgressTracker::Notify(IProgressObserver* aObserver)
     runnable->AddObserver(aObserver);
   } else {
     mRunnable = new AsyncNotifyRunnable(this, aObserver);
-    NS_DispatchToCurrentThread(mRunnable);
+    mEventTarget->Dispatch(mRunnable, NS_DISPATCH_NORMAL);
   }
 }
 
@@ -204,7 +219,8 @@ class AsyncNotifyCurrentStateRunnable : public Runnable
   public:
     AsyncNotifyCurrentStateRunnable(ProgressTracker* aProgressTracker,
                                     IProgressObserver* aObserver)
-      : mProgressTracker(aProgressTracker)
+      : Runnable("ProgressTracker::AsyncNotifyCurrentStateRunnable")
+      , mProgressTracker(aProgressTracker)
       , mObserver(aObserver)
     {
       MOZ_ASSERT(NS_IsMainThread(), "Should be created on the main thread");
@@ -250,7 +266,7 @@ ProgressTracker::NotifyCurrentState(IProgressObserver* aObserver)
 
   nsCOMPtr<nsIRunnable> ev = new AsyncNotifyCurrentStateRunnable(this,
                                                                  aObserver);
-  NS_DispatchToCurrentThread(ev);
+  mEventTarget->Dispatch(ev.forget(), NS_DISPATCH_NORMAL);
 }
 
 /**
@@ -445,6 +461,103 @@ ProgressTracker::EmulateRequestFinished(IProgressObserver* aObserver)
   if (!(mProgress & FLAG_LOAD_COMPLETE)) {
     aObserver->OnLoadComplete(true);
   }
+}
+
+already_AddRefed<nsIEventTarget>
+ProgressTracker::GetEventTarget() const
+{
+  MutexAutoLock lock(mImageMutex);
+  MOZ_ASSERT(mEventTarget);
+  nsCOMPtr<nsIEventTarget> target = mEventTarget;
+  return target.forget();
+}
+
+void
+ProgressTracker::AddObserver(IProgressObserver* aObserver,
+                             RefPtr<dom::DocGroup>&& aDocGroup)
+{
+  MOZ_ASSERT(NS_IsMainThread());
+
+  {
+    MutexAutoLock lock(mImageMutex);
+
+    RefPtr<dom::DocGroup> docGroup = Move(aDocGroup);
+    RefPtr<dom::TabGroup> tabGroup;
+    if (docGroup) {
+      tabGroup = docGroup->GetTabGroup();
+    }
+
+    bool changed = false;
+    switch (mEventTargetState) {
+      case EventTargetState::Default:
+        MOZ_ASSERT(!mDocGroup);
+        MOZ_ASSERT(!mTabGroup);
+        if (docGroup && tabGroup) {
+          mDocGroup = Move(docGroup);
+          mTabGroup = Move(tabGroup);
+          mEventTargetState = EventTargetState::DocGroup;
+          changed = true;
+        } else if (tabGroup) {
+          mTabGroup = Move(tabGroup);
+          mEventTargetState = EventTargetState::TabGroup;
+          changed = true;
+        }
+        break;
+      case EventTargetState::DocGroup:
+        MOZ_ASSERT(mDocGroup);
+        MOZ_ASSERT(mTabGroup);
+        if (mDocGroup.get() != docGroup.get()) {
+          mDocGroup = nullptr;
+          if (mTabGroup.get() != tabGroup.get()) {
+            mTabGroup = nullptr;
+            mEventTargetState = EventTargetState::None;
+            changed = true;
+          } else {
+            mEventTargetState = EventTargetState::TabGroup;
+            changed = true;
+          }
+        }
+        break;
+      case EventTargetState::TabGroup:
+        MOZ_ASSERT(!mDocGroup);
+        MOZ_ASSERT(mTabGroup);
+        if (mTabGroup.get() != tabGroup.get()) {
+          mTabGroup = nullptr;
+          mEventTargetState = EventTargetState::None;
+          changed = true;
+        }
+        break;
+      case EventTargetState::None:
+        MOZ_ASSERT(!mDocGroup);
+        MOZ_ASSERT(!mTabGroup);
+        break;
+      default:
+        MOZ_ASSERT_UNREACHABLE("Unhandled EventTargetState!");
+        break;
+    }
+
+    if (changed) {
+      switch (mEventTargetState) {
+        case EventTargetState::None:
+          mEventTarget = do_GetMainThread();
+          break;
+        case EventTargetState::DocGroup:
+          MOZ_ASSERT(mDocGroup);
+          mEventTarget = mDocGroup->EventTargetFor(TaskCategory::Other);
+          break;
+        case EventTargetState::TabGroup:
+          MOZ_ASSERT(mTabGroup);
+          mEventTarget = mTabGroup->EventTargetFor(TaskCategory::Other);
+          break;
+        case EventTargetState::Default:
+        default:
+          MOZ_ASSERT_UNREACHABLE("Unhandled EventTargetState!");
+          break;
+      }
+    }
+  }
+
+  AddObserver(aObserver);
 }
 
 void

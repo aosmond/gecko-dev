@@ -406,6 +406,12 @@ ImageLoader::Notify(imgIRequest* aRequest, int32_t aType, const nsIntRect* aData
   return NS_OK;
 }
 
+nsIDocument*
+ImageLoader::NotifyDocument()
+{
+  return mDocument;
+}
+
 nsresult
 ImageLoader::OnSizeAvailable(imgIRequest* aRequest, imgIContainer* aImage)
 { 

@@ -2413,6 +2413,12 @@ nsImageFrame::IconLoad::Notify(imgIRequest* aRequest,
   return NS_OK;
 }
 
+nsIDocument*
+nsImageFrame::IconLoad::NotifyDocument()
+{
+  return nullptr;
+}
+
 NS_IMPL_ISUPPORTS(nsImageListener, imgINotificationObserver)
 
 nsImageListener::nsImageListener(nsImageFrame *aFrame) :
@@ -2431,6 +2437,15 @@ nsImageListener::Notify(imgIRequest *aRequest, int32_t aType, const nsIntRect* a
     return NS_ERROR_FAILURE;
 
   return mFrame->Notify(aRequest, aType, aData);
+}
+
+nsIDocument*
+nsImageListener::NotifyDocument()
+{
+  if (!mFrame)
+    return nullptr;
+
+  return mFrame->PresContext()->Document();
 }
 
 static bool

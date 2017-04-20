@@ -1475,6 +1475,15 @@ nsBulletListener::Notify(imgIRequest *aRequest, int32_t aType, const nsIntRect* 
   return mFrame->Notify(aRequest, aType, aData);
 }
 
+nsIDocument*
+nsBulletListener::NotifyDocument()
+{
+  if (!mFrame) {
+    return nullptr;
+  }
+  return mFrame->PresContext()->Document();
+}
+
 NS_IMETHODIMP
 nsBulletListener::BlockOnload(imgIRequest* aRequest)
 {

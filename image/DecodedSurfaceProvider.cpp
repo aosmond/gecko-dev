@@ -20,6 +20,7 @@ DecodedSurfaceProvider::DecodedSurfaceProvider(NotNull<RasterImage*> aImage,
                                                NotNull<Decoder*> aDecoder)
   : ISurfaceProvider(ImageKey(aImage.get()), aSurfaceKey,
                      AvailabilityState::StartAsPlaceholder())
+  , IDecodingTask(aImage)
   , mImage(aImage.get())
   , mMutex("mozilla::image::DecodedSurfaceProvider")
   , mDecoder(aDecoder.get())

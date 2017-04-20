@@ -58,5 +58,11 @@ ScriptedNotificationObserver::Notify(imgIRequest* aRequest,
   return NS_OK;
 }
 
+nsIDocument*
+ScriptedNotificationObserver::NotifyDocument()
+{
+  return nullptr;
+}
+
 } // namespace image
 } // namespace mozilla

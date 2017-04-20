@@ -50,15 +50,21 @@ public:
   void Resume() override;
 
 protected:
-  /// Notify @aImage of @aDecoder's progress.
-  static void NotifyProgress(NotNull<RasterImage*> aImage,
-                             NotNull<Decoder*> aDecoder);
-
-  /// Notify @aImage that @aDecoder has finished.
-  static void NotifyDecodeComplete(NotNull<RasterImage*> aImage,
-                                   NotNull<Decoder*> aDecoder);
+  explicit IDecodingTask(NotNull<RasterImage*> aImage);
+  IDecodingTask();
 
   virtual ~IDecodingTask() { }
+
+  /// Notify @aImage of @aDecoder's progress.
+  void NotifyProgress(NotNull<RasterImage*> aImage,
+                      NotNull<Decoder*> aDecoder);
+
+  /// Notify @aImage that @aDecoder has finished.
+  void NotifyDecodeComplete(NotNull<RasterImage*> aImage,
+                            NotNull<Decoder*> aDecoder);
+
+private:
+  nsCOMPtr<nsIEventTarget> mEventTarget;
 };
 
 
@@ -70,7 +76,8 @@ class MetadataDecodingTask final : public IDecodingTask
 public:
   NS_INLINE_DECL_THREADSAFE_REFCOUNTING(MetadataDecodingTask, override)
 
-  explicit MetadataDecodingTask(NotNull<Decoder*> aDecoder);
+  explicit MetadataDecodingTask(NotNull<RasterImage*> aImage,
+                                NotNull<Decoder*> aDecoder);
 
   void Run() override;
 

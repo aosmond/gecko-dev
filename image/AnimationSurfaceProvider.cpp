@@ -20,6 +20,7 @@ AnimationSurfaceProvider::AnimationSurfaceProvider(NotNull<RasterImage*> aImage,
                                                    NotNull<Decoder*> aDecoder)
   : ISurfaceProvider(ImageKey(aImage.get()), aSurfaceKey,
                      AvailabilityState::StartAsPlaceholder())
+  , IDecodingTask(aImage)
   , mImage(aImage.get())
   , mDecodingMutex("AnimationSurfaceProvider::mDecoder")
   , mDecoder(aDecoder.get())

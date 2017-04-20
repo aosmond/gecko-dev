@@ -23,7 +23,23 @@ namespace image {
 // Helpers for sending notifications to the image associated with a decoder.
 ///////////////////////////////////////////////////////////////////////////////
 
-/* static */ void
+IDecodingTask::IDecodingTask(NotNull<RasterImage*> aImage)
+{
+  RefPtr<ProgressTracker> tracker = aImage->GetProgressTracker();
+  if (tracker) {
+    mEventTarget = tracker->GetEventTarget();
+  } else {
+    mEventTarget = do_GetMainThread();
+  }
+}
+
+IDecodingTask::IDecodingTask()
+{
+  // This should only be used for anonymous decoders, where we do not need the
+  // event target because we never dispatch.
+}
+
+void
 IDecodingTask::NotifyProgress(NotNull<RasterImage*> aImage,
                               NotNull<Decoder*> aDecoder)
 {
@@ -49,16 +65,17 @@ IDecodingTask::NotifyProgress(NotNull<RasterImage*> aImage,
   }
 
   // We're forced to notify asynchronously.
+  MOZ_ASSERT(mEventTarget);
   NotNull<RefPtr<RasterImage>> image = aImage;
-  NS_DispatchToMainThread(NS_NewRunnableFunction(
+  mEventTarget->Dispatch(NS_NewRunnableFunction(
                             "IDecodingTask::NotifyProgress",
                             [=]() -> void {
     image->NotifyProgress(progress, invalidRect, frameCount,
                           decoderFlags, surfaceFlags);
-  }));
+  }), NS_DISPATCH_NORMAL);
 }
 
-/* static */ void
+void
 IDecodingTask::NotifyDecodeComplete(NotNull<RasterImage*> aImage,
                                     NotNull<Decoder*> aDecoder)
 {
@@ -84,14 +101,15 @@ IDecodingTask::NotifyDecodeComplete(NotNull<RasterImage*> aImage,
   }
 
   // We're forced to notify asynchronously.
+  MOZ_ASSERT(mEventTarget);
   NotNull<RefPtr<RasterImage>> image = aImage;
-  NS_DispatchToMainThread(NS_NewRunnableFunction(
+  mEventTarget->Dispatch(NS_NewRunnableFunction(
                             "IDecodingTask::NotifyDecodeComplete",
                             [=]() -> void {
     image->NotifyDecodeComplete(finalStatus, metadata, telemetry, progress,
                                 invalidRect, frameCount, decoderFlags,
                                 surfaceFlags);
-  }));
+  }), NS_DISPATCH_NORMAL);
 }
 
 
@@ -110,8 +128,10 @@ IDecodingTask::Resume()
 // MetadataDecodingTask implementation.
 ///////////////////////////////////////////////////////////////////////////////
 
-MetadataDecodingTask::MetadataDecodingTask(NotNull<Decoder*> aDecoder)
-  : mMutex("mozilla::image::MetadataDecodingTask")
+MetadataDecodingTask::MetadataDecodingTask(NotNull<RasterImage*> aImage,
+                                           NotNull<Decoder*> aDecoder)
+  : IDecodingTask(aImage)
+  , mMutex("mozilla::image::MetadataDecodingTask")
   , mDecoder(aDecoder)
 {
   MOZ_ASSERT(mDecoder->IsMetadataDecode(),

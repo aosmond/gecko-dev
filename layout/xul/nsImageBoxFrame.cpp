@@ -801,6 +801,15 @@ nsImageBoxListener::Notify(imgIRequest *request, int32_t aType, const nsIntRect*
   return mFrame->Notify(request, aType, aData);
 }
 
+nsIDocument*
+nsImageBoxListener::NotifyDocument()
+{
+  if (!mFrame)
+    return nullptr;
+
+  return mFrame->PresContext()->Document();
+}
+
 NS_IMETHODIMP
 nsImageBoxListener::BlockOnload(imgIRequest *aRequest)
 {

@@ -44,6 +44,16 @@ nsTreeImageListener::Notify(imgIRequest *aRequest, int32_t aType, const nsIntRec
   return NS_OK;
 }
 
+nsIDocument*
+nsTreeImageListener::NotifyDocument()
+{
+  if (!mTreeFrame) {
+    return nullptr;
+  }
+
+  return mTreeFrame->PresContext()->Document();
+}
+
 void
 nsTreeImageListener::AddCell(int32_t aIndex, nsITreeColumn* aCol)
 {

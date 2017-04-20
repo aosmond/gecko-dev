@@ -202,6 +202,12 @@ nsImageLoadingContent::Notify(imgIRequest* aRequest,
   return NS_OK;
 }
 
+nsIDocument*
+nsImageLoadingContent::NotifyDocument()
+{
+  return GetOurOwnerDoc();
+}
+
 nsresult
 nsImageLoadingContent::OnLoadComplete(imgIRequest* aRequest, nsresult aStatus)
 {
