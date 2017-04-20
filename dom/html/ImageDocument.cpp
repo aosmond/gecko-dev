@@ -508,6 +508,12 @@ ImageDocument::Notify(imgIRequest* aRequest, int32_t aType, const nsIntRect* aDa
   return NS_OK;
 }
 
+nsIDocument*
+ImageDocument::NotifyDocument()
+{
+  return OwnerDoc();
+}
+
 void
 ImageDocument::OnHasTransparency()
 {

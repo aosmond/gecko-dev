@@ -33,6 +33,9 @@ class nsITimedChannel;
 class nsIURI;
 
 namespace mozilla {
+namespace dom {
+class DocGroup;
+}
 namespace image {
 class Image;
 class ImageURL;
@@ -79,7 +82,8 @@ public:
   void ClearLoader();
 
   // Callers must call imgRequestProxy::Notify later.
-  void AddProxy(imgRequestProxy* proxy);
+  void AddProxy(imgRequestProxy* proxy,
+                RefPtr<mozilla::dom::DocGroup>&& aDocGroup);
 
   nsresult RemoveProxy(imgRequestProxy* proxy, nsresult aStatus);
 

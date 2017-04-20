@@ -21,6 +21,11 @@
 class nsIRunnable;
 
 namespace mozilla {
+namespace dom {
+class DocGroup;
+class TabGroup;
+}
+
 namespace image {
 
 class AsyncNotifyRunnable;
@@ -107,19 +112,13 @@ private:
  */
 class ProgressTracker : public mozilla::SupportsWeakPtr<ProgressTracker>
 {
-  virtual ~ProgressTracker() { }
+  virtual ~ProgressTracker();
 
 public:
   MOZ_DECLARE_WEAKREFERENCE_TYPENAME(ProgressTracker)
   NS_INLINE_DECL_THREADSAFE_REFCOUNTING(ProgressTracker)
 
-  ProgressTracker()
-    : mImageMutex("ProgressTracker::mImage")
-    , mImage(nullptr)
-    , mObservers(new ObserverTable)
-    , mProgress(NoProgress)
-    , mIsMultipart(false)
-  { }
+  ProgressTracker();
 
   bool HasImage() const { MutexAutoLock lock(mImageMutex); return mImage; }
   already_AddRefed<Image> GetImage() const
@@ -188,9 +187,14 @@ public:
 
   // We manage a set of observers that are using an image and thus concerned
   // with its loading progress. Weak pointers.
+  void AddObserver(IProgressObserver* aObserver,
+                   RefPtr<dom::DocGroup>&& aDocGroup);
   void AddObserver(IProgressObserver* aObserver);
   bool RemoveObserver(IProgressObserver* aObserver);
   uint32_t ObserverCount() const;
+
+  // Get the event target we should currently dispatch events to.
+  already_AddRefed<nsIEventTarget> GetEventTarget() const;
 
   // Resets our weak reference to our image. Image subclasses should call this
   // in their destructor.
@@ -204,6 +208,14 @@ private:
   friend class AsyncNotifyCurrentStateRunnable;
   friend class ImageFactory;
 
+  enum class EventTargetState : uint8_t {
+    Default,    // Has yet to see first observer, uses unlabelled.
+    None,       // All observers belong to different tab groups,
+                // or some observers no tab group, uses unlabelled.
+    TabGroup,   // All observers belong to the same tab group.
+    DocGroup    // All observers belong to the same doc group.
+  };
+
   ProgressTracker(const ProgressTracker& aOther) = delete;
 
   // Sets our weak reference to our image. Only ImageFactory should call this.
@@ -216,6 +228,10 @@ private:
 
   // Main thread only because it deals with the observer service.
   void FireFailureNotification();
+
+  // Update the event target to comply with the existing and new observer
+  // scheduling requirements.
+  void UpdateEventTarget(IProgressObserver* aObserver);
 
   // The runnable, if any, that we've scheduled to deliver async notifications.
   nsCOMPtr<nsIRunnable> mRunnable;
@@ -233,6 +249,11 @@ private:
 
   // Whether this is a progress tracker for a multipart image.
   bool mIsMultipart;
+
+  EventTargetState mEventTargetState;
+  RefPtr<dom::DocGroup> mDocGroup;
+  RefPtr<dom::TabGroup> mTabGroup;
+  nsCOMPtr<nsIEventTarget> mEventTarget;
 };
 
 } // namespace image

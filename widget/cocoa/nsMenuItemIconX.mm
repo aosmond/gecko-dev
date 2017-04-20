@@ -372,6 +372,15 @@ nsMenuItemIconX::Notify(imgIRequest* aRequest,
   return NS_OK;
 }
 
+nsIDocument*
+nsMenuItemIconX::NotifyDocument()
+{
+  if (!mContent) {
+    return nullptr;
+  }
+  return mContent->OwnerDoc();
+}
+
 nsresult
 nsMenuItemIconX::OnFrameComplete(imgIRequest* aRequest)
 {

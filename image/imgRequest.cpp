@@ -209,7 +209,8 @@ imgRequest::ResetCacheEntry()
 }
 
 void
-imgRequest::AddProxy(imgRequestProxy* proxy)
+imgRequest::AddProxy(imgRequestProxy* proxy,
+                     RefPtr<dom::DocGroup>&& aDocGroup)
 {
   NS_PRECONDITION(proxy, "null imgRequestProxy passed in");
   LOG_SCOPE_WITH_PARAM(gImgLog, "imgRequest::AddProxy", "proxy", proxy);
@@ -230,7 +231,7 @@ imgRequest::AddProxy(imgRequestProxy* proxy)
     }
   }
 
-  progressTracker->AddObserver(proxy);
+  progressTracker->AddObserver(proxy, Move(aDocGroup));
 }
 
 nsresult

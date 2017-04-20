@@ -197,6 +197,8 @@ private:
   friend class imgCacheValidator;
   friend imgRequestProxy* NewStaticProxy(imgRequestProxy* aThis);
 
+  void AddProxy();
+
   // The URI of our request.
   RefPtr<ImageURL> mURI;
 

@@ -178,9 +178,7 @@ imgRequestProxy::Init(imgRequest* aOwner,
   mURI = aURI;
 
   // Note: AddProxy won't send all the On* notifications immediately
-  if (GetOwner()) {
-    GetOwner()->AddProxy(this);
-  }
+  AddProxy();
 
   return NS_OK;
 }
@@ -224,7 +222,7 @@ imgRequestProxy::ChangeOwner(imgRequest* aNewOwner)
     IncrementAnimationConsumers();
   }
 
-  GetOwner()->AddProxy(this);
+  AddProxy();
 
   // If we'd previously requested a synchronous decode, request a decode on the
   // new image.
@@ -233,6 +231,21 @@ imgRequestProxy::ChangeOwner(imgRequest* aNewOwner)
   }
 
   return NS_OK;
+}
+
+void
+imgRequestProxy::AddProxy()
+{
+  RefPtr<dom::DocGroup> docGroup;
+
+  if (mListener) {
+    nsCOMPtr<nsIDocument> doc = mListener->NotifyDocument();
+    if (doc) {
+      docGroup = doc->GetDocGroup();
+    }
+  }
+
+  GetOwner()->AddProxy(this, Move(docGroup));
 }
 
 void
