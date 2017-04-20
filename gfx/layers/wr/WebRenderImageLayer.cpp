@@ -7,7 +7,9 @@
 
 #include "gfxPrefs.h"
 #include "LayersLogging.h"
+#include "mozilla/layers/CompositorBridgeChild.h"
 #include "mozilla/layers/ImageClient.h"
+#include "mozilla/layers/SourceSurfaceSharedData.h"
 #include "mozilla/layers/StackingContextHelper.h"
 #include "mozilla/layers/TextureClientRecycleAllocator.h"
 #include "mozilla/layers/TextureWrapperImage.h"
@@ -21,6 +23,7 @@ using namespace gfx;
 
 WebRenderImageLayer::WebRenderImageLayer(WebRenderLayerManager* aLayerManager)
   : ImageLayer(aLayerManager, static_cast<WebRenderLayer*>(this))
+  , mSharedImageId(0)
   , mImageClientTypeContainer(CompositableType::UNKNOWN)
 {
   MOZ_COUNT_CTOR(WebRenderImageLayer);
@@ -83,16 +86,192 @@ WebRenderImageLayer::ClearCachedResources()
   }
 }
 
-void
-WebRenderImageLayer::RenderLayer(wr::DisplayListBuilder& aBuilder)
+class WrImageLayerUserData final
 {
-  if (!mContainer) {
-     return;
+public:
+  explicit WrImageLayerUserData(CompositorBridgeChild* aBridge)
+    : mBridge(aBridge)
+    , mId(0)
+  { }
+
+  ~WrImageLayerUserData()
+  {
+    ReleaseId();
   }
 
+  CompositorBridgeChild* Bridge() const
+  {
+    return mBridge.get();
+  }
+
+  uint64_t Id() const
+  {
+    return mId;
+  }
+
+  void UpdateBridge(CompositorBridgeChild* aBridge)
+  {
+    Unused << NS_WARN_IF(ReleaseId());
+    mBridge = aBridge;
+  }
+
+  void Share(uint64_t aId, gfx::SourceSurfaceSharedData* aSurface,
+             ipc::SharedMemoryBasic::Handle aHandle)
+  {
+    MOZ_ASSERT(!mId);
+    MOZ_ASSERT(aId);
+    MOZ_ASSERT(aSurface);
+
+    mId = aId;
+
+    gfx::IntSize size = aSurface->GetSize();
+    SurfaceFormat format = aSurface->GetFormat();
+    MOZ_RELEASE_ASSERT(format == SurfaceFormat::B8G8R8X8 ||
+                       format == SurfaceFormat::B8G8R8A8, "bad format");
+
+    mBridge->SendAddSharedImage(aId, size, aSurface->Stride(), format, aHandle);
+  }
+
+private:
+  bool ReleaseId()
+  {
+    bool released = false;
+    if (mId) {
+      MOZ_ASSERT(mBridge);
+
+      // If the channel is closed, then we already freed the image in the WR
+      // process.
+      if (mBridge->IPCOpen()) {
+        mBridge->SendRemoveSharedImage(mId);
+        released = true;
+      }
+      mId = 0;
+    }
+    return released;
+  }
+
+  RefPtr<CompositorBridgeChild> mBridge;
+  uint64_t mId;
+};
+
+static void
+DestroyWrImageLayerUserData(void* aClosure)
+{
+  MOZ_ASSERT(aClosure);
+
+  if (!NS_IsMainThread()) {
+    SystemGroup::Dispatch("DestroyWrImageLayerUserData", TaskCategory::Other,
+                          NS_NewRunnableFunction([=]() -> void {
+      DestroyWrImageLayerUserData(aClosure);
+    }));
+    return;
+  }
+
+  WrImageLayerUserData* data = static_cast<WrImageLayerUserData*>(aClosure);
+  delete data;
+}
+
+void
+WebRenderImageLayer::DiscardImageKeyIfShared()
+{
+  // If the new surface from the image is not shareable, but we previously had
+  // shared something, we need to release the image key, because we will try to
+  // use an external image next.
+  if (mSharedImageId) {
+    MOZ_ASSERT(mKey.isSome());
+    WrManager()->AddImageKeyForDiscard(mKey.value());
+    mKey = Nothing();
+    mSharedImageId = 0;
+  }
+}
+
+bool
+WebRenderImageLayer::TryShared(Image* aImage)
+{
+  RefPtr<gfx::SourceSurface> surface = aImage->GetAsSourceSurface();
+  if (!surface || surface->GetType() != SurfaceType::DATA_SHARED) {
+    DiscardImageKeyIfShared();
+    return false;
+  }
+
+  gfx::SourceSurfaceSharedData* sharedSurface =
+    static_cast<gfx::SourceSurfaceSharedData*>(surface.get());
+
+  CompositorBridgeChild* bridge = WrBridge()->GetCompositorBridgeChild();
+  MOZ_ASSERT(bridge);
+
+  static UserDataKey sWrImageLayer;
+  WrImageLayerUserData* data =
+    static_cast<WrImageLayerUserData*>(sharedSurface->GetUserData(&sWrImageLayer));
+  if (!data) {
+    data = new WrImageLayerUserData(bridge);
+    sharedSurface->AddUserData(&sWrImageLayer, data, DestroyWrImageLayerUserData);
+  } else if (MOZ_UNLIKELY(data->Bridge() != bridge)) {
+    // FIXME: Is there a better way to clean this up if the compositor gets
+    // reinitialized to ensure we release the bridge in a timely manner? Perhaps
+    // SurfaceCacheUtils::DiscardAll or something similar for shared images?
+    data->UpdateBridge(bridge);
+  } else {
+    // If the id is valid, we know it has already been shared. Now we just need
+    // to regenerate the image key if it doesn't match the last image this layer
+    // has rendered.
+    uint64_t id = data->Id();
+    if (id) {
+      mKey = UpdateImageKey(mKey, mSharedImageId, id,
+                            sharedSurface->IsFinalized());
+      MOZ_ASSERT(mKey.isSome());
+      mSharedImageId = id;
+      return true;
+    }
+  }
+
+  // Ensure that the handle doesn't get released until after we have finished
+  // sending the buffer to WebRender and/or reallocating it. FinishedSharing is
+  // not a sufficient condition because another thread may decide we are done
+  // while we are in the processing of sharing our newly reallocated handle.
+  // Once this goes out of scope, it will request release as well.
+  SourceSurfaceSharedData::HandleLock lock(sharedSurface);
+
+  // Attempt to share a handle with the parent process. The handle may not yet
+  // be closed because we may be the first process to want access to the image
+  // or the image has yet to be finalized.
+  ipc::SharedMemoryBasic::Handle handle = ipc::SharedMemoryBasic::NULLHandle();
+  base::ProcessId pid = bridge->GetParentPid();
+  nsresult rv = sharedSurface->ShareToProcess(pid, handle);
+  if (rv == NS_ERROR_NOT_AVAILABLE) {
+    // Since we close the handle after we share the image, or after we determine
+    // it will not be shared (i.e. imgFrame::Draw was called), we must attempt
+    // to realloc the shared buffer and reshare the new file handle.
+    if (NS_WARN_IF(!sharedSurface->ReallocHandle())) {
+      DiscardImageKeyIfShared();
+      return false;
+    }
+
+    // Reattempt the sharing of the handle to the parent process.
+    rv = sharedSurface->ShareToProcess(pid, handle);
+  }
+
+  if (NS_WARN_IF(NS_FAILED(rv))) {
+    MOZ_ASSERT(rv != NS_ERROR_NOT_AVAILABLE);
+    DiscardImageKeyIfShared();
+    return false;
+  }
+
+  uint64_t id = bridge->GetNextSharedImageId();
+  MOZ_ASSERT(id);
+  data->Share(id, sharedSurface, handle);
+  mKey = UpdateImageKey(mKey, mSharedImageId, id, sharedSurface->IsFinalized());
+  MOZ_ASSERT(mKey.isSome());
+  mSharedImageId = id;
+  return true;
+}
+
+bool
+WebRenderImageLayer::TryExternal()
+{
   CompositableType type = GetImageClientType();
   if (type == CompositableType::UNKNOWN) {
-    return;
+    return false;
   }
 
   MOZ_ASSERT(GetImageClientType() != CompositableType::UNKNOWN);
@@ -120,7 +299,7 @@ WebRenderImageLayer::RenderLayer(wr::DisplayListBuilder& aBuilder)
                                                   WrBridge(),
                                                   TextureFlags::DEFAULT);
     if (!mImageClient) {
-      return;
+      return false;
     }
     mImageClient->Connect();
   }
@@ -136,14 +315,6 @@ WebRenderImageLayer::RenderLayer(wr::DisplayListBuilder& aBuilder)
     }
   }
   MOZ_ASSERT(mExternalImageId.isSome());
-
-  // XXX Not good for async ImageContainer case.
-  AutoLockImage autoLock(mContainer);
-  Image* image = autoLock.GetImage();
-  if (!image) {
-    return;
-  }
-  gfx::IntSize size = image->GetSize();
 
   if (GetImageClientType() == CompositableType::IMAGE_BRIDGE) {
     // Always allocate key
@@ -161,11 +332,33 @@ WebRenderImageLayer::RenderLayer(wr::DisplayListBuilder& aBuilder)
   }
 
   if (mKey.isNothing()) {
+    return false;
+  }
+
+  return true;
+}
+
+void
+WebRenderImageLayer::RenderLayer(wr::DisplayListBuilder& aBuilder)
+{
+  if (!mContainer) {
+     return;
+  }
+
+  // XXX Not good for async ImageContainer case.
+  AutoLockImage autoLock(mContainer);
+  Image* image = autoLock.GetImage();
+  if (!image) {
+    return;
+  }
+
+  if (!TryShared(image) && !TryExternal()) {
     return;
   }
 
   StackingContextHelper sc(aBuilder, this);
 
+  gfx::IntSize size = image->GetSize();
   LayerRect rect(0, 0, size.width, size.height);
   if (mScaleMode != ScaleMode::SCALE_NONE) {
     NS_ASSERTION(mScaleMode == ScaleMode::STRETCH,
@@ -191,21 +384,17 @@ WebRenderImageLayer::RenderLayer(wr::DisplayListBuilder& aBuilder)
   aBuilder.PushImage(sc.ToRelativeWrRect(rect), clip, filter, mKey.value());
 }
 
-Maybe<WrImageMask>
-WebRenderImageLayer::RenderMaskLayer(const gfx::Matrix4x4& aTransform)
+bool
+WebRenderImageLayer::TryMaskExternal()
 {
-  if (!mContainer) {
-     return Nothing();
-  }
-
   CompositableType type = GetImageClientType();
   if (type == CompositableType::UNKNOWN) {
-    return Nothing();
+    return false;
   }
 
   MOZ_ASSERT(GetImageClientType() == CompositableType::IMAGE);
   if (GetImageClientType() != CompositableType::IMAGE) {
-    return Nothing();
+    return false;
   }
 
   if (!mImageClient) {
@@ -213,7 +402,7 @@ WebRenderImageLayer::RenderMaskLayer(const gfx::Matrix4x4& aTransform)
                                                   WrBridge(),
                                                   TextureFlags::DEFAULT);
     if (!mImageClient) {
-      return Nothing();
+      return false;
     }
     mImageClient->Connect();
   }
@@ -222,18 +411,33 @@ WebRenderImageLayer::RenderMaskLayer(const gfx::Matrix4x4& aTransform)
     mExternalImageId = Some(WrBridge()->AllocExternalImageIdForCompositable(mImageClient));
   }
 
+  MOZ_ASSERT(mImageClient->AsImageClientSingle());
+  mKey = UpdateImageKey(mImageClient->AsImageClientSingle(),
+                        mContainer,
+                        mKey,
+                        mExternalImageId.ref());
+
+  if (mKey.isNothing()) {
+    return false;
+  }
+
+  return true;
+}
+
+Maybe<WrImageMask>
+WebRenderImageLayer::RenderMaskLayer(const gfx::Matrix4x4& aTransform)
+{
+  if (!mContainer) {
+     return Nothing();
+  }
+
   AutoLockImage autoLock(mContainer);
   Image* image = autoLock.GetImage();
   if (!image) {
     return Nothing();
   }
 
-  MOZ_ASSERT(mImageClient->AsImageClientSingle());
-  mKey = UpdateImageKey(mImageClient->AsImageClientSingle(),
-                        mContainer,
-                        mKey,
-                        mExternalImageId.ref());
-  if (mKey.isNothing()) {
+  if (!TryShared(image) && !TryMaskExternal()) {
     return Nothing();
   }
 

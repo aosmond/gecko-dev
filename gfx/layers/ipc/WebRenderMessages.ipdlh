@@ -20,6 +20,11 @@ struct OpAddExternalImage {
   ImageKey key;
 };
 
+struct OpAddSharedImage {
+  uint64_t sharedImageId;
+  ImageKey key;
+};
+
 struct OpAddCompositorAnimations {
   CompositorAnimations data;
 };
@@ -33,6 +38,7 @@ union WebRenderParentCommand {
   CompositableOperation;
   OpAddCompositorAnimations;
   OpRemoveCompositorAnimations;
+  OpAddSharedImage;
 };
 
 } // namespace

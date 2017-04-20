@@ -176,6 +176,33 @@ WebRenderLayer::UpdateImageKey(ImageClientSingle* aImageClient,
   return Some(key);
 }
 
+Maybe<wr::ImageKey>
+WebRenderLayer::UpdateImageKey(Maybe<wr::ImageKey>& aOldKey,
+                               uint64_t aOldSharedImageId,
+                               uint64_t aSharedImageId,
+                               bool aFinishedDecoding)
+{
+  MOZ_ASSERT(aSharedImageId);
+
+  // Reuse old key only if it is the same shared image; the old shared image
+  // ID should have been cleared if we switched to an external image at all.
+  // If we haven't finished decoding yet, then the contents of the buffer can
+  // change as well, so we should regenerate the key too.
+  if (aOldSharedImageId == aSharedImageId && aFinishedDecoding) {
+    MOZ_ASSERT(aOldKey.isSome());
+    return aOldKey;
+  }
+
+  // Delete old key, we are generating a new key.
+  if (aOldKey.isSome()) {
+    WrManager()->AddImageKeyForDiscard(aOldKey.value());
+  }
+
+  WrImageKey key = GetImageKey();
+  WrBridge()->AddWebRenderParentCommand(OpAddSharedImage(aSharedImageId, key));
+  return Some(key);
+}
+
 void
 WebRenderLayer::DumpLayerInfo(const char* aLayerType, const LayerRect& aRect)
 {

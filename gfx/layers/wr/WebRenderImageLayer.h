@@ -34,6 +34,10 @@ public:
 
 protected:
   CompositableType GetImageClientType();
+  void DiscardImageKeyIfShared();
+  bool TryShared(Image* aImage);
+  bool TryExternal();
+  bool TryMaskExternal();
 
   class Holder {
   public:
@@ -46,6 +50,7 @@ protected:
   };
 
   wr::MaybeExternalImageId mExternalImageId;
+  uint64_t mSharedImageId;
   Maybe<wr::ImageKey> mKey;
   RefPtr<ImageClient> mImageClient;
   CompositableType mImageClientTypeContainer;

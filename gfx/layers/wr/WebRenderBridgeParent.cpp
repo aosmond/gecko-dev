@@ -467,6 +467,24 @@ WebRenderBridgeParent::ProcessWebRenderCommands(const gfx::IntSize &aSize,
         dSurf->Unmap();
         break;
       }
+      case WebRenderParentCommand::TOpAddSharedImage: {
+        const OpAddSharedImage& op = cmd.get_OpAddSharedImage();
+        RefPtr<SharedImageData> data =
+          mCompositorBridge->GetSharedImage(op.sharedImageId());
+        if (NS_WARN_IF(!data)) {
+          MOZ_ASSERT_UNREACHABLE("Unknown shared image ID!");
+          break;
+        }
+
+        wr::ImageKey key = op.key();
+        MOZ_ASSERT(!mActiveKeys.Get(wr::AsUint64(key), nullptr));
+        mActiveKeys.Put(wr::AsUint64(key), key);
+
+        wr::ImageDescriptor descriptor(data->mSize, data->mStride, data->mFormat);
+        auto slice = Range<uint8_t>(data->GetData(), data->GetDataLength());
+        mApi->AddImage(key, descriptor, slice);
+        break;
+      }
       case WebRenderParentCommand::TCompositableOperation: {
         if (!ReceiveCompositableUpdate(cmd.get_CompositableOperation())) {
           NS_ERROR("ReceiveCompositableUpdate failed");

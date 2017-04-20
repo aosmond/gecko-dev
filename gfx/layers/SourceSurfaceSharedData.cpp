@@ -67,6 +67,7 @@ SourceSurfaceSharedData::ShareToProcess(base::ProcessId aPid,
                                         SharedMemoryBasic::Handle& aHandle)
 {
   MutexAutoLock lock(mMutex);
+  MOZ_ASSERT(mHandleCount > 0);
 
   if (mClosed) {
     return NS_ERROR_NOT_AVAILABLE;
@@ -86,10 +87,13 @@ SourceSurfaceSharedData::CloseHandleInternal()
   mMutex.AssertCurrentThreadOwns();
 
   if (mClosed) {
+    MOZ_ASSERT(mHandleCount == 0);
+    MOZ_ASSERT(mFinalized);
+    MOZ_ASSERT(mShared);
     return;
   }
 
-  if (mFinalized && mShared) {
+  if (mFinalized && mShared && mHandleCount == 0) {
     mBuf->CloseHandle();
     mClosed = true;
   }
@@ -101,6 +105,7 @@ SourceSurfaceSharedData::ReallocHandle()
   MutexAutoLock lock(mMutex);
   MOZ_ASSERT(mClosed);
   MOZ_ASSERT(mFinalized);
+  MOZ_ASSERT(mHandleCount > 0);
 
   size_t len = GetAlignedDataLength();
   RefPtr<SharedMemoryBasic> buf = new SharedMemoryBasic();
