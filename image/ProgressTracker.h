@@ -187,8 +187,14 @@ public:
 
   // We manage a set of observers that are using an image and thus concerned
   // with its loading progress. Weak pointers.
+  //
+  // Add an observer and update the event target based on the DocGroup of the
+  // underlying listener.
   void AddObserver(IProgressObserver* aObserver,
                    RefPtr<dom::DocGroup>&& aDocGroup);
+  // Add an observer. This does not update the event target and assumes the
+  // observer no has impact on the DOM (i.e. kept internal to imagelib). This
+  // is useful for listener-less imgRequestProxy and multipart images.
   void AddObserver(IProgressObserver* aObserver);
   bool RemoveObserver(IProgressObserver* aObserver);
   uint32_t ObserverCount() const;

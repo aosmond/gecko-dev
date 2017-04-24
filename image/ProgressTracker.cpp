@@ -478,83 +478,83 @@ ProgressTracker::AddObserver(IProgressObserver* aObserver,
 {
   MOZ_ASSERT(NS_IsMainThread());
 
-  {
-    MutexAutoLock lock(mImageMutex);
+  RefPtr<dom::DocGroup> docGroup = Move(aDocGroup);
+  RefPtr<dom::TabGroup> tabGroup;
+  if (docGroup) {
+    tabGroup = docGroup->GetTabGroup();
+  }
 
-    RefPtr<dom::DocGroup> docGroup = Move(aDocGroup);
-    RefPtr<dom::TabGroup> tabGroup;
-    if (docGroup) {
-      tabGroup = docGroup->GetTabGroup();
-    }
-
-    bool changed = false;
-    switch (mEventTargetState) {
-      case EventTargetState::Default:
-        MOZ_ASSERT(!mDocGroup);
-        MOZ_ASSERT(!mTabGroup);
-        if (docGroup && tabGroup) {
-          mDocGroup = Move(docGroup);
-          mTabGroup = Move(tabGroup);
-          mEventTargetState = EventTargetState::DocGroup;
-          changed = true;
-        } else if (tabGroup) {
-          mTabGroup = Move(tabGroup);
-          mEventTargetState = EventTargetState::TabGroup;
-          changed = true;
+  EventTargetState nextState = mEventTargetState;
+  switch (nextState) {
+    case EventTargetState::Default:
+      MOZ_ASSERT(!mDocGroup);
+      MOZ_ASSERT(!mTabGroup);
+      if (docGroup && tabGroup) {
+        nextState = EventTargetState::DocGroup;
+      } else if (tabGroup) {
+        nextState = EventTargetState::TabGroup;
+      } else {
+        nextState = EventTargetState::None;
+      }
+      break;
+    case EventTargetState::DocGroup:
+      MOZ_ASSERT(mDocGroup);
+      MOZ_ASSERT(mTabGroup);
+      if (mDocGroup.get() != docGroup.get()) {
+        if (mTabGroup.get() != tabGroup.get()) {
+          nextState = EventTargetState::None;
+        } else {
+          nextState = EventTargetState::TabGroup;
         }
+      }
+      break;
+    case EventTargetState::TabGroup:
+      MOZ_ASSERT(!mDocGroup);
+      MOZ_ASSERT(mTabGroup);
+      if (mTabGroup.get() != tabGroup.get()) {
+        nextState = EventTargetState::None;
+      }
+      break;
+    case EventTargetState::None:
+      MOZ_ASSERT(!mDocGroup);
+      MOZ_ASSERT(!mTabGroup);
+      break;
+    default:
+      MOZ_ASSERT_UNREACHABLE("Unhandled EventTargetState!");
+      break;
+  }
+
+  if (mEventTargetState != nextState) {
+    mEventTargetState = nextState;
+
+    nsCOMPtr<nsIEventTarget> eventTarget;
+    switch (nextState) {
+      case EventTargetState::None:
+        mDocGroup = nullptr;
+        mTabGroup = nullptr;
+        eventTarget = do_GetMainThread();
         break;
       case EventTargetState::DocGroup:
-        MOZ_ASSERT(mDocGroup);
-        MOZ_ASSERT(mTabGroup);
-        if (mDocGroup.get() != docGroup.get()) {
-          mDocGroup = nullptr;
-          if (mTabGroup.get() != tabGroup.get()) {
-            mTabGroup = nullptr;
-            mEventTargetState = EventTargetState::None;
-            changed = true;
-          } else {
-            mEventTargetState = EventTargetState::TabGroup;
-            changed = true;
-          }
-        }
+        MOZ_ASSERT(docGroup);
+        MOZ_ASSERT(tabGroup);
+        mDocGroup = Move(docGroup);
+        mTabGroup = Move(tabGroup);
+        eventTarget = mDocGroup->EventTargetFor(TaskCategory::Other);
         break;
       case EventTargetState::TabGroup:
-        MOZ_ASSERT(!mDocGroup);
-        MOZ_ASSERT(mTabGroup);
-        if (mTabGroup.get() != tabGroup.get()) {
-          mTabGroup = nullptr;
-          mEventTargetState = EventTargetState::None;
-          changed = true;
-        }
+        MOZ_ASSERT(tabGroup);
+        mDocGroup = nullptr;
+        mTabGroup = Move(tabGroup);
+        eventTarget = mTabGroup->EventTargetFor(TaskCategory::Other);
         break;
-      case EventTargetState::None:
-        MOZ_ASSERT(!mDocGroup);
-        MOZ_ASSERT(!mTabGroup);
-        break;
+      case EventTargetState::Default:
       default:
         MOZ_ASSERT_UNREACHABLE("Unhandled EventTargetState!");
         break;
     }
 
-    if (changed) {
-      switch (mEventTargetState) {
-        case EventTargetState::None:
-          mEventTarget = do_GetMainThread();
-          break;
-        case EventTargetState::DocGroup:
-          MOZ_ASSERT(mDocGroup);
-          mEventTarget = mDocGroup->EventTargetFor(TaskCategory::Other);
-          break;
-        case EventTargetState::TabGroup:
-          MOZ_ASSERT(mTabGroup);
-          mEventTarget = mTabGroup->EventTargetFor(TaskCategory::Other);
-          break;
-        case EventTargetState::Default:
-        default:
-          MOZ_ASSERT_UNREACHABLE("Unhandled EventTargetState!");
-          break;
-      }
-    }
+    MutexAutoLock lock(mImageMutex);
+    mEventTarget = Move(eventTarget);
   }
 
   AddObserver(aObserver);
