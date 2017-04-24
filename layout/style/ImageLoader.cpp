@@ -372,6 +372,7 @@ NS_IMPL_RELEASE(ImageLoader)
 NS_INTERFACE_MAP_BEGIN(ImageLoader)
   NS_INTERFACE_MAP_ENTRY(imgINotificationObserver)
   NS_INTERFACE_MAP_ENTRY(imgIOnloadBlocker)
+  NS_INTERFACE_MAP_ENTRY(nsIDocGroupContainer)
 NS_INTERFACE_MAP_END
 
 NS_IMETHODIMP
@@ -406,10 +407,13 @@ ImageLoader::Notify(imgIRequest* aRequest, int32_t aType, const nsIntRect* aData
   return NS_OK;
 }
 
-nsIDocument*
-ImageLoader::NotifyDocument()
+dom::DocGroup*
+ImageLoader::GetDocGroup()
 {
-  return mDocument;
+  if (!mDocument) {
+    return nullptr;
+  }
+  return mDocument->GetDocGroup();
 }
 
 nsresult

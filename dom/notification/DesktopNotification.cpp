@@ -56,7 +56,8 @@ public:
 /* AlertServiceObserver                                                     */
 /* ------------------------------------------------------------------------ */
 
-NS_IMPL_ISUPPORTS(AlertServiceObserver, nsIObserver)
+NS_IMPL_ISUPPORTS(AlertServiceObserver, nsIObserver
+                                      , nsIDocGroupContainer)
 
 /* ------------------------------------------------------------------------ */
 /* DesktopNotification                                                      */

@@ -72,7 +72,7 @@ GetPixbufFromImgRequest(imgIRequest* aRequest)
 }
 
 NS_IMPL_ISUPPORTS(nsAlertsIconListener, nsIAlertNotificationImageListener,
-                  nsIObserver, nsISupportsWeakReference)
+                  nsIObserver, nsISupportsWeakReference, nsIDocGroupContainer)
 
 nsAlertsIconListener::nsAlertsIconListener(nsSystemAlertsService* aBackend,
                                            const nsAString& aAlertName)
@@ -109,6 +109,16 @@ nsAlertsIconListener::~nsAlertsIconListener()
 {
   mBackend->RemoveListener(mAlertName, this);
   // Don't dlclose libnotify as it uses atexit().
+}
+
+mozilla::dom::DocGroup*
+nsAlertsIconListener::GetDocGroup()
+{
+  nsCOMPtr<nsIDocGroupContainer> container = do_QueryInterface(mAlertListener);
+  if (!container) {
+    return nullptr;
+  }
+  return container->GetDocGroup();
 }
 
 NS_IMETHODIMP

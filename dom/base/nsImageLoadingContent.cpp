@@ -202,10 +202,14 @@ nsImageLoadingContent::Notify(imgIRequest* aRequest,
   return NS_OK;
 }
 
-nsIDocument*
-nsImageLoadingContent::NotifyDocument()
+DocGroup*
+nsImageLoadingContent::GetDocGroup()
 {
-  return GetOurOwnerDoc();
+  nsCOMPtr<nsIDocument> doc = GetOurOwnerDoc();
+  if (!doc) {
+    return nullptr;
+  }
+  return doc->GetDocGroup();
 }
 
 nsresult

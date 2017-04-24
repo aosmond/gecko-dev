@@ -195,6 +195,7 @@ NS_INTERFACE_MAP_BEGIN_CYCLE_COLLECTION(AlertImageRequest)
   NS_INTERFACE_MAP_ENTRY(imgINotificationObserver)
   NS_INTERFACE_MAP_ENTRY(nsICancelable)
   NS_INTERFACE_MAP_ENTRY(nsITimerCallback)
+  NS_INTERFACE_MAP_ENTRY(nsIDocGroupContainer)
   NS_INTERFACE_MAP_ENTRY_AMBIGUOUS(nsISupports, imgINotificationObserver)
 NS_INTERFACE_MAP_END
 
@@ -262,11 +263,14 @@ AlertImageRequest::Notify(imgIRequest* aRequest, int32_t aType,
   return NS_OK;
 }
 
-nsIDocument*
-AlertImageRequest::NotifyDocument()
+dom::DocGroup*
+AlertImageRequest::GetDocGroup()
 {
-  // FIXME: we have a document, but we don't have access at this layer yet
-  return nullptr;
+  nsCOMPtr<nsIDocGroupContainer> container = do_QueryInterface(mListener);
+  if (!container) {
+    return nullptr;
+  }
+  return container->GetDocGroup();
 }
 
 NS_IMETHODIMP

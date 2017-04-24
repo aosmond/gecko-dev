@@ -12,6 +12,7 @@
 #include "mozilla/dom/workers/bindings/WorkerHolder.h"
 
 #include "nsIObserver.h"
+#include "nsIDocGroupContainer.h"
 
 #include "nsCycleCollectionParticipant.h"
 #include "nsHashKeys.h"
@@ -133,6 +134,7 @@ private:
  */
 class Notification : public DOMEventTargetHelper
                    , public nsIObserver
+                   , public nsIDocGroupContainer
                    , public nsSupportsWeakReference
 {
   friend class CloseNotificationRunnable;
@@ -154,6 +156,10 @@ public:
   NS_DECL_ISUPPORTS_INHERITED
   NS_DECL_CYCLE_COLLECTION_SCRIPT_HOLDER_CLASS_INHERITED(Notification, DOMEventTargetHelper)
   NS_DECL_NSIOBSERVER
+  NS_DECL_NSIDOCGROUPCONTAINER
+
+  // nsIDocGroupContainer
+  DocGroup* GetDocGroup() final override;
 
   static bool RequireInteractionEnabled(JSContext* aCx, JSObject* aObj);
   static bool PrefEnabled(JSContext* aCx, JSObject* aObj);

@@ -1455,7 +1455,8 @@ nsBulletFrame::DeregisterAndCancelImageRequest()
 
 
 
-NS_IMPL_ISUPPORTS(nsBulletListener, imgINotificationObserver)
+NS_IMPL_ISUPPORTS(nsBulletListener, imgINotificationObserver
+                                  , nsIDocGroupContainer)
 
 nsBulletListener::nsBulletListener() :
   mFrame(nullptr)
@@ -1475,13 +1476,17 @@ nsBulletListener::Notify(imgIRequest *aRequest, int32_t aType, const nsIntRect* 
   return mFrame->Notify(aRequest, aType, aData);
 }
 
-nsIDocument*
-nsBulletListener::NotifyDocument()
+dom::DocGroup*
+nsBulletListener::GetDocGroup()
 {
   if (!mFrame) {
     return nullptr;
   }
-  return mFrame->PresContext()->Document();
+  nsCOMPtr<nsIDocument> doc = mFrame->PresContext()->Document();
+  if (!doc) {
+    return nullptr;
+  }
+  return doc->GetDocGroup();
 }
 
 NS_IMETHODIMP
