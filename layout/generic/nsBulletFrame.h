@@ -14,6 +14,7 @@
 #include "imgIContainer.h"
 #include "imgINotificationObserver.h"
 #include "imgIOnloadBlocker.h"
+#include "nsIDocGroupContainer.h"
 
 class imgIContainer;
 class imgRequestProxy;
@@ -22,7 +23,8 @@ class nsBulletFrame;
 class BulletRenderer;
 
 class nsBulletListener final : public imgINotificationObserver,
-                               public imgIOnloadBlocker
+                               public imgIOnloadBlocker,
+                               public nsIDocGroupContainer
 {
 public:
   nsBulletListener();
@@ -30,6 +32,9 @@ public:
   NS_DECL_ISUPPORTS
   NS_DECL_IMGINOTIFICATIONOBSERVER
   NS_DECL_IMGIONLOADBLOCKER
+
+  // nsIDocGroupContainer
+  mozilla::dom::DocGroup* GetDocGroup() final override;
 
   void SetFrame(nsBulletFrame *frame) { mFrame = frame; }
 

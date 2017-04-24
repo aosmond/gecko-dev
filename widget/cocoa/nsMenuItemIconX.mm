@@ -53,7 +53,8 @@ static const uint32_t kIconHeight = 16;
 typedef NS_STDCALL_FUNCPROTO(nsresult, GetRectSideMethod, nsIDOMRect,
                              GetBottom, (nsIDOMCSSPrimitiveValue**));
 
-NS_IMPL_ISUPPORTS(nsMenuItemIconX, imgINotificationObserver)
+NS_IMPL_ISUPPORTS(nsMenuItemIconX, imgINotificationObserver
+                                 , nsIDocGroupContainer)
 
 nsMenuItemIconX::nsMenuItemIconX(nsMenuObjectX* aMenuItem,
                                  nsIContent*    aContent,
@@ -372,13 +373,17 @@ nsMenuItemIconX::Notify(imgIRequest* aRequest,
   return NS_OK;
 }
 
-nsIDocument*
-nsMenuItemIconX::NotifyDocument()
+mozilla::dom::DocGroup*
+nsMenuItemIconX::GetDocGroup()
 {
   if (!mContent) {
     return nullptr;
   }
-  return mContent->OwnerDoc();
+  nsCOMPtr<nsIDocument> doc = mContent->OwnerDoc();
+  if (!doc) {
+    return nullptr;
+  }
+  return doc->GetDocGroup();
 }
 
 nsresult

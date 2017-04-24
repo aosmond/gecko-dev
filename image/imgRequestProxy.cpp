@@ -11,6 +11,7 @@
 #include "Image.h"
 #include "ImageOps.h"
 #include "nsError.h"
+#include "nsIDocGroupContainer.h"
 #include "nsCRTGlue.h"
 #include "imgINotificationObserver.h"
 
@@ -239,9 +240,9 @@ imgRequestProxy::AddProxy()
   RefPtr<dom::DocGroup> docGroup;
 
   if (mListener) {
-    nsCOMPtr<nsIDocument> doc = mListener->NotifyDocument();
-    if (doc) {
-      docGroup = doc->GetDocGroup();
+    nsCOMPtr<nsIDocGroupContainer> container = do_QueryInterface(mListener);
+    if (container) {
+      docGroup = container->GetDocGroup();
     }
   }
 

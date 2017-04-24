@@ -14,6 +14,7 @@
 #include "imgIRequest.h"
 #include "imgIOnloadBlocker.h"
 #include "imgINotificationObserver.h"
+#include "nsIDocGroupContainer.h"
 #include "mozilla/Attributes.h"
 
 class imgIContainer;
@@ -29,7 +30,8 @@ namespace css {
 struct ImageValue;
 
 class ImageLoader final : public imgINotificationObserver,
-                          public imgIOnloadBlocker
+                          public imgIOnloadBlocker,
+			  public nsIDocGroupContainer
 {
 public:
   typedef mozilla::css::ImageValue Image;
@@ -44,6 +46,9 @@ public:
   NS_DECL_ISUPPORTS
   NS_DECL_IMGIONLOADBLOCKER
   NS_DECL_IMGINOTIFICATIONOBSERVER
+
+  // nsIDocGroupContainer
+  dom::DocGroup* GetDocGroup() final override;
 
   void DropDocumentReference();
 

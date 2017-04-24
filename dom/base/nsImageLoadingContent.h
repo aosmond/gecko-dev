@@ -19,6 +19,7 @@
 #include "mozilla/EventStates.h"
 #include "mozilla/TimeStamp.h"
 #include "nsCOMPtr.h"
+#include "nsIDocGroupContainer.h"
 #include "nsIImageLoadingContent.h"
 #include "nsIRequest.h"
 #include "mozilla/ErrorResult.h"
@@ -42,7 +43,8 @@ class AsyncEventDispatcher;
 #endif
 
 class nsImageLoadingContent : public nsIImageLoadingContent,
-                              public imgIOnloadBlocker
+                              public imgIOnloadBlocker,
+                              public nsIDocGroupContainer
 {
   template <typename T> using Maybe = mozilla::Maybe<T>;
   using Nothing = mozilla::Nothing;
@@ -57,6 +59,9 @@ public:
   NS_DECL_IMGINOTIFICATIONOBSERVER
   NS_DECL_NSIIMAGELOADINGCONTENT
   NS_DECL_IMGIONLOADBLOCKER
+
+  // nsIDocGroupContainer
+  mozilla::dom::DocGroup* GetDocGroup() final override;
 
   // Web IDL binding methods.
   // Note that the XPCOM SetLoadingEnabled, AddObserver, RemoveObserver,

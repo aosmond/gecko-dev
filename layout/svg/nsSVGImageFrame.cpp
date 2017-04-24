@@ -22,6 +22,7 @@
 #include "nsContentUtils.h"
 #include "nsIReflowCallback.h"
 #include "mozilla/Unused.h"
+#include "nsIDocGroupContainer.h"
 
 using namespace mozilla;
 using namespace mozilla::dom;
@@ -31,12 +32,16 @@ using namespace mozilla::image;
 class nsSVGImageFrame;
 
 class nsSVGImageListener final : public imgINotificationObserver
+                               , public nsIDocGroupContainer
 {
 public:
   explicit nsSVGImageListener(nsSVGImageFrame *aFrame);
 
   NS_DECL_ISUPPORTS
   NS_DECL_IMGINOTIFICATIONOBSERVER
+
+  // nsIDocGroupContainer
+  DocGroup* GetDocGroup() final override;
 
   void SetFrame(nsSVGImageFrame *frame) { mFrame = frame; }
 
@@ -625,7 +630,8 @@ nsSVGImageFrame::GetHitTestFlags()
 //----------------------------------------------------------------------
 // nsSVGImageListener implementation
 
-NS_IMPL_ISUPPORTS(nsSVGImageListener, imgINotificationObserver)
+NS_IMPL_ISUPPORTS(nsSVGImageListener, imgINotificationObserver
+                                    , nsIDocGroupContainer)
 
 nsSVGImageListener::nsSVGImageListener(nsSVGImageFrame *aFrame) :  mFrame(aFrame)
 {
@@ -667,12 +673,18 @@ nsSVGImageListener::Notify(imgIRequest *aRequest, int32_t aType, const nsIntRect
   return NS_OK;
 }
 
-nsIDocument*
-nsSVGImageListener::NotifyDocument()
+DocGroup*
+nsSVGImageListener::GetDocGroup()
 {
-  if (!mFrame)
+  if (!mFrame) {
     return nullptr;
+  }
 
-  return mFrame->PresContext()->Document();
+  nsCOMPtr<nsIDocument> doc = mFrame->PresContext()->Document();
+  if (!doc) {
+    return nullptr;
+  }
+
+  return doc->GetDocGroup();
 }
 

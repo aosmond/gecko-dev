@@ -782,7 +782,9 @@ nsImageBoxFrame::OnFrameUpdate(imgIRequest* aRequest)
   return NS_OK;
 }
 
-NS_IMPL_ISUPPORTS(nsImageBoxListener, imgINotificationObserver, imgIOnloadBlocker)
+NS_IMPL_ISUPPORTS(nsImageBoxListener, imgINotificationObserver,
+                                      imgIOnloadBlocker,
+                                      nsIDocGroupContainer)
 
 nsImageBoxListener::nsImageBoxListener()
 {
@@ -801,13 +803,19 @@ nsImageBoxListener::Notify(imgIRequest *request, int32_t aType, const nsIntRect*
   return mFrame->Notify(request, aType, aData);
 }
 
-nsIDocument*
-nsImageBoxListener::NotifyDocument()
+mozilla::dom::DocGroup*
+nsImageBoxListener::GetDocGroup()
 {
-  if (!mFrame)
+  if (!mFrame) {
     return nullptr;
+  }
 
-  return mFrame->PresContext()->Document();
+  nsCOMPtr<nsIDocument> doc = mFrame->PresContext()->Document();
+  if (!doc) {
+    return nullptr;
+  }
+
+  return doc->GetDocGroup();
 }
 
 NS_IMETHODIMP

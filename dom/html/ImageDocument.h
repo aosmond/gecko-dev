@@ -11,6 +11,7 @@
 #include "MediaDocument.h"
 #include "nsIDOMEventListener.h"
 #include "nsIImageDocument.h"
+#include "nsIDocGroupContainer.h"
 
 namespace mozilla {
 namespace dom {
@@ -18,7 +19,8 @@ namespace dom {
 class ImageDocument final : public MediaDocument,
                             public nsIImageDocument,
                             public imgINotificationObserver,
-                            public nsIDOMEventListener
+                            public nsIDOMEventListener,
+                            public nsIDocGroupContainer
 {
 public:
   ImageDocument();
@@ -42,6 +44,9 @@ public:
 
   NS_DECL_NSIIMAGEDOCUMENT
   NS_DECL_IMGINOTIFICATIONOBSERVER
+
+  // nsIDocGroupContainer
+  DocGroup* GetDocGroup() final override;
 
   // nsIDOMEventListener
   NS_IMETHOD HandleEvent(nsIDOMEvent* aEvent) override;
