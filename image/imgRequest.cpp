@@ -210,6 +210,7 @@ imgRequest::ResetCacheEntry()
 
 void
 imgRequest::AddProxy(imgRequestProxy* proxy,
+                     bool aHasListener,
                      RefPtr<dom::DocGroup>&& aDocGroup)
 {
   NS_PRECONDITION(proxy, "null imgRequestProxy passed in");
@@ -231,7 +232,17 @@ imgRequest::AddProxy(imgRequestProxy* proxy,
     }
   }
 
-  progressTracker->AddObserver(proxy, Move(aDocGroup));
+  // An imgRequestProxy can be initialized without a listener. The caller will
+  // typically follow up by creating another imgRequestProxy with the listener.
+  // This is because imgLoader::LoadImage does not require a valid listener to
+  // be provided. In this situation we don't want to force ProgressTracker to
+  // assume we must only use the most liberal event target (no doc/tab group),
+  // because without a listener, we have no such restriction.
+  if (aHasListener) {
+    progressTracker->AddObserver(proxy, Move(aDocGroup));
+  } else {
+    progressTracker->AddObserver(proxy);
+  }
 }
 
 nsresult

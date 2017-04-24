@@ -238,15 +238,15 @@ void
 imgRequestProxy::AddProxy()
 {
   RefPtr<dom::DocGroup> docGroup;
-
-  if (mListener) {
+  bool hasListener = !!mListener;
+  if (hasListener) {
     nsCOMPtr<nsIDocGroupContainer> container = do_QueryInterface(mListener);
     if (container) {
       docGroup = container->GetDocGroup();
     }
   }
 
-  GetOwner()->AddProxy(this, Move(docGroup));
+  GetOwner()->AddProxy(this, hasListener, Move(docGroup));
 }
 
 void

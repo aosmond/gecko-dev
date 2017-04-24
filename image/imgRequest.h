@@ -83,6 +83,7 @@ public:
 
   // Callers must call imgRequestProxy::Notify later.
   void AddProxy(imgRequestProxy* proxy,
+                bool aHasListener,
                 RefPtr<mozilla::dom::DocGroup>&& aDocGroup);
 
   nsresult RemoveProxy(imgRequestProxy* proxy, nsresult aStatus);
