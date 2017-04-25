@@ -11,7 +11,6 @@
 #include "Image.h"
 #include "ImageOps.h"
 #include "nsError.h"
-#include "nsIDocGroupContainer.h"
 #include "nsCRTGlue.h"
 #include "imgINotificationObserver.h"
 
@@ -156,7 +155,7 @@ nsresult
 imgRequestProxy::Init(imgRequest* aOwner,
                       nsILoadGroup* aLoadGroup,
                       ImageURL* aURI,
-                      imgINotificationObserver* aObserver)
+                      nsISupports* aObserver)
 {
   NS_PRECONDITION(!GetOwner() && !mListener,
                   "imgRequestProxy is already initialized");
@@ -167,19 +166,20 @@ imgRequestProxy::Init(imgRequest* aOwner,
   MOZ_ASSERT(mAnimationConsumers == 0, "Cannot have animation before Init");
 
   mBehaviour->SetOwner(aOwner);
-  mListener = aObserver;
+  nsCOMPtr<imgINotificationObserver> observer = do_QueryInterface(aObserver);
+  observer.forget(&mListener);
   // Make sure to addref mListener before the AddProxy call below, since
   // that call might well want to release it if the imgRequest has
   // already seen OnStopRequest.
   if (mListener) {
     mListenerIsStrongRef = true;
-    NS_ADDREF(mListener);
   }
   mLoadGroup = aLoadGroup;
   mURI = aURI;
 
   // Note: AddProxy won't send all the On* notifications immediately
-  AddProxy();
+  nsCOMPtr<nsIDocGroupContainer> container = do_QueryInterface(aObserver);
+  AddProxy(container);
 
   return NS_OK;
 }
@@ -223,7 +223,8 @@ imgRequestProxy::ChangeOwner(imgRequest* aNewOwner)
     IncrementAnimationConsumers();
   }
 
-  AddProxy();
+  nsCOMPtr<nsIDocGroupContainer> container = do_QueryInterface(mListener);
+  AddProxy(container);
 
   // If we'd previously requested a synchronous decode, request a decode on the
   // new image.
@@ -235,15 +236,12 @@ imgRequestProxy::ChangeOwner(imgRequest* aNewOwner)
 }
 
 void
-imgRequestProxy::AddProxy()
+imgRequestProxy::AddProxy(nsIDocGroupContainer* aContainer)
 {
   RefPtr<dom::DocGroup> docGroup;
-  bool hasListener = !!mListener;
-  if (hasListener) {
-    nsCOMPtr<nsIDocGroupContainer> container = do_QueryInterface(mListener);
-    if (container) {
-      docGroup = container->GetDocGroup();
-    }
+  bool hasListener = !!mListener || !!aContainer;
+  if (aContainer) {
+    docGroup = aContainer->GetDocGroup();
   }
 
   GetOwner()->AddProxy(this, hasListener, Move(docGroup));

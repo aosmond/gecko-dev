@@ -2225,7 +2225,7 @@ nsImageFrame::LoadIcon(const nsAString& aSpec,
                        mozilla::net::RP_Unset,
                        nullptr,      /* principal (not relevant for icons) */
                        loadGroup,
-                       gIconLoad,
+                       static_cast<nsISupports*>(static_cast<void*>(gIconLoad)),
                        nullptr,      /* No context */
                        nullptr,      /* Not associated with any particular document */
                        loadFlags,

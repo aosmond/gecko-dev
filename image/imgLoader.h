@@ -302,7 +302,7 @@ public:
                                   ReferrerPolicy aReferrerPolicy,
                                   nsIPrincipal* aLoadingPrincipal,
                                   nsILoadGroup* aLoadGroup,
-                                  imgINotificationObserver* aObserver,
+                                  nsISupports* aObserver,
                                   nsINode* aContext,
                                   nsIDocument* aLoadingDocument,
                                   nsLoadFlags aLoadFlags,
@@ -313,7 +313,7 @@ public:
 
   MOZ_MUST_USE nsresult
   LoadImageWithChannel(nsIChannel* channel,
-                       imgINotificationObserver* aObserver,
+                       nsISupports* aObserver,
                        nsISupports* aCX,
                        nsIStreamListener** listener,
                        imgRequestProxy** _retval);
@@ -407,7 +407,7 @@ private: // methods
                      nsIURI* aInitialDocumentURI, nsIURI* aReferrerURI,
                      ReferrerPolicy aReferrerPolicy,
                      nsILoadGroup* aLoadGroup,
-                     imgINotificationObserver* aObserver, nsISupports* aCX,
+                     nsISupports* aObserver, nsISupports* aCX,
                      nsLoadFlags aLoadFlags,
                      nsContentPolicyType aContentPolicyType,
                      bool aCanMakeNewChannel,
@@ -420,7 +420,7 @@ private: // methods
                                      nsIURI* aReferrerURI,
                                      ReferrerPolicy aReferrerPolicy,
                                      nsILoadGroup* aLoadGroup,
-                                     imgINotificationObserver* aObserver,
+                                     nsISupports* aObserver,
                                      nsISupports* aCX, nsLoadFlags aLoadFlags,
                                      nsContentPolicyType aContentPolicyType,
                                      imgRequestProxy** aProxyRequest,
@@ -429,7 +429,7 @@ private: // methods
 
   nsresult CreateNewProxyForRequest(imgRequest* aRequest,
                                     nsILoadGroup* aLoadGroup,
-                                    imgINotificationObserver* aObserver,
+                                    nsISupports* aObserver,
                                     nsLoadFlags aLoadFlags,
                                     imgRequestProxy** _retval);
 

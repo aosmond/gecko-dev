@@ -13,6 +13,7 @@
 #include "nsILoadGroup.h"
 #include "nsISupportsPriority.h"
 #include "nsITimedChannel.h"
+#include "nsIDocGroupContainer.h"
 #include "nsCOMPtr.h"
 #include "nsThreadUtils.h"
 #include "mozilla/TimeStamp.h"
@@ -71,7 +72,7 @@ public:
   nsresult Init(imgRequest* aOwner,
                 nsILoadGroup* aLoadGroup,
                 ImageURL* aURI,
-                imgINotificationObserver* aObserver);
+                nsISupports* aObserver);
 
   nsresult ChangeOwner(imgRequest* aNewOwner); // this will change mOwner.
                                                // Do not call this if the
@@ -197,7 +198,7 @@ private:
   friend class imgCacheValidator;
   friend imgRequestProxy* NewStaticProxy(imgRequestProxy* aThis);
 
-  void AddProxy();
+  void AddProxy(nsIDocGroupContainer* aContainer);
 
   // The URI of our request.
   RefPtr<ImageURL> mURI;

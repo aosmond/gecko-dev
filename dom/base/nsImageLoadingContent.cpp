@@ -630,7 +630,8 @@ nsImageLoadingContent::LoadImageWithChannel(nsIChannel* aChannel,
   // Do the load.
   RefPtr<imgRequestProxy>& req = PrepareNextRequest(eImageLoadType_Normal);
   nsresult rv = loader->
-    LoadImageWithChannel(aChannel, this, doc, aListener, getter_AddRefs(req));
+    LoadImageWithChannel(aChannel, static_cast<nsISupports*>(static_cast<void*>(this)),
+                         doc, aListener, getter_AddRefs(req));
   if (NS_SUCCEEDED(rv)) {
     TrackImage(req);
     ResetAnimationIfNeeded();
