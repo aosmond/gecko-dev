@@ -155,6 +155,7 @@ imgRequestProxy::~imgRequestProxy()
 nsresult
 imgRequestProxy::Init(imgRequest* aOwner,
                       nsILoadGroup* aLoadGroup,
+                      nsISupports* aContext,
                       ImageURL* aURI,
                       imgINotificationObserver* aObserver)
 {
@@ -179,7 +180,7 @@ imgRequestProxy::Init(imgRequest* aOwner,
   mURI = aURI;
 
   // Note: AddProxy won't send all the On* notifications immediately
-  AddProxy();
+  AddProxy(aContext);
 
   return NS_OK;
 }
@@ -223,7 +224,7 @@ imgRequestProxy::ChangeOwner(imgRequest* aNewOwner)
     IncrementAnimationConsumers();
   }
 
-  AddProxy();
+  AddProxy(nullptr);
 
   // If we'd previously requested a synchronous decode, request a decode on the
   // new image.
@@ -235,14 +236,26 @@ imgRequestProxy::ChangeOwner(imgRequest* aNewOwner)
 }
 
 void
-imgRequestProxy::AddProxy()
+imgRequestProxy::AddProxy(nsISupports* aContext)
 {
   RefPtr<dom::DocGroup> docGroup;
+
   bool hasListener = !!mListener;
   if (hasListener) {
     nsCOMPtr<nsIDocGroupContainer> container = do_QueryInterface(mListener);
     if (container) {
       docGroup = container->GetDocGroup();
+    }
+  }
+
+  if (!docGroup) {
+    nsCOMPtr<nsINode> node = do_QueryInterface(aContext);
+    if (node) {
+      nsCOMPtr<nsIDocument> doc = node->OwnerDoc();
+      if (doc) {
+        docGroup = doc->GetDocGroup();
+        hasListener = true;
+      }
     }
   }
 
@@ -673,7 +686,7 @@ imgRequestProxy::PerformClone(imgINotificationObserver* aObserver,
   // XXXldb That's not true anymore.  Stuff from imgLoader adds the
   // request to the loadgroup.
   clone->SetLoadFlags(mLoadFlags);
-  nsresult rv = clone->Init(mBehaviour->GetOwner(), mLoadGroup,
+  nsresult rv = clone->Init(mBehaviour->GetOwner(), mLoadGroup, nullptr,
                             mURI, aObserver);
   if (NS_FAILED(rv)) {
     return rv;
@@ -966,7 +979,7 @@ imgRequestProxy::GetStaticRequest(imgRequestProxy** aReturn)
   GetImagePrincipal(getter_AddRefs(currentPrincipal));
   RefPtr<imgRequestProxy> req = new imgRequestProxyStatic(frozenImage,
                                                             currentPrincipal);
-  req->Init(nullptr, nullptr, mURI, nullptr);
+  req->Init(nullptr, nullptr, nullptr, mURI, nullptr);
 
   NS_ADDREF(*aReturn = req);
 

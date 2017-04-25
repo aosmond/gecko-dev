@@ -70,6 +70,7 @@ public:
   // (although not immediately after) doing so.
   nsresult Init(imgRequest* aOwner,
                 nsILoadGroup* aLoadGroup,
+                nsISupports* aContext,
                 ImageURL* aURI,
                 imgINotificationObserver* aObserver);
 
@@ -197,7 +198,7 @@ private:
   friend class imgCacheValidator;
   friend imgRequestProxy* NewStaticProxy(imgRequestProxy* aThis);
 
-  void AddProxy();
+  void AddProxy(nsISupports* aContext);
 
   // The URI of our request.
   RefPtr<ImageURL> mURI;
