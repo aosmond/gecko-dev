@@ -50,9 +50,6 @@ public:
   void Resume() override;
 
 protected:
-  explicit IDecodingTask(NotNull<RasterImage*> aImage);
-  IDecodingTask();
-
   virtual ~IDecodingTask() { }
 
   /// Notify @aImage of @aDecoder's progress.
@@ -64,7 +61,8 @@ protected:
                             NotNull<Decoder*> aDecoder);
 
 private:
-  nsCOMPtr<nsIEventTarget> mEventTarget;
+  void Dispatch(already_AddRefed<Runnable>&& aRunnable,
+                NotNull<RasterImage*> aImage);
 };
 
 
@@ -76,8 +74,7 @@ class MetadataDecodingTask final : public IDecodingTask
 public:
   NS_INLINE_DECL_THREADSAFE_REFCOUNTING(MetadataDecodingTask, override)
 
-  explicit MetadataDecodingTask(NotNull<RasterImage*> aImage,
-                                NotNull<Decoder*> aDecoder);
+  explicit MetadataDecodingTask(NotNull<Decoder*> aDecoder);
 
   void Run() override;
 

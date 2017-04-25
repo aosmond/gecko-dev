@@ -23,20 +23,24 @@ namespace image {
 // Helpers for sending notifications to the image associated with a decoder.
 ///////////////////////////////////////////////////////////////////////////////
 
-IDecodingTask::IDecodingTask(NotNull<RasterImage*> aImage)
+void
+IDecodingTask::Dispatch(already_AddRefed<Runnable>&& aRunnable,
+                        NotNull<RasterImage*> aImage)
 {
+  // We determine the event target on demand because it can change as the
+  // observers bound to an imgRequest change. While it would be tempting
+  // to use the system group if we have no progress tracker (that means
+  // no modifications to the DOM are possible), if this changes in the
+  // middle of decoding, we don't want earlier events to get reordered to
+  // potentially run after the prioritized docgroup events.
   RefPtr<ProgressTracker> tracker = aImage->GetProgressTracker();
+  nsCOMPtr<nsIEventTarget> eventTarget;
   if (tracker) {
-    mEventTarget = tracker->GetEventTarget();
+    eventTarget = tracker->GetEventTarget();
   } else {
-    mEventTarget = do_GetMainThread();
+    eventTarget = do_GetMainThread();
   }
-}
-
-IDecodingTask::IDecodingTask()
-{
-  // This should only be used for anonymous decoders, where we do not need the
-  // event target because we never dispatch.
+  eventTarget->Dispatch(Move(aRunnable), NS_DISPATCH_NORMAL);
 }
 
 void
@@ -65,14 +69,13 @@ IDecodingTask::NotifyProgress(NotNull<RasterImage*> aImage,
   }
 
   // We're forced to notify asynchronously.
-  MOZ_ASSERT(mEventTarget);
   NotNull<RefPtr<RasterImage>> image = aImage;
-  mEventTarget->Dispatch(NS_NewRunnableFunction(
-                            "IDecodingTask::NotifyProgress",
-                            [=]() -> void {
+  Dispatch(NS_NewRunnableFunction(
+           "IDecodingTask::NotifyProgress",
+           [=]() -> void {
     image->NotifyProgress(progress, invalidRect, frameCount,
                           decoderFlags, surfaceFlags);
-  }), NS_DISPATCH_NORMAL);
+  }), aImage);
 }
 
 void
@@ -101,15 +104,14 @@ IDecodingTask::NotifyDecodeComplete(NotNull<RasterImage*> aImage,
   }
 
   // We're forced to notify asynchronously.
-  MOZ_ASSERT(mEventTarget);
   NotNull<RefPtr<RasterImage>> image = aImage;
-  mEventTarget->Dispatch(NS_NewRunnableFunction(
-                            "IDecodingTask::NotifyDecodeComplete",
-                            [=]() -> void {
+  Dispatch(NS_NewRunnableFunction(
+           "IDecodingTask::NotifyDecodeComplete",
+           [=]() -> void {
     image->NotifyDecodeComplete(finalStatus, metadata, telemetry, progress,
                                 invalidRect, frameCount, decoderFlags,
                                 surfaceFlags);
-  }), NS_DISPATCH_NORMAL);
+  }), aImage);
 }
 
 
@@ -128,10 +130,8 @@ IDecodingTask::Resume()
 // MetadataDecodingTask implementation.
 ///////////////////////////////////////////////////////////////////////////////
 
-MetadataDecodingTask::MetadataDecodingTask(NotNull<RasterImage*> aImage,
-                                           NotNull<Decoder*> aDecoder)
-  : IDecodingTask(aImage)
-  , mMutex("mozilla::image::MetadataDecodingTask")
+MetadataDecodingTask::MetadataDecodingTask(NotNull<Decoder*> aDecoder)
+  : mMutex("mozilla::image::MetadataDecodingTask")
   , mDecoder(aDecoder)
 {
   MOZ_ASSERT(mDecoder->IsMetadataDecode(),
