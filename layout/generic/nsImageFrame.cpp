@@ -2433,21 +2433,6 @@ nsImageListener::Notify(imgIRequest *aRequest, int32_t aType, const nsIntRect* a
   return mFrame->Notify(aRequest, aType, aData);
 }
 
-DocGroup*
-nsImageListener::GetDocGroup()
-{
-  if (!mFrame) {
-    return nullptr;
-  }
-
-  nsCOMPtr<nsIDocument> doc = mFrame->PresContext()->Document();
-  if (!doc) {
-    return nullptr;
-  }
-
-  return doc->GetDocGroup();
-}
-
 static bool
 IsInAutoWidthTableCellForQuirk(nsIFrame *aFrame)
 {

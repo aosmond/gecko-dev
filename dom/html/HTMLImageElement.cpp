@@ -137,8 +137,7 @@ NS_INTERFACE_TABLE_HEAD_CYCLE_COLLECTION_INHERITED(HTMLImageElement)
                                nsIDOMHTMLImageElement,
                                nsIImageLoadingContent,
                                imgIOnloadBlocker,
-                               imgINotificationObserver,
-                               nsIDocGroupContainer)
+                               imgINotificationObserver)
 NS_INTERFACE_TABLE_TAIL_INHERITING(nsGenericHTMLElement)
 
 

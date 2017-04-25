@@ -120,7 +120,7 @@ ImageLoader::MaybeRegisterCSSImage(ImageLoader::Image* aImage)
   // Ignore errors here.  If cloning fails for some reason we'll put a null
   // entry in the hash and we won't keep trying to clone.
   mInClone = true;
-  canonicalRequest->Clone(this, getter_AddRefs(request));
+  canonicalRequest->Clone(this, mDocument, getter_AddRefs(request));
   mInClone = false;
 
   aImage->mRequests.Put(mDocument, request);
@@ -272,7 +272,7 @@ ImageLoader::LoadImage(nsIURI* aURI, nsIPrincipal* aOriginPrincipal,
 
   RefPtr<imgRequestProxy> clonedRequest;
   mInClone = true;
-  rv = request->Clone(this, getter_AddRefs(clonedRequest));
+  rv = request->Clone(this, mDocument, getter_AddRefs(clonedRequest));
   mInClone = false;
 
   if (NS_FAILED(rv)) {
@@ -372,7 +372,6 @@ NS_IMPL_RELEASE(ImageLoader)
 NS_INTERFACE_MAP_BEGIN(ImageLoader)
   NS_INTERFACE_MAP_ENTRY(imgINotificationObserver)
   NS_INTERFACE_MAP_ENTRY(imgIOnloadBlocker)
-  NS_INTERFACE_MAP_ENTRY(nsIDocGroupContainer)
 NS_INTERFACE_MAP_END
 
 NS_IMETHODIMP
@@ -405,15 +404,6 @@ ImageLoader::Notify(imgIRequest* aRequest, int32_t aType, const nsIntRect* aData
   }
 
   return NS_OK;
-}
-
-dom::DocGroup*
-ImageLoader::GetDocGroup()
-{
-  if (!mDocument) {
-    return nullptr;
-  }
-  return mDocument->GetDocGroup();
 }
 
 nsresult

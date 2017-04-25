@@ -89,7 +89,6 @@ NS_INTERFACE_TABLE_HEAD_CYCLE_COLLECTION_INHERITED(HTMLSharedObjectElement)
                                imgINotificationObserver,
                                nsIImageLoadingContent,
                                imgIOnloadBlocker,
-                               nsIDocGroupContainer,
                                nsIChannelEventSink)
   NS_INTERFACE_TABLE_TO_MAP_SEGUE
   NS_INTERFACE_MAP_ENTRY_IF_TAG(nsIDOMHTMLAppletElement, applet)

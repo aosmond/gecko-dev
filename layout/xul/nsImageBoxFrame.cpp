@@ -266,7 +266,9 @@ nsImageBoxFrame::UpdateImage()
       // get the list-style-image
       imgRequestProxy *styleRequest = StyleList()->GetListStyleImage();
       if (styleRequest) {
-        styleRequest->Clone(mListener, getter_AddRefs(mImageRequest));
+        styleRequest->Clone(mListener,
+                            mContent->GetComposedDoc(),
+                            getter_AddRefs(mImageRequest));
       }
     }
   }
@@ -783,8 +785,7 @@ nsImageBoxFrame::OnFrameUpdate(imgIRequest* aRequest)
 }
 
 NS_IMPL_ISUPPORTS(nsImageBoxListener, imgINotificationObserver,
-                                      imgIOnloadBlocker,
-                                      nsIDocGroupContainer)
+                                      imgIOnloadBlocker)
 
 nsImageBoxListener::nsImageBoxListener()
 {
@@ -801,21 +802,6 @@ nsImageBoxListener::Notify(imgIRequest *request, int32_t aType, const nsIntRect*
     return NS_OK;
 
   return mFrame->Notify(request, aType, aData);
-}
-
-mozilla::dom::DocGroup*
-nsImageBoxListener::GetDocGroup()
-{
-  if (!mFrame) {
-    return nullptr;
-  }
-
-  nsCOMPtr<nsIDocument> doc = mFrame->PresContext()->Document();
-  if (!doc) {
-    return nullptr;
-  }
-
-  return doc->GetDocGroup();
 }
 
 NS_IMETHODIMP

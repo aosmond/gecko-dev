@@ -9,8 +9,7 @@
 #include "imgIContainer.h"
 #include "nsIContent.h"
 
-NS_IMPL_ISUPPORTS(nsTreeImageListener, imgINotificationObserver
-                                     , nsIDocGroupContainer)
+NS_IMPL_ISUPPORTS(nsTreeImageListener, imgINotificationObserver)
 
 nsTreeImageListener::nsTreeImageListener(nsTreeBodyFrame* aTreeFrame)
   : mTreeFrame(aTreeFrame),
@@ -43,21 +42,6 @@ nsTreeImageListener::Notify(imgIRequest *aRequest, int32_t aType, const nsIntRec
   }
 
   return NS_OK;
-}
-
-mozilla::dom::DocGroup*
-nsTreeImageListener::GetDocGroup()
-{
-  if (!mTreeFrame) {
-    return nullptr;
-  }
-
-  nsCOMPtr<nsIDocument> doc = mTreeFrame->PresContext()->Document();
-  if (!doc) {
-    return nullptr;
-  }
-
-  return doc->GetDocGroup();
 }
 
 void

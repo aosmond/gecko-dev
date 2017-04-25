@@ -11,7 +11,6 @@
 #include "nsAtomicContainerFrame.h"
 #include "nsIIOService.h"
 #include "nsIObserver.h"
-#include "nsIDocGroupContainer.h"
 
 #include "imgINotificationObserver.h"
 
@@ -42,7 +41,6 @@ namespace layers {
 } // namespace mozilla
 
 class nsImageListener : public imgINotificationObserver
-                      , public nsIDocGroupContainer
 {
 protected:
   virtual ~nsImageListener();
@@ -52,9 +50,6 @@ public:
 
   NS_DECL_ISUPPORTS
   NS_DECL_IMGINOTIFICATIONOBSERVER
-
-  // nsIDocGroupContainer
-  mozilla::dom::DocGroup* GetDocGroup() final override;
 
   void SetFrame(nsImageFrame *frame) { mFrame = frame; }
 

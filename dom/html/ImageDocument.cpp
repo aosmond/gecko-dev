@@ -166,8 +166,7 @@ NS_IMPL_RELEASE_INHERITED(ImageDocument, MediaDocument)
 
 NS_INTERFACE_TABLE_HEAD_CYCLE_COLLECTION_INHERITED(ImageDocument)
   NS_INTERFACE_TABLE_INHERITED(ImageDocument, nsIImageDocument,
-                               imgINotificationObserver, nsIDOMEventListener,
-                               nsIDocGroupContainer)
+                               imgINotificationObserver, nsIDOMEventListener)
 NS_INTERFACE_TABLE_TAIL_INHERITING(MediaDocument)
 
 
@@ -507,16 +506,6 @@ ImageDocument::Notify(imgIRequest* aRequest, int32_t aType, const nsIntRect* aDa
   }
 
   return NS_OK;
-}
-
-DocGroup*
-ImageDocument::GetDocGroup()
-{
-  nsCOMPtr<nsIDocument> doc = OwnerDoc();
-  if (!doc) {
-    return nullptr;
-  }
-  return doc->GetDocGroup();
 }
 
 void

@@ -1209,8 +1209,7 @@ NS_INTERFACE_TABLE_HEAD_CYCLE_COLLECTION_INHERITED(HTMLInputElement)
                                nsIImageLoadingContent,
                                imgIOnloadBlocker,
                                nsIDOMNSEditableElement,
-                               nsIConstraintValidation,
-                               nsIDocGroupContainer)
+                               nsIConstraintValidation)
 NS_INTERFACE_TABLE_TAIL_INHERITING(nsGenericHTMLFormElementWithState)
 
 // nsIConstraintValidation

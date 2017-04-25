@@ -136,7 +136,9 @@ nsBulletFrame::DidSetStyleContext(nsStyleContext* aOldStyleContext)
 
     if (needNewRequest) {
       RefPtr<imgRequestProxy> newRequestClone;
-      newRequest->Clone(mListener, getter_AddRefs(newRequestClone));
+      newRequest->Clone(mListener,
+                        PresContext()->Document(),
+                        getter_AddRefs(newRequestClone));
 
       // Deregister the old request. We wait until after Clone is done in case
       // the old request and the new request are the same underlying image
@@ -1455,8 +1457,7 @@ nsBulletFrame::DeregisterAndCancelImageRequest()
 
 
 
-NS_IMPL_ISUPPORTS(nsBulletListener, imgINotificationObserver
-                                  , nsIDocGroupContainer)
+NS_IMPL_ISUPPORTS(nsBulletListener, imgINotificationObserver)
 
 nsBulletListener::nsBulletListener() :
   mFrame(nullptr)
@@ -1474,19 +1475,6 @@ nsBulletListener::Notify(imgIRequest *aRequest, int32_t aType, const nsIntRect* 
     return NS_ERROR_FAILURE;
   }
   return mFrame->Notify(aRequest, aType, aData);
-}
-
-dom::DocGroup*
-nsBulletListener::GetDocGroup()
-{
-  if (!mFrame) {
-    return nullptr;
-  }
-  nsCOMPtr<nsIDocument> doc = mFrame->PresContext()->Document();
-  if (!doc) {
-    return nullptr;
-  }
-  return doc->GetDocGroup();
 }
 
 NS_IMETHODIMP

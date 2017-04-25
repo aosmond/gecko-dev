@@ -23,7 +23,6 @@ class nsMenuObjectX;
 #import <Cocoa/Cocoa.h>
 
 class nsMenuItemIconX : public imgINotificationObserver
-                      , public nsIDocGroupContainer
 {
 public:
   nsMenuItemIconX(nsMenuObjectX* aMenuItem,
@@ -35,9 +34,6 @@ private:
 public:
   NS_DECL_ISUPPORTS
   NS_DECL_IMGINOTIFICATIONOBSERVER
-
-  // nsIDocGroupContainer
-  mozilla::dom::DocGroup* GetDocGroup() final override;
 
   // SetupIcon succeeds if it was able to set up the icon, or if there should
   // be no icon, in which case it clears any existing icon but still succeeds.

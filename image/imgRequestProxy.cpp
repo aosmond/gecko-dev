@@ -155,7 +155,7 @@ imgRequestProxy::~imgRequestProxy()
 nsresult
 imgRequestProxy::Init(imgRequest* aOwner,
                       nsILoadGroup* aLoadGroup,
-                      nsISupports* aContext,
+                      nsIDocument* aLoadingDocument,
                       ImageURL* aURI,
                       imgINotificationObserver* aObserver)
 {
@@ -180,7 +180,7 @@ imgRequestProxy::Init(imgRequest* aOwner,
   mURI = aURI;
 
   // Note: AddProxy won't send all the On* notifications immediately
-  AddProxy(aContext);
+  AddProxy(aLoadingDocument);
 
   return NS_OK;
 }
@@ -236,30 +236,17 @@ imgRequestProxy::ChangeOwner(imgRequest* aNewOwner)
 }
 
 void
-imgRequestProxy::AddProxy(nsISupports* aContext)
+imgRequestProxy::AddProxy(nsIDocument* aLoadingDocument)
 {
   RefPtr<dom::DocGroup> docGroup;
 
-  bool hasListener = !!mListener;
-  if (hasListener) {
-    nsCOMPtr<nsIDocGroupContainer> container = do_QueryInterface(mListener);
-    if (container) {
-      docGroup = container->GetDocGroup();
-    }
+  bool assumeDocGroup = !!mListener;
+  if (aLoadingDocument) {
+    assumeDocGroup = true;
+    docGroup = aLoadingDocument->GetDocGroup();
   }
 
-  if (!docGroup) {
-    nsCOMPtr<nsINode> node = do_QueryInterface(aContext);
-    if (node) {
-      nsCOMPtr<nsIDocument> doc = node->OwnerDoc();
-      if (doc) {
-        docGroup = doc->GetDocGroup();
-        hasListener = true;
-      }
-    }
-  }
-
-  GetOwner()->AddProxy(this, hasListener, Move(docGroup));
+  GetOwner()->AddProxy(this, assumeDocGroup, Move(docGroup));
 }
 
 void
@@ -654,19 +641,21 @@ imgRequestProxy::Clone(imgINotificationObserver* aObserver,
 {
   nsresult result;
   imgRequestProxy* proxy;
-  result = Clone(aObserver, &proxy);
+  result = Clone(aObserver, nullptr, &proxy);
   *aClone = proxy;
   return result;
 }
 
 nsresult imgRequestProxy::Clone(imgINotificationObserver* aObserver,
+                                nsIDocument* aLoadingDocument,
                                 imgRequestProxy** aClone)
 {
-  return PerformClone(aObserver, NewProxy, aClone);
+  return PerformClone(aObserver, aLoadingDocument, NewProxy, aClone);
 }
 
 nsresult
 imgRequestProxy::PerformClone(imgINotificationObserver* aObserver,
+                              nsIDocument* aLoadingDocument,
                               imgRequestProxy* (aAllocFn)(imgRequestProxy*),
                               imgRequestProxy** aClone)
 {
@@ -686,8 +675,8 @@ imgRequestProxy::PerformClone(imgINotificationObserver* aObserver,
   // XXXldb That's not true anymore.  Stuff from imgLoader adds the
   // request to the loadgroup.
   clone->SetLoadFlags(mLoadFlags);
-  nsresult rv = clone->Init(mBehaviour->GetOwner(), mLoadGroup, nullptr,
-                            mURI, aObserver);
+  nsresult rv = clone->Init(mBehaviour->GetOwner(), mLoadGroup,
+                            aLoadingDocument, mURI, aObserver);
   if (NS_FAILED(rv)) {
     return rv;
   }
@@ -1134,7 +1123,8 @@ imgRequestProxyStatic::GetImagePrincipal(nsIPrincipal** aPrincipal)
 
 nsresult
 imgRequestProxyStatic::Clone(imgINotificationObserver* aObserver,
+                             nsIDocument* aLoadingDocument,
                              imgRequestProxy** aClone)
 {
-  return PerformClone(aObserver, NewStaticProxy, aClone);
+  return PerformClone(aObserver, aLoadingDocument, NewStaticProxy, aClone);
 }

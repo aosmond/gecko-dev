@@ -202,16 +202,6 @@ nsImageLoadingContent::Notify(imgIRequest* aRequest,
   return NS_OK;
 }
 
-DocGroup*
-nsImageLoadingContent::GetDocGroup()
-{
-  nsCOMPtr<nsIDocument> doc = GetOurOwnerDoc();
-  if (!doc) {
-    return nullptr;
-  }
-  return doc->GetDocGroup();
-}
-
 nsresult
 nsImageLoadingContent::OnLoadComplete(imgIRequest* aRequest, nsresult aStatus)
 {
@@ -1077,7 +1067,7 @@ nsImageLoadingContent::UseAsPrimaryRequest(imgRequestProxy* aRequest,
 
   // Clone the request we were given.
   RefPtr<imgRequestProxy>& req = PrepareNextRequest(aImageLoadType);
-  nsresult rv = aRequest->Clone(this, getter_AddRefs(req));
+  nsresult rv = aRequest->Clone(this, GetOurOwnerDoc(), getter_AddRefs(req));
   if (NS_SUCCEEDED(rv)) {
     TrackImage(req);
   } else {

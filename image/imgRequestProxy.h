@@ -70,7 +70,7 @@ public:
   // (although not immediately after) doing so.
   nsresult Init(imgRequest* aOwner,
                 nsILoadGroup* aLoadGroup,
-                nsISupports* aContext,
+                nsIDocument* aLoadingDocument,
                 ImageURL* aURI,
                 imgINotificationObserver* aObserver);
 
@@ -127,6 +127,7 @@ public:
   void ClearAnimationConsumers();
 
   virtual nsresult Clone(imgINotificationObserver* aObserver,
+                         nsIDocument* aLoadingDocument,
                          imgRequestProxy** aClone);
   nsresult GetStaticRequest(imgRequestProxy** aReturn);
 
@@ -185,6 +186,7 @@ protected:
   imgRequest* GetOwner() const;
 
   nsresult PerformClone(imgINotificationObserver* aObserver,
+                        nsIDocument* aLoadingDocument,
                         imgRequestProxy* (aAllocFn)(imgRequestProxy*),
                         imgRequestProxy** aClone);
 
@@ -198,7 +200,7 @@ private:
   friend class imgCacheValidator;
   friend imgRequestProxy* NewStaticProxy(imgRequestProxy* aThis);
 
-  void AddProxy(nsISupports* aContext);
+  void AddProxy(nsIDocument* aLoadingDocument);
 
   // The URI of our request.
   RefPtr<ImageURL> mURI;
@@ -238,6 +240,7 @@ public:
   using imgRequestProxy::Clone;
 
   virtual nsresult Clone(imgINotificationObserver* aObserver,
+                         nsIDocument* aLoadingDocument,
                          imgRequestProxy** aClone) override;
 
 protected:

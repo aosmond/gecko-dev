@@ -8,23 +8,18 @@
 
 #include "nsString.h"
 #include "nsCOMPtr.h"
-#include "nsIDocGroupContainer.h"
 #include "nsITreeColumns.h"
 #include "nsTreeBodyFrame.h"
 #include "mozilla/Attributes.h"
 
 // This class handles image load observation.
 class nsTreeImageListener final : public imgINotificationObserver
-                                , public nsIDocGroupContainer
 {
 public:
   explicit nsTreeImageListener(nsTreeBodyFrame *aTreeFrame);
 
   NS_DECL_ISUPPORTS
   NS_DECL_IMGINOTIFICATIONOBSERVER
-
-  // nsIDocGroupContainer
-  mozilla::dom::DocGroup* GetDocGroup() final override;
 
   NS_IMETHOD ClearFrame();
 

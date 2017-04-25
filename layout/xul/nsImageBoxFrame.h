@@ -13,16 +13,14 @@
 #include "imgIContainer.h"
 #include "imgINotificationObserver.h"
 #include "imgIOnloadBlocker.h"
-#include "nsIDocGroupContainer.h"
 
 class imgRequestProxy;
 class nsImageBoxFrame;
 
 class nsDisplayXULImage;
 
-class nsImageBoxListener final : public imgINotificationObserver
-                               , public imgIOnloadBlocker
-                               , public nsIDocGroupContainer
+class nsImageBoxListener final : public imgINotificationObserver,
+                                 public imgIOnloadBlocker
 {
 public:
   nsImageBoxListener();
@@ -30,9 +28,6 @@ public:
   NS_DECL_ISUPPORTS
   NS_DECL_IMGINOTIFICATIONOBSERVER
   NS_DECL_IMGIONLOADBLOCKER
-
-  // nsIDocGroupContainer
-  mozilla::dom::DocGroup* GetDocGroup() final override;
 
   void SetFrame(nsImageBoxFrame *frame) { mFrame = frame; }
 

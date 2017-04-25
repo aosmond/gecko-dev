@@ -71,8 +71,7 @@ NS_IMPL_ISUPPORTS_INHERITED(nsGenConImageContent,
                             nsXMLElement,
                             nsIImageLoadingContent,
                             imgINotificationObserver,
-                            imgIOnloadBlocker,
-                            nsIDocGroupContainer)
+                            imgIOnloadBlocker)
 
 nsresult
 NS_NewGenConImageContent(nsIContent** aResult, already_AddRefed<mozilla::dom::NodeInfo>&& aNodeInfo,
