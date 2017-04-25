@@ -484,6 +484,17 @@ ProgressTracker::AddObserver(IProgressObserver* aObserver,
     tabGroup = docGroup->GetTabGroup();
   }
 
+  // It is common for an image to be decoded, observers removed and then for a
+  // new document to request the same image (e.g. chrome images related to
+  // loading a page, etc). Thus if we find we are adding a new observer, but it
+  // is the only one, we should reset the state rather than determine we need
+  // an even more restrictive event target.
+  if (mEventTargetState != EventTargetState::Default && ObserverCount() == 0) {
+    mDocGroup = nullptr;
+    mTabGroup = nullptr;
+    mEventTargetState = EventTargetState::Default;
+  }
+
   EventTargetState nextState = mEventTargetState;
   switch (nextState) {
     case EventTargetState::Default:
