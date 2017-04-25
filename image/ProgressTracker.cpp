@@ -484,17 +484,6 @@ ProgressTracker::AddObserver(IProgressObserver* aObserver,
     tabGroup = docGroup->GetTabGroup();
   }
 
-  // It is common for an image to be decoded, observers removed and then for a
-  // new document to request the same image (e.g. chrome images related to
-  // loading a page, etc). Thus if we find we are adding a new observer, but it
-  // is the only one, we should reset the state rather than determine we need
-  // an even more restrictive event target.
-  if (mEventTargetState != EventTargetState::Default && ObserverCount() == 0) {
-    mDocGroup = nullptr;
-    mTabGroup = nullptr;
-    mEventTargetState = EventTargetState::Default;
-  }
-
   EventTargetState nextState = mEventTargetState;
   switch (nextState) {
     case EventTargetState::Default:
@@ -591,13 +580,28 @@ ProgressTracker::RemoveObserver(IProgressObserver* aObserver)
 {
   MOZ_ASSERT(NS_IsMainThread());
   RefPtr<IProgressObserver> observer = aObserver;
+  bool empty = false;
 
   // Remove the observer from the list.
-  bool removed = mObservers.Write([=](ObserverTable* aTable) {
+  bool removed = mObservers.Write([observer,&empty](ObserverTable* aTable) {
     bool removed = aTable->Get(observer, nullptr);
     aTable->Remove(observer);
+    if (removed && aTable->Count() == 0) {
+      empty = true;
+    }
     return removed;
   });
+
+  // It is common for an image to be decoded, observers removed and then for a
+  // new document to request the same image (e.g. chrome images related to
+  // loading a page, etc). Thus if we find we are adding a new observer, but it
+  // is the only one, we should reset the state rather than determine we need
+  // an even more restrictive event target.
+  if (empty && mEventTargetState != EventTargetState::Default) {
+    mDocGroup = nullptr;
+    mTabGroup = nullptr;
+    mEventTargetState = EventTargetState::Default;
+  }
 
   // Observers can get confused if they don't get all the proper teardown
   // notifications. Part ways on good terms.
