@@ -2786,16 +2786,6 @@ Notification::Observe(nsISupports* aSubject, const char* aTopic,
   return NS_OK;
 }
 
-DocGroup*
-Notification::GetDocGroup()
-{
-  nsCOMPtr<nsPIDOMWindowInner> window = GetOwner();
-  if (!window) {
-    return nullptr;
-  }
-  return window->GetDocGroup();
-}
-
 nsresult
 Notification::DispatchToMainThread(already_AddRefed<nsIRunnable>&& aRunnable)
 {

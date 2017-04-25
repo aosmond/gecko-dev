@@ -11,7 +11,6 @@
 #include "nsIAlertsService.h"
 #include "nsIContentPermissionPrompt.h"
 
-#include "nsIDocGroupContainer.h"
 #include "nsIObserver.h"
 #include "nsString.h"
 #include "nsWeakPtr.h"
@@ -142,8 +141,7 @@ protected:
   static uint32_t sCount;
 };
 
-class AlertServiceObserver: public nsIObserver,
-                            public nsIDocGroupContainer
+class AlertServiceObserver: public nsIObserver
 {
  public:
   NS_DECL_ISUPPORTS
@@ -169,19 +167,6 @@ class AlertServiceObserver: public nsIObserver,
     }
     return NS_OK;
   };
-
-  DocGroup*
-  GetDocGroup() final override
-  {
-    if (!mNotification) {
-      return nullptr;
-    }
-    nsCOMPtr<nsPIDOMWindowInner> window = mNotification->GetOwner();
-    if (!window) {
-      return nullptr;
-    }
-    return window->GetDocGroup();
-  }
 
  private:
   virtual ~AlertServiceObserver() {}

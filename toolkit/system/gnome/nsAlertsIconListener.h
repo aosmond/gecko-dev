@@ -10,7 +10,6 @@
 #include "nsIAlertsService.h"
 #include "nsString.h"
 #include "nsIObserver.h"
-#include "nsIDocGroupContainer.h"
 #include "nsWeakReference.h"
 
 #include <gdk-pixbuf/gdk-pixbuf.h>
@@ -23,16 +22,12 @@ struct NotifyNotification;
 
 class nsAlertsIconListener : public nsIAlertNotificationImageListener,
                              public nsIObserver,
-                             public nsIDocGroupContainer,
                              public nsSupportsWeakReference
 {
 public:
   NS_DECL_ISUPPORTS
   NS_DECL_NSIALERTNOTIFICATIONIMAGELISTENER
   NS_DECL_NSIOBSERVER
-
-  // nsIDocGroupContainer
-  mozilla::dom::DocGroup* GetDocGroup() final override;
 
   nsAlertsIconListener(nsSystemAlertsService* aBackend,
                        const nsAString& aAlertName);

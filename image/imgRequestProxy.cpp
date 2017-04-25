@@ -11,7 +11,6 @@
 #include "Image.h"
 #include "ImageOps.h"
 #include "nsError.h"
-#include "nsIDocGroupContainer.h"
 #include "nsCRTGlue.h"
 #include "imgINotificationObserver.h"
 

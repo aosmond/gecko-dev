@@ -195,7 +195,6 @@ NS_INTERFACE_MAP_BEGIN_CYCLE_COLLECTION(AlertImageRequest)
   NS_INTERFACE_MAP_ENTRY(imgINotificationObserver)
   NS_INTERFACE_MAP_ENTRY(nsICancelable)
   NS_INTERFACE_MAP_ENTRY(nsITimerCallback)
-  NS_INTERFACE_MAP_ENTRY(nsIDocGroupContainer)
   NS_INTERFACE_MAP_ENTRY_AMBIGUOUS(nsISupports, imgINotificationObserver)
 NS_INTERFACE_MAP_END
 
@@ -261,16 +260,6 @@ AlertImageRequest::Notify(imgIRequest* aRequest, int32_t aType,
   }
 
   return NS_OK;
-}
-
-dom::DocGroup*
-AlertImageRequest::GetDocGroup()
-{
-  nsCOMPtr<nsIDocGroupContainer> container = do_QueryInterface(mListener);
-  if (!container) {
-    return nullptr;
-  }
-  return container->GetDocGroup();
 }
 
 NS_IMETHODIMP
