@@ -228,8 +228,7 @@ DecoderFactory::CreateMetadataDecoder(DecoderType aType,
     return nullptr;
   }
 
-  RefPtr<IDecodingTask> task = new MetadataDecodingTask(aImage,
-                                                        WrapNotNull(decoder));
+  RefPtr<IDecodingTask> task = new MetadataDecodingTask(WrapNotNull(decoder));
   return task.forget();
 }
 
