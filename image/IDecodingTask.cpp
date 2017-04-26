@@ -13,6 +13,8 @@
 #include "RasterImage.h"
 #include "SurfaceCache.h"
 
+#include "mozilla/SystemGroup.h"
+
 namespace mozilla {
 
 using gfx::IntRect;
@@ -23,7 +25,30 @@ namespace image {
 // Helpers for sending notifications to the image associated with a decoder.
 ///////////////////////////////////////////////////////////////////////////////
 
-/* static */ void
+bool
+IDecodingTask::IsOnEventTarget(NotNull<RasterImage*> aImage)
+{
+  if (!mEventTarget) {
+    // We determine the event target as late as possible, at the first dispatch
+    // time, because the observers bound to an imgRequest will affect it.
+    RefPtr<ProgressTracker> tracker = aImage->GetProgressTracker();
+    if (tracker) {
+      mEventTarget = tracker->GetEventTarget();
+    } else {
+      mEventTarget = SystemGroup::EventTargetFor(TaskCategory::Other);
+    }
+  }
+
+  // XXX(aosmond): Note this depends on bug 1363474 landing.
+  // If we are on the main thread, but executing in the context of a different
+  // scheduler group than that of the given event target, we may need to
+  // dispatch again.
+  bool current = false;
+  mEventTarget->IsOnCurrentThread(&current);
+  return current;
+}
+
+void
 IDecodingTask::NotifyProgress(NotNull<RasterImage*> aImage,
                               NotNull<Decoder*> aDecoder)
 {
@@ -42,7 +67,7 @@ IDecodingTask::NotifyProgress(NotNull<RasterImage*> aImage,
   SurfaceFlags surfaceFlags = aDecoder->GetSurfaceFlags();
 
   // Synchronously notify if we can.
-  if (NS_IsMainThread() && !(decoderFlags & DecoderFlags::ASYNC_NOTIFY)) {
+  if (IsOnEventTarget(aImage) && !(decoderFlags & DecoderFlags::ASYNC_NOTIFY)) {
     aImage->NotifyProgress(progress, invalidRect, frameCount,
                            decoderFlags, surfaceFlags);
     return;
@@ -50,15 +75,15 @@ IDecodingTask::NotifyProgress(NotNull<RasterImage*> aImage,
 
   // We're forced to notify asynchronously.
   NotNull<RefPtr<RasterImage>> image = aImage;
-  NS_DispatchToMainThread(NS_NewRunnableFunction(
-                            "IDecodingTask::NotifyProgress",
-                            [=]() -> void {
+  mEventTarget->Dispatch(NS_NewRunnableFunction(
+                           "IDecodingTask::NotifyProgress",
+                           [=]() -> void {
     image->NotifyProgress(progress, invalidRect, frameCount,
                           decoderFlags, surfaceFlags);
-  }));
+  }), NS_DISPATCH_NORMAL);
 }
 
-/* static */ void
+void
 IDecodingTask::NotifyDecodeComplete(NotNull<RasterImage*> aImage,
                                     NotNull<Decoder*> aDecoder)
 {
@@ -76,7 +101,7 @@ IDecodingTask::NotifyDecodeComplete(NotNull<RasterImage*> aImage,
   SurfaceFlags surfaceFlags = aDecoder->GetSurfaceFlags();
 
   // Synchronously notify if we can.
-  if (NS_IsMainThread() && !(decoderFlags & DecoderFlags::ASYNC_NOTIFY)) {
+  if (IsOnEventTarget(aImage) && !(decoderFlags & DecoderFlags::ASYNC_NOTIFY)) {
     aImage->NotifyDecodeComplete(finalStatus, metadata, telemetry, progress,
                                  invalidRect, frameCount, decoderFlags,
                                  surfaceFlags);
@@ -85,13 +110,13 @@ IDecodingTask::NotifyDecodeComplete(NotNull<RasterImage*> aImage,
 
   // We're forced to notify asynchronously.
   NotNull<RefPtr<RasterImage>> image = aImage;
-  NS_DispatchToMainThread(NS_NewRunnableFunction(
-                            "IDecodingTask::NotifyDecodeComplete",
-                            [=]() -> void {
+  mEventTarget->Dispatch(NS_NewRunnableFunction(
+                           "IDecodingTask::NotifyDecodeComplete",
+                           [=]() -> void {
     image->NotifyDecodeComplete(finalStatus, metadata, telemetry, progress,
                                 invalidRect, frameCount, decoderFlags,
                                 surfaceFlags);
-  }));
+  }), NS_DISPATCH_NORMAL);
 }
 
 

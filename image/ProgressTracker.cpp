@@ -16,6 +16,7 @@
 
 #include "mozilla/Assertions.h"
 #include "mozilla/Services.h"
+#include "mozilla/SystemGroup.h"
 
 using mozilla::WeakPtr;
 
@@ -68,6 +69,19 @@ CheckProgressConsistency(Progress aOldProgress, Progress aNewProgress, bool aIsM
     // No preconditions.
   }
 }
+
+ProgressTracker::ProgressTracker()
+  : mImageMutex("ProgressTracker::mImage")
+  , mImage(nullptr)
+  , mObservers(new ObserverTable)
+  , mProgress(NoProgress)
+  , mIsMultipart(false)
+  , mEventTarget(SystemGroup::EventTargetFor(TaskCategory::Other))
+  , mObserversWithTargets(0)
+{ }
+
+ProgressTracker::~ProgressTracker()
+{ }
 
 void
 ProgressTracker::SetImage(Image* aImage)
@@ -125,6 +139,7 @@ class AsyncNotifyRunnable : public Runnable
                         IProgressObserver* aObserver)
      : Runnable("ProgressTracker::AsyncNotifyRunnable")
      , mTracker(aTracker)
+     , mEventTarget(aTracker->GetEventTarget())
     {
       MOZ_ASSERT(NS_IsMainThread(), "Should be created on the main thread");
       MOZ_ASSERT(aTracker, "aTracker should not be null");
@@ -136,6 +151,7 @@ class AsyncNotifyRunnable : public Runnable
     {
       MOZ_ASSERT(NS_IsMainThread(), "Should be running on the main thread");
       MOZ_ASSERT(mTracker, "mTracker should not be null");
+
       for (uint32_t i = 0; i < mObservers.Length(); ++i) {
         mObservers[i]->SetNotificationsDeferred(false);
         mTracker->SyncNotify(mObservers[i]);
@@ -159,6 +175,7 @@ class AsyncNotifyRunnable : public Runnable
     friend class ProgressTracker;
 
     RefPtr<ProgressTracker> mTracker;
+    nsCOMPtr<nsIEventTarget> mEventTarget;
     nsTArray<RefPtr<IProgressObserver>> mObservers;
 };
 
@@ -193,7 +210,7 @@ ProgressTracker::Notify(IProgressObserver* aObserver)
     runnable->AddObserver(aObserver);
   } else {
     mRunnable = new AsyncNotifyRunnable(this, aObserver);
-    NS_DispatchToCurrentThread(mRunnable);
+    mEventTarget->Dispatch(mRunnable, NS_DISPATCH_NORMAL);
   }
 }
 
@@ -204,7 +221,9 @@ class AsyncNotifyCurrentStateRunnable : public Runnable
   public:
     AsyncNotifyCurrentStateRunnable(ProgressTracker* aProgressTracker,
                                     IProgressObserver* aObserver)
-      : mProgressTracker(aProgressTracker)
+      : Runnable("ProgressTracker::AsyncNotifyCurrentStateRunnable")
+      , mProgressTracker(aProgressTracker)
+      , mEventTarget(aProgressTracker->GetEventTarget())
       , mObserver(aObserver)
     {
       MOZ_ASSERT(NS_IsMainThread(), "Should be created on the main thread");
@@ -216,6 +235,7 @@ class AsyncNotifyCurrentStateRunnable : public Runnable
     NS_IMETHOD Run() override
     {
       MOZ_ASSERT(NS_IsMainThread(), "Should be running on the main thread");
+
       mObserver->SetNotificationsDeferred(false);
 
       mProgressTracker->SyncNotify(mObserver);
@@ -224,6 +244,7 @@ class AsyncNotifyCurrentStateRunnable : public Runnable
 
   private:
     RefPtr<ProgressTracker> mProgressTracker;
+    nsCOMPtr<nsIEventTarget> mEventTarget;
     RefPtr<IProgressObserver> mObserver;
 
     // We have to hold on to a reference to the tracker's image, just in case
@@ -250,7 +271,7 @@ ProgressTracker::NotifyCurrentState(IProgressObserver* aObserver)
 
   nsCOMPtr<nsIRunnable> ev = new AsyncNotifyCurrentStateRunnable(this,
                                                                  aObserver);
-  NS_DispatchToCurrentThread(ev);
+  mEventTarget->Dispatch(ev.forget(), NS_DISPATCH_NORMAL);
 }
 
 /**
@@ -447,11 +468,37 @@ ProgressTracker::EmulateRequestFinished(IProgressObserver* aObserver)
   }
 }
 
+already_AddRefed<nsIEventTarget>
+ProgressTracker::GetEventTarget() const
+{
+  MutexAutoLock lock(mImageMutex);
+  MOZ_ASSERT(mEventTarget);
+  nsCOMPtr<nsIEventTarget> target = mEventTarget;
+  return target.forget();
+}
+
 void
 ProgressTracker::AddObserver(IProgressObserver* aObserver)
 {
   MOZ_ASSERT(NS_IsMainThread());
   RefPtr<IProgressObserver> observer = aObserver;
+
+  nsCOMPtr<nsIEventTarget> target = observer->GetEventTarget();
+  if (target) {
+    if (mObserversWithTargets == 0) {
+      // On the first observer with a target (i.e. listener), always accept its
+      // event target; this may be for a specific DocGroup, or it may be the
+      // unlabelled main thread target.
+      MutexAutoLock lock(mImageMutex);
+      mEventTarget = Move(target);
+    } else if (mEventTarget.get() != target.get()) {
+      // If a subsequent observer comes in with a different target, we need to
+      // switch to use the unlabelled main thread target, if we haven't already.
+      MutexAutoLock lock(mImageMutex);
+      mEventTarget = do_GetMainThread();
+    }
+    ++mObserversWithTargets;
+  }
 
   mObservers.Write([=](ObserverTable* aTable) {
     MOZ_ASSERT(!aTable->Get(observer, nullptr),
@@ -469,11 +516,26 @@ ProgressTracker::RemoveObserver(IProgressObserver* aObserver)
   RefPtr<IProgressObserver> observer = aObserver;
 
   // Remove the observer from the list.
-  bool removed = mObservers.Write([=](ObserverTable* aTable) {
+  bool removed = mObservers.Write([observer](ObserverTable* aTable) {
     bool removed = aTable->Get(observer, nullptr);
     aTable->Remove(observer);
     return removed;
   });
+
+  // Sometimes once an image is decoded, and all of its observers removed, a new
+  // document may request the same image. Thus we need to clear our event target
+  // state when the last observer is removed, so that we select the most
+  // appropriate event target when a new observer is added.
+  nsCOMPtr<nsIEventTarget> target = observer->GetEventTarget();
+  if (target) {
+    MOZ_ASSERT(mObserversWithTargets > 0);
+    --mObserversWithTargets;
+
+    if (mObserversWithTargets == 0) {
+      MutexAutoLock lock(mImageMutex);
+      mEventTarget = SystemGroup::EventTargetFor(TaskCategory::Other);
+    }
+  }
 
   // Observers can get confused if they don't get all the proper teardown
   // notifications. Part ways on good terms.

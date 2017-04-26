@@ -135,7 +135,7 @@ nsSVGImageFrame::~nsSVGImageFrame()
   if (mListener) {
     nsCOMPtr<nsIImageLoadingContent> imageLoader = do_QueryInterface(mContent);
     if (imageLoader) {
-      imageLoader->RemoveObserver(mListener);
+      imageLoader->RemoveNativeObserver(mListener);
     }
     reinterpret_cast<nsSVGImageListener*>(mListener.get())->SetFrame(nullptr);
   }
@@ -174,7 +174,7 @@ nsSVGImageFrame::Init(nsIContent*       aContent,
   // we need to register any image animations with the refresh driver.
   imageLoader->FrameCreated(this);
 
-  imageLoader->AddObserver(mListener);
+  imageLoader->AddNativeObserver(mListener);
 }
 
 /* virtual */ void

@@ -33,6 +33,9 @@ class nsITimedChannel;
 class nsIURI;
 
 namespace mozilla {
+namespace dom {
+class DocGroup;
+}
 namespace image {
 class Image;
 class ImageURL;

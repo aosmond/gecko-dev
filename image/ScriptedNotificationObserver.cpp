@@ -31,6 +31,17 @@ ScriptedNotificationObserver::Notify(imgIRequest* aRequest,
                                      int32_t aType,
                                      const nsIntRect* /*aUnused*/)
 {
+  if (!nsContentUtils::IsSafeToRunScript()) {
+    RefPtr<ScriptedNotificationObserver> self = this;
+    nsCOMPtr<imgIRequest> req = aRequest;
+    nsContentUtils::AddScriptRunner(NS_NewRunnableFunction(
+                                      "ScriptedNotificationObserver::Notify",
+                                      [self, req, aType]() -> void {
+      self->Notify(req, aType, nullptr);
+    }));
+  }
+
+  printf_stderr("[AO] ScriptedNotificationObserver::Notify -- %p of %d\n", aRequest, aType);
   if (aType == imgINotificationObserver::SIZE_AVAILABLE) {
     return mInner->SizeAvailable(aRequest);
   }

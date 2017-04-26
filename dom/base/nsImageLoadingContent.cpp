@@ -83,6 +83,7 @@ nsImageLoadingContent::nsImageLoadingContent()
   : mCurrentRequestFlags(0),
     mPendingRequestFlags(0),
     mObserverList(nullptr),
+    mScriptedObserverList(nullptr),
     mImageBlockingStatus(nsIContentPolicy::ACCEPT),
     mLoadingEnabled(true),
     mIsImageStateForced(false),
@@ -118,6 +119,7 @@ nsImageLoadingContent::~nsImageLoadingContent()
                "DestroyImageLoadingContent not called");
   NS_ASSERTION(!mObserverList.mObserver && !mObserverList.mNext,
                "Observers still registered?");
+  NS_ASSERTION(!mScriptedObserverList, "Scripted observers still registered?");
 }
 
 /*
@@ -375,7 +377,7 @@ ReplayImageStatus(imgIRequest* aRequest, imgINotificationObserver* aObserver)
 }
 
 NS_IMETHODIMP
-nsImageLoadingContent::AddObserver(imgINotificationObserver* aObserver)
+nsImageLoadingContent::AddNativeObserver(imgINotificationObserver* aObserver)
 {
   NS_ENSURE_ARG_POINTER(aObserver);
 
@@ -404,7 +406,7 @@ nsImageLoadingContent::AddObserver(imgINotificationObserver* aObserver)
 }
 
 NS_IMETHODIMP
-nsImageLoadingContent::RemoveObserver(imgINotificationObserver* aObserver)
+nsImageLoadingContent::RemoveNativeObserver(imgINotificationObserver* aObserver)
 {
   NS_ENSURE_ARG_POINTER(aObserver);
 
@@ -435,6 +437,166 @@ nsImageLoadingContent::RemoveObserver(imgINotificationObserver* aObserver)
   }
 #endif
   return NS_OK;
+}
+
+NS_IMETHODIMP
+nsImageLoadingContent::AddObserver(imgINotificationObserver* aObserver)
+{
+  NS_ENSURE_ARG_POINTER(aObserver);
+
+  // We want to delay executing the script notifications for both pending and
+  // current until after we have finished inserting the observer into the list.
+  // We can't just clone after insertion because the notifications from the
+  // current request may remove us from the observer list before we clone the
+  // pending request.
+  nsAutoScriptBlocker scriptBlocker;
+
+  nsresult rv = NS_OK;
+  RefPtr<imgRequestProxy> currentReq;
+  if (mCurrentRequest) {
+    // Scripted observers may not belong to the same document as us, so when we
+    // create the imgRequestProxy, we shouldn't use any. This allows the request
+    // to dispatch notifications from the correct scheduler group.
+    rv = mCurrentRequest->Clone(aObserver, nullptr, getter_AddRefs(currentReq));
+    if (NS_FAILED(rv)) {
+      return rv;
+    }
+  }
+
+  RefPtr<imgRequestProxy> pendingReq;
+  if (mPendingRequest) {
+    // See above for why we don't use the loading document.
+    rv = mPendingRequest->Clone(aObserver, nullptr, getter_AddRefs(pendingReq));
+    if (NS_FAILED(rv)) {
+      mCurrentRequest->CancelAndForgetObserver(NS_BINDING_ABORTED);
+      return rv;
+    }
+  }
+
+  ScriptedImageObserver* observer =
+    new ScriptedImageObserver(aObserver, Move(currentReq), Move(pendingReq));
+
+  if (!mScriptedObserverList) {
+    mScriptedObserverList = observer;
+  } else {
+    ScriptedImageObserver* last = mScriptedObserverList;
+    while (last->mNext) {
+      last = last->mNext;
+    }
+
+    last->mNext = observer;
+  }
+
+  return rv;
+}
+
+NS_IMETHODIMP
+nsImageLoadingContent::RemoveObserver(imgINotificationObserver* aObserver)
+{
+  NS_ENSURE_ARG_POINTER(aObserver);
+
+  if (NS_WARN_IF(!mScriptedObserverList)) {
+    return NS_OK;
+  }
+
+  ScriptedImageObserver* observer = mScriptedObserverList;
+  ScriptedImageObserver* prevObserver = nullptr;
+  do {
+    if (observer->mObserver == aObserver) {
+      break;
+    }
+
+    prevObserver = observer;
+    observer = observer->mNext;
+  } while (observer);
+
+  if (NS_WARN_IF(!observer)) {
+    return NS_OK;
+  }
+
+  if (prevObserver) {
+    MOZ_ASSERT(observer != mScriptedObserverList);
+    prevObserver->mNext = observer->mNext;
+  } else {
+    MOZ_ASSERT(observer == mScriptedObserverList);
+    mScriptedObserverList = observer->mNext;
+  }
+
+  observer->mNext = nullptr;
+  observer->CancelRequests();
+  delete observer;
+  return NS_OK;
+}
+
+void
+nsImageLoadingContent::ClearScriptedRequests(int32_t aRequestType, nsresult aReason)
+{
+  ScriptedImageObserver* observer = mScriptedObserverList;
+  while (observer) {
+    RefPtr<imgRequestProxy> req;
+    switch (aRequestType) {
+    case CURRENT_REQUEST:
+      req = Move(observer->mCurrentRequest);
+      break;
+    case PENDING_REQUEST:
+      req = Move(observer->mPendingRequest);
+      break;
+    default:
+      NS_ERROR("Unknown request type");
+      return;
+    }
+
+    if (req) {
+      req->CancelAndForgetObserver(aReason);
+    }
+
+    observer = observer->mNext;
+  }
+}
+
+void
+nsImageLoadingContent::CloneScriptedRequests(imgRequestProxy* aRequest)
+{
+  MOZ_ASSERT(aRequest);
+
+  bool current;
+  if (aRequest == mCurrentRequest) {
+    current = true;
+  } else if (aRequest == mPendingRequest) {
+    current = false;
+  } else {
+    MOZ_ASSERT_UNREACHABLE("Unknown request type");
+    return;
+  }
+
+  ScriptedImageObserver* observer = mScriptedObserverList;
+  while (observer) {
+    RefPtr<imgRequestProxy>& req = current ? observer->mCurrentRequest
+                                           : observer->mPendingRequest;
+    if (NS_WARN_IF(req)) {
+      MOZ_ASSERT_UNREACHABLE("Should have cancelled original request");
+      req->CancelAndForgetObserver(NS_BINDING_ABORTED);
+      req = nullptr;
+    }
+
+    nsresult rv = aRequest->Clone(observer->mObserver, nullptr, getter_AddRefs(req));
+    Unused << NS_WARN_IF(NS_FAILED(rv));
+
+    observer = observer->mNext;
+  }
+}
+
+void
+nsImageLoadingContent::MakePendingScriptedRequestsCurrent()
+{
+  ScriptedImageObserver* observer = mScriptedObserverList;
+  while (observer) {
+    if (observer->mCurrentRequest) {
+      observer->mCurrentRequest->CancelAndForgetObserver(NS_BINDING_ABORTED);
+    }
+    observer->mCurrentRequest = Move(observer->mPendingRequest);
+    observer = observer->mNext;
+  }
 }
 
 already_AddRefed<imgIRequest>
@@ -621,6 +783,7 @@ nsImageLoadingContent::LoadImageWithChannel(nsIChannel* aChannel,
   nsresult rv = loader->
     LoadImageWithChannel(aChannel, this, doc, aListener, getter_AddRefs(req));
   if (NS_SUCCEEDED(rv)) {
+    CloneScriptedRequests(req);
     TrackImage(req);
     ResetAnimationIfNeeded();
     return NS_OK;
@@ -892,6 +1055,7 @@ nsImageLoadingContent::LoadImage(nsIURI* aNewURI,
   aDocument->ForgetImagePreload(aNewURI);
 
   if (NS_SUCCEEDED(rv)) {
+    CloneScriptedRequests(req);
     TrackImage(req);
     ResetAnimationIfNeeded();
 
@@ -1066,8 +1230,9 @@ nsImageLoadingContent::UseAsPrimaryRequest(imgRequestProxy* aRequest,
 
   // Clone the request we were given.
   RefPtr<imgRequestProxy>& req = PrepareNextRequest(aImageLoadType);
-  nsresult rv = aRequest->Clone(this, getter_AddRefs(req));
+  nsresult rv = aRequest->Clone(this, GetOurOwnerDoc(), getter_AddRefs(req));
   if (NS_SUCCEEDED(rv)) {
+    CloneScriptedRequests(req);
     TrackImage(req);
   } else {
     MOZ_ASSERT(!req, "Shouldn't have non-null request here");
@@ -1316,6 +1481,7 @@ nsImageLoadingContent::MakePendingRequestCurrent()
                                                  : eImageLoadType_Normal;
 
   PrepareCurrentRequest(loadType) = mPendingRequest;
+  MakePendingScriptedRequestsCurrent();
   mPendingRequest = nullptr;
   mCurrentRequestFlags = mPendingRequestFlags;
   mPendingRequestFlags = 0;
@@ -1345,6 +1511,7 @@ nsImageLoadingContent::ClearCurrentRequest(nsresult aReason,
 
   // Clean up the request.
   UntrackImage(mCurrentRequest, aNonvisibleAction);
+  ClearScriptedRequests(CURRENT_REQUEST, aReason);
   mCurrentRequest->CancelAndForgetObserver(aReason);
   mCurrentRequest = nullptr;
   mCurrentRequestFlags = 0;
@@ -1363,6 +1530,7 @@ nsImageLoadingContent::ClearPendingRequest(nsresult aReason,
                                         &mPendingRequestRegistered);
 
   UntrackImage(mPendingRequest, aNonvisibleAction);
+  ClearScriptedRequests(PENDING_REQUEST, aReason);
   mPendingRequest->CancelAndForgetObserver(aReason);
   mPendingRequest = nullptr;
   mPendingRequestFlags = 0;
@@ -1550,7 +1718,11 @@ nsImageLoadingContent::UntrackImage(imgIRequest* aImage,
 void
 nsImageLoadingContent::CreateStaticImageClone(nsImageLoadingContent* aDest) const
 {
+  aDest->ClearScriptedRequests(CURRENT_REQUEST, NS_BINDING_ABORTED);
   aDest->mCurrentRequest = nsContentUtils::GetStaticRequest(mCurrentRequest);
+  if (aDest->mCurrentRequest) {
+    aDest->CloneScriptedRequests(aDest->mCurrentRequest);
+  }
   aDest->TrackImage(aDest->mCurrentRequest);
   aDest->mForcedImageState = mForcedImageState;
   aDest->mImageBlockingStatus = mImageBlockingStatus;
@@ -1580,6 +1752,37 @@ nsImageLoadingContent::ImageObserver::~ImageObserver()
 {
   MOZ_COUNT_DTOR(ImageObserver);
   NS_CONTENT_DELETE_LIST_MEMBER(ImageObserver, this, mNext);
+}
+
+nsImageLoadingContent::ScriptedImageObserver::ScriptedImageObserver()
+  : mNext(nullptr)
+{ }
+
+nsImageLoadingContent::ScriptedImageObserver::ScriptedImageObserver(imgINotificationObserver* aObserver,
+                                                                    RefPtr<imgRequestProxy>&& aCurrentRequest,
+                                                                    RefPtr<imgRequestProxy>&& aPendingRequest)
+  : mNext(nullptr)
+  , mObserver(aObserver)
+  , mCurrentRequest(aCurrentRequest)
+  , mPendingRequest(aPendingRequest)
+{ }
+
+nsImageLoadingContent::ScriptedImageObserver::~ScriptedImageObserver()
+{
+  NS_CONTENT_DELETE_LIST_MEMBER(ScriptedImageObserver, this, mNext);
+}
+
+void
+nsImageLoadingContent::ScriptedImageObserver::CancelRequests()
+{
+  if (mCurrentRequest) {
+    mCurrentRequest->CancelAndForgetObserver(NS_BINDING_ABORTED);
+    mCurrentRequest = nullptr;
+  }
+  if (mPendingRequest) {
+    mPendingRequest->CancelAndForgetObserver(NS_BINDING_ABORTED);
+    mPendingRequest = nullptr;
+  }
 }
 
 // Only HTMLInputElement.h overrides this for <img> tags
