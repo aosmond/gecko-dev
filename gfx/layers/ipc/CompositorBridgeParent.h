@@ -88,6 +88,39 @@ private:
   uint64_t mLayersId;
 };
 
+class SharedImageData final
+{
+  NS_INLINE_DECL_THREADSAFE_REFCOUNTING(SharedImageData);
+public:
+  SharedImageData()
+    : mStride(0)
+    , mFormat(gfx::SurfaceFormat::UNKNOWN)
+  { }
+
+  size_t GetDataLength() const {
+    return static_cast<size_t>(mStride) * mSize.height;
+  }
+
+  size_t GetAlignedDataLength() const {
+    return mozilla::ipc::SharedMemory::PageAlignedSize(GetDataLength());
+  }
+
+  uint8_t* GetData() const {
+    return static_cast<uint8_t*>(mBuffer->memory());
+  }
+
+  RefPtr<mozilla::ipc::SharedMemoryBasic> mBuffer;
+  gfx::IntSize mSize;
+  int32_t mStride;
+  gfx::SurfaceFormat mFormat;
+
+private:
+  DISALLOW_EVIL_CONSTRUCTORS(SharedImageData);
+
+  ~SharedImageData()
+  { }
+};
+
 class CompositorBridgeParentBase : public PCompositorBridgeParent,
                                    public HostIPCAllocator,
                                    public ShmemAllocator,
@@ -154,6 +187,17 @@ public:
   virtual bool IsRemote() const {
     return false;
   }
+
+  already_AddRefed<SharedImageData> GetSharedImage(uint64_t aId);
+  mozilla::ipc::IPCResult RecvAddSharedImage(const uint64_t& aId,
+                                             const gfx::IntSize& aSize,
+                                             const int32_t& aStride,
+                                             const gfx::SurfaceFormat& aFormat,
+                                             const mozilla::ipc::SharedMemoryBasic::Handle& aHandle) override;
+  mozilla::ipc::IPCResult RecvRemoveSharedImage(const uint64_t& aId) override;
+
+private:
+  nsRefPtrHashtable<nsUint64HashKey, SharedImageData> mSharedImages;
 };
 
 class CompositorBridgeParent final : public CompositorBridgeParentBase

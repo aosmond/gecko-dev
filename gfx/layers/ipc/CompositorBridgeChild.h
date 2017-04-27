@@ -239,6 +239,8 @@ public:
 
   wr::MaybeExternalImageId GetNextExternalImageId() override;
 
+  uint64_t GetNextSharedImageId();
+
 private:
   // Private destructor, to discourage deletion outside of Release():
   virtual ~CompositorBridgeChild();
@@ -274,6 +276,15 @@ private:
   already_AddRefed<nsIEventTarget>
   GetSpecificMessageEventTarget(const Message& aMsg) override;
 
+  uint32_t GetNextResourceId()
+  {
+    uint32_t resourceId = ++mResourceId;
+    MOZ_RELEASE_ASSERT(resourceId != UINT32_MAX);
+    return resourceId;
+  }
+
+  uint64_t GetNextUniqueId();
+
   // Class used to store the shared FrameMetrics, mutex, and APZCId  in a hash table
   class SharedFrameMetricsData {
   public:
@@ -303,6 +314,8 @@ private:
   RefPtr<LayerManager> mLayerManager;
 
   uint32_t mNamespace;
+
+  uint32_t mResourceId;
 
   // When not multi-process, hold a reference to the CompositorBridgeParent to keep it
   // alive. This reference should be null in multi-process.

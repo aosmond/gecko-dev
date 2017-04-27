@@ -79,6 +79,7 @@ Atomic<int32_t> KnowsCompositor::sSerialCounter(0);
 CompositorBridgeChild::CompositorBridgeChild(LayerManager *aLayerManager, uint32_t aNamespace)
   : mLayerManager(aLayerManager)
   , mNamespace(aNamespace)
+  , mResourceId(0)
   , mCanSend(false)
   , mFwdTransactionId(0)
   , mDeviceResetSequenceNumber(0)
@@ -1190,13 +1191,21 @@ CompositorBridgeChild::DeallocPWebRenderBridgeChild(PWebRenderBridgeChild* aActo
 wr::MaybeExternalImageId
 CompositorBridgeChild::GetNextExternalImageId()
 {
-  static uint32_t sNextID = 1;
-  ++sNextID;
-  MOZ_RELEASE_ASSERT(sNextID != UINT32_MAX);
+  return Some(wr::ToExternalImageId(GetNextUniqueId()));
+}
 
-  uint64_t imageId = mNamespace;
-  imageId = imageId << 32 | sNextID;
-  return Some(wr::ToExternalImageId(imageId));
+uint64_t
+CompositorBridgeChild::GetNextSharedImageId()
+{
+  return GetNextUniqueId();
+}
+
+uint64_t
+CompositorBridgeChild::GetNextUniqueId()
+{
+  uint64_t id = mNamespace;
+  id = id << 32 | GetNextResourceId();
+  return id;
 }
 
 } // namespace layers

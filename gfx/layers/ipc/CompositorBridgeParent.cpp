@@ -2319,5 +2319,54 @@ CompositorBridgeParent::RecvAllPluginsCaptured()
 #endif
 }
 
+already_AddRefed<SharedImageData>
+CompositorBridgeParentBase::GetSharedImage(uint64_t aId)
+{
+  RefPtr<SharedImageData> data;
+  mSharedImages.Get(aId, getter_AddRefs(data));
+  return data.forget();
+}
+
+mozilla::ipc::IPCResult
+CompositorBridgeParentBase::RecvAddSharedImage(const uint64_t& aId,
+                                               const gfx::IntSize& aSize,
+                                               const int32_t& aStride,
+                                               const gfx::SurfaceFormat& aFormat,
+                                               const ipc::SharedMemoryBasic::Handle& aHandle)
+{
+  RefPtr<ipc::SharedMemoryBasic> shmem = new ipc::SharedMemoryBasic();
+  if (NS_WARN_IF(!shmem->IsHandleValid(aHandle))) {
+    return IPC_FAIL_NO_REASON(this);
+  }
+
+  shmem->SetHandle(aHandle, ipc::SharedMemory::RightsReadOnly);
+
+  MOZ_ASSERT(!mSharedImages.Contains(aId));
+
+  RefPtr<SharedImageData> data = new SharedImageData();
+  data->mSize = aSize;
+  data->mStride = aStride;
+  data->mFormat = aFormat;
+
+  size_t len = data->GetAlignedDataLength();
+  if (NS_WARN_IF(!shmem->Map(len))) {
+    return IPC_FAIL_NO_REASON(this);
+  }
+
+  shmem->CloseHandle();
+  data->mBuffer = Move(shmem);
+  mSharedImages.Put(aId, data.forget());
+  return IPC_OK();
+}
+
+mozilla::ipc::IPCResult
+CompositorBridgeParentBase::RecvRemoveSharedImage(const uint64_t& aId)
+{
+  MOZ_ASSERT(aId);
+  MOZ_ASSERT(mSharedImages.Contains(aId));
+  mSharedImages.Remove(aId);
+  return IPC_OK();
+}
+
 } // namespace layers
 } // namespace mozilla

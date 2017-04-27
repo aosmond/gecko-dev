@@ -255,6 +255,9 @@ parent:
   sync PWebRenderBridge(PipelineId pipelineId, LayoutDeviceIntSize aSize)
     returns (TextureFactoryIdentifier textureFactoryIdentifier, uint32_t idNamespace); //XXX: use the WrIdNamespace type
 
+  async AddSharedImage(uint64_t aId, IntSize aSize, int32_t aStride, SurfaceFormat aFormat, Handle aHandle);
+  async RemoveSharedImage(uint64_t aId);
+
 child:
   // Send back Compositor Frame Metrics from APZCs so tiled layers can
   // update progressively.
