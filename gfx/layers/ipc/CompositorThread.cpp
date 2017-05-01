@@ -8,6 +8,7 @@
 #include "nsThreadUtils.h"
 #include "CompositorBridgeParent.h"
 #include "mozilla/media/MediaSystemResourceService.h"
+#include "SharedSurfaceBridgeParent.h"
 
 namespace mozilla {
 
