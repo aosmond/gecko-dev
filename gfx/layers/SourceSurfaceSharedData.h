@@ -13,6 +13,66 @@
 namespace mozilla {
 namespace gfx {
 
+class SourceSurfaceSharedDataWrapper final : public DataSourceSurface
+{
+  typedef mozilla::ipc::SharedMemoryBasic SharedMemoryBasic;
+
+public:
+  MOZ_DECLARE_REFCOUNTED_VIRTUAL_TYPENAME(SourceSurfaceSharedData, override)
+
+  SourceSurfaceSharedDataWrapper()
+    : mStride(0)
+    , mFormat(SurfaceFormat::UNKNOWN)
+  { }
+
+  bool Init(const IntSize& aSize,
+            int32_t aStride,
+            SurfaceFormat aFormat,
+            const SharedMemoryBasic::Handle& aHandle);
+
+  int32_t Stride() override { return mStride; }
+
+  SurfaceType GetType() const override { return SurfaceType::DATA_SHARED; }
+  IntSize GetSize() const override { return mSize; }
+  SurfaceFormat GetFormat() const override { return mFormat; }
+
+  uint8_t* GetData() override
+  {
+    return static_cast<uint8_t*>(mBuf->memory());
+  }
+
+  bool OnHeap() const override
+  {
+    return false;
+  }
+
+  bool Map(MapType, MappedSurface *aMappedSurface) override
+  {
+    aMappedSurface->mData = GetData();
+    aMappedSurface->mStride = mStride;
+    return true;
+  }
+
+  void Unmap() override
+  { }
+
+private:
+  size_t GetDataLength() const
+  {
+    return static_cast<size_t>(mStride) * mSize.height;
+  }
+
+  size_t GetAlignedDataLength() const
+  {
+    return mozilla::ipc::SharedMemory::PageAlignedSize(GetDataLength());
+  }
+
+  int32_t mStride;
+  IntSize mSize;
+  RefPtr<SharedMemoryBasic> mBuf;
+  SurfaceFormat mFormat;
+};
+
 /**
  * This class is used to wrap shared (as in process) data buffers used by a
  * source surface.
@@ -36,7 +96,7 @@ public:
   {
   }
 
-  bool Init(const IntSize &aSize,
+  bool Init(const IntSize& aSize,
             int32_t aStride,
             SurfaceFormat aFormat);
 

@@ -12,6 +12,28 @@ namespace mozilla {
 namespace gfx {
 
 bool
+SourceSurfaceSharedDataWrapper::Init(const IntSize& aSize,
+                                     int32_t aStride,
+                                     SurfaceFormat aFormat,
+                                     const SharedMemoryBasic::Handle& aHandle)
+{
+  mSize = aSize;
+  mStride = aStride;
+  mFormat = aFormat;
+
+  size_t len = GetAlignedDataLength();
+  mBuf = new SharedMemoryBasic();
+  if (NS_WARN_IF(!mBuf->SetHandle(aHandle, ipc::SharedMemory::RightsReadOnly)) ||
+      NS_WARN_IF(!mBuf->Map(len))) {
+    mBuf = nullptr;
+    return false;
+  }
+
+  mBuf->CloseHandle();
+  return true;
+}
+
+bool
 SourceSurfaceSharedData::Init(const IntSize &aSize,
                               int32_t aStride,
                               SurfaceFormat aFormat)

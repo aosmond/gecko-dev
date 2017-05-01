@@ -24,13 +24,6 @@ SharedSurfaceBridgeParent::RecvAdd(const uint64_t& aId,
 }
 
 mozilla::ipc::IPCResult
-SharedSurfaceBridgeParent::RecvReplace(const uint64_t& aId,
-                                       const mozilla::ipc::SharedMemoryBasic::Handle& aHandle)
-{
-  return IPC_OK();
-}
-
-mozilla::ipc::IPCResult
 SharedSurfaceBridgeParent::RecvRemove(const uint64_t& aId)
 {
   return IPC_OK();

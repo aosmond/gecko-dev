@@ -17,7 +17,6 @@
 namespace mozilla {
 namespace gfx {
 class SourceSurfaceSharedData;
-class SourceSurfaceSharedDataWrapper;
 } // namespace gfx
 
 namespace layers {
@@ -25,7 +24,7 @@ namespace layers {
 class SharedSurfaceManager final
 {
 public:
-  static already_AddRefed<SourceSurfaceSharedDataWrapper> Get(const uint64_t aId);
+  static already_AddRefed<DataSourceSurface> Get(uint64_t aId);
   static nsresult ShareToParent(SourceSurfaceSharedData* aSurface, uint64_t& aId);
 private:
   SharedSurfaceManager() = delete;
