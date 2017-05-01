@@ -9,6 +9,48 @@
 namespace mozilla {
 namespace layers {
 
+class SharedSurfaceManagerImpl final
+{
+public:
+  SharedSurfaceManagerImpl()
+  { }
+
+  already_AddRefed<DataSourceSurface> Get(uint64_t aId)
+  {
+    MOZ_ASSERT(NS_IsMainThread());
+    RefPtr<DataSourceSurface> surface;
+    mSurfaces.Get(aId, getter_AddRefs(surface));
+    return surface.forget();
+  }
+
+  nsresult ShareToParent(SourceSurfaceSharedData* aSurface, uint64_t& aId)
+  {
+    MOZ_ASSERT(NS_IsMainThread());
+  }
+
+  void Add(RefPtr<DataSourceSurface>&& aSurface, uint64_t aId)
+  {
+    MOZ_ASSERT(NS_IsMainThread());
+    MOZ_ASSERT(!mSurfaces.Contains(aId));
+    mSurfaces.Put(aId, Move(aSurface));
+  }
+
+  void Remove(uint64_t aId)
+  {
+    MOZ_ASSERT(NS_IsMainThread());
+    MOZ_ASSERT(mSurfaces.Contains(aId));
+    mSurfaces.Remove(aId);
+  }
+
+private:
+  ~SharedSurfaceManagerImpl()
+  { }
+
+  nsRefPtrHashtable<nsUint64HashKey, DataSourceSurface> mSurfaces;
+};
+
+static StaticRefPtr<SharedSurfaceManagerImpl> sManager = nullptr;
+
 SharedSurfaceBridgeParent::SharedSurfaceBridgeParent()
 {
 }
@@ -20,12 +62,23 @@ SharedSurfaceBridgeParent::RecvAdd(const uint64_t& aId,
                                    const gfx::SurfaceFormat& aFormat,
                                    const mozilla::ipc::SharedMemoryBasic::Handle& aHandle)
 {
+  RefPtr<SourceSurfaceSharedDataWrapper> surface = new SourceSurfaceSharedDataWrapper();
+  if (NS_WARN_IF(!surface->Init(aSize, aStride, aFormat, aHandle))) {
+    return IPC_OK();
+  }
+
+  if (sManager) {
+    sManager->Add(Move(surface), aId);
+  }
   return IPC_OK();
 }
 
 mozilla::ipc::IPCResult
 SharedSurfaceBridgeParent::RecvRemove(const uint64_t& aId)
 {
+  if (sManager) {
+    sManager->Remove(aId);
+  }
   return IPC_OK();
 }
 

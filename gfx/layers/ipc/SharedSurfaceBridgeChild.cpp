@@ -119,12 +119,12 @@ SharedSurfaceBridgeChild::Share(SourceSurfaceSharedData* aSurface,
     return NS_ERROR_NOT_IMPLEMENTED;
   }
 
-  static UserDataKey sShared;
+  static UserDataKey sSharedKey;
   SharedUserData* data =
-    static_cast<SharedUserData*>(aSurface->GetUserData(&sShared));
+    static_cast<SharedUserData*>(aSurface->GetUserData(&sSharedKey));
   if (!data) {
     data = new SharedUserData(this, GetNextId());
-    aSurface->AddUserData(&sShared, data, DestroySharedUserData);
+    aSurface->AddUserData(&sSharedKey, data, DestroySharedUserData);
   } else if (MOZ_UNLIKELY(data->UpdateBridge(this))) {
     // FIXME: Is there a better way to clean this up if the bridge gets
     // reinitialized to ensure we release it in a timely manner? Perhaps
