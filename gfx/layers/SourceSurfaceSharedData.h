@@ -28,6 +28,7 @@ public:
     : mMutex("SourceSurfaceSharedData")
     , mStride(0)
     , mMapCount(0)
+    , mHandleCount(0)
     , mFormat(SurfaceFormat::UNKNOWN)
     , mClosed(false)
     , mFinalized(false)
@@ -133,15 +134,61 @@ public:
   bool ReallocHandle();
 
   /**
-   * Indicates we have finished writing to the buffer and it may be marked as
+   * Signals we have finished writing to the buffer and it may be marked as
    * read only. May release the handle if possible (see CloseHandleInternal).
    */
   void Finalize();
+
+  /**
+   * Indicates whether or not the buffer can change. If this returns true, it is
+   * guaranteed to continue to do so for the remainder of the surface's life.
+   */
+  bool IsFinalized() const
+  {
+    MutexAutoLock lock(mMutex);
+    return mFinalized;
+  }
+
+  /**
+   * While a HandleLock exists for the given surface, the shared memory handle
+   * cannot be released.
+   */
+  class MOZ_STACK_CLASS HandleLock final {
+  public:
+    explicit HandleLock(SourceSurfaceSharedData* aSurface)
+      : mSurface(aSurface)
+    {
+      mSurface->LockHandle();
+    }
+
+    ~HandleLock()
+    {
+      mSurface->UnlockHandle();
+    }
+
+  private:
+    RefPtr<SourceSurfaceSharedData> mSurface;
+  };
 
 private:
   ~SourceSurfaceSharedData() override
   {
     MOZ_ASSERT(mMapCount == 0);
+  }
+
+  void LockHandle()
+  {
+    MutexAutoLock lock(mMutex);
+    ++mHandleCount;
+  }
+
+  void UnlockHandle()
+  {
+    MutexAutoLock lock(mMutex);
+    MOZ_ASSERT(mHandleCount > 0);
+    --mHandleCount;
+    mShared = true;
+    CloseHandleInternal();
   }
 
   uint8_t* GetDataInternal() const;
@@ -165,6 +212,7 @@ private:
   mutable Mutex mMutex;
   int32_t mStride;
   int32_t mMapCount;
+  int32_t mHandleCount;
   IntSize mSize;
   RefPtr<SharedMemoryBasic> mBuf;
   RefPtr<SharedMemoryBasic> mOldBuf;
