@@ -19,6 +19,7 @@
 #include "mozilla/layers/CompositorVsyncScheduler.h"
 #include "mozilla/layers/ImageBridgeParent.h"
 #include "mozilla/layers/ImageDataSerializer.h"
+#include "mozilla/layers/SharedSurfaceBridgeParent.h"
 #include "mozilla/layers/TextureHost.h"
 #include "mozilla/layers/WebRenderCompositableHolder.h"
 #include "mozilla/layers/WebRenderImageHost.h"
@@ -470,6 +471,32 @@ WebRenderBridgeParent::ProcessWebRenderCommands(const gfx::IntSize &aSize,
           break;
         }
         RefPtr<DataSourceSurface> dSurf = host->GetAsSurface();
+        if (!dSurf) {
+          break;
+        }
+
+        DataSourceSurface::MappedSurface map;
+        if (!dSurf->Map(gfx::DataSourceSurface::MapType::READ, &map)) {
+          break;
+        }
+
+        IntSize size = dSurf->GetSize();
+        wr::ImageDescriptor descriptor(size, map.mStride, dSurf->GetFormat());
+        auto slice = Range<uint8_t>(map.mData, size.height * map.mStride);
+        mApi->AddImage(key, descriptor, slice);
+
+        dSurf->Unmap();
+        break;
+      }
+      case WebRenderParentCommand::TOpAddSharedSurface: {
+        const OpAddSharedSurface& op = cmd.get_OpAddSharedSurface();
+        wr::ImageKey key = op.key();
+        RefPtr<DataSourceSurface> dSurf =
+          SharedSurfaceBridgeParent::Get(OtherPid(), op.externalImageId());
+        MOZ_ASSERT(dSurf);
+        MOZ_ASSERT(!mActiveKeys.Get(wr::AsUint64(key), nullptr));
+        mActiveKeys.Put(wr::AsUint64(key), key);
+
         if (!dSurf) {
           break;
         }

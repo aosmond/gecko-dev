@@ -35,6 +35,10 @@ public:
 
 protected:
   CompositableType GetImageClientType();
+  void DiscardKeyIfShared();
+  bool TryShared(Image* aImage);
+  bool TryExternal();
+  bool TryMaskExternal();
 
   class Holder {
   public:
@@ -52,6 +56,7 @@ protected:
   CompositableType mImageClientTypeContainer;
   Maybe<wr::PipelineId> mPipelineId;
   MozPromiseRequestHolder<PipelineIdPromise> mPipelineIdRequest;
+  bool mIsShared;
 };
 
 } // namespace layers
