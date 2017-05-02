@@ -692,6 +692,7 @@ GPUProcessManager::CreateContentBridges(base::ProcessId aOtherProcess,
                                         ipc::Endpoint<PImageBridgeChild>* aOutImageBridge,
                                         ipc::Endpoint<PVRManagerChild>* aOutVRBridge,
                                         ipc::Endpoint<dom::PVideoDecoderManagerChild>* aOutVideoManager,
+                                        ipc::Endpoint<PSharedSurfaceBridgeChild>* aOutSharedSurfaceBridge,
                                         nsTArray<uint32_t>* aNamespaces)
 {
   if (!CreateContentCompositorBridge(aOtherProcess, aOutCompositor) ||
@@ -703,7 +704,10 @@ GPUProcessManager::CreateContentBridges(base::ProcessId aOtherProcess,
   // VideoDeocderManager is only supported in the GPU process, so we allow this to be
   // fallible.
   CreateContentVideoDecoderManager(aOtherProcess, aOutVideoManager);
-  // Allocates 2 namaspaces(for CompositorBridgeChild and ImageBridgeChild)
+  CreateContentSharedSurfaceBridge(aOtherProcess, aOutSharedSurfaceBridge);
+  // Allocates 3 namaspaces (for CompositorBridgeChild, ImageBridgeChild and
+  // SharedSurfaceBridgeChild)
+  aNamespaces->AppendElement(AllocateNamespace());
   aNamespaces->AppendElement(AllocateNamespace());
   aNamespaces->AppendElement(AllocateNamespace());
   return true;
@@ -770,6 +774,38 @@ GPUProcessManager::CreateContentImageBridge(base::ProcessId aOtherProcess,
     if (!ImageBridgeParent::CreateForContent(Move(parentPipe))) {
       return false;
     }
+  }
+
+  *aOutEndpoint = Move(childPipe);
+  return true;
+}
+
+bool
+GPUProcessManager::CreateContentSharedSurfaceBridge(base::ProcessId aOtherProcess,
+                                                    ipc::Endpoint<PSharedSurfaceBridgeChild>* aOutEndpoint)
+{
+  EnsureImageBridgeChild();
+
+  base::ProcessId gpuPid = mGPUChild
+                           ? mGPUChild->OtherPid()
+                           : base::GetCurrentProcId();
+
+  ipc::Endpoint<PSharedSurfaceBridgeParent> parentPipe;
+  ipc::Endpoint<PSharedSurfaceBridgeChild> childPipe;
+  nsresult rv = PSharedSurfaceBridge::CreateEndpoints(
+    gpuPid,
+    aOtherProcess,
+    &parentPipe,
+    &childPipe);
+  if (NS_FAILED(rv)) {
+    gfxCriticalNote << "Could not create shared surface bridge: " << hexa(int(rv));
+    return false;
+  }
+
+  if (EnsureGPUReady()) {
+    mGPUChild->SendNewContentSharedSurfaceBridge(Move(parentPipe));
+  } else {
+    SharedSurfaceBridgeParent::Init(Move(parentPipe));
   }
 
   *aOutEndpoint = Move(childPipe);
