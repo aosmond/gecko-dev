@@ -37,6 +37,12 @@ public:
     return mId;
   }
 
+  void SetId(uint64_t aId)
+  {
+    mId = aId;
+    mShared = false;
+  }
+
   bool IsShared() const
   {
     return mShared;
@@ -78,7 +84,15 @@ SharedSurfaceBridgeChild::Init(uint32_t aNamespace)
     MOZ_ASSERT_UNREACHABLE("Already initalized");
     return;
   }
+  sInstance = new SharedSurfaceBridgeChild(aNamespace);
+}
 
+/* static */ void
+SharedSurfaceBridgeChild::Reinit(uint32_t aNamespace)
+{
+  MOZ_ASSERT(NS_IsMainThread());
+  MOZ_ASSERT(sInstance);
+  MOZ_ASSERT(sInstance->mNamespace != aNamespace);
   sInstance = new SharedSurfaceBridgeChild(aNamespace);
 }
 
@@ -123,6 +137,12 @@ SharedSurfaceBridgeChild::GetNextId()
   return id;
 }
 
+bool
+SharedSurfaceBridgeChild::OwnsId(uint64_t aId) const
+{
+  return mNamespace == (aId >> 32);
+}
+
 nsresult
 SharedSurfaceBridgeChild::ShareInternal(SourceSurfaceSharedData* aSurface,
                                         uint64_t& aId)
@@ -135,6 +155,11 @@ SharedSurfaceBridgeChild::ShareInternal(SourceSurfaceSharedData* aSurface,
   if (!data) {
     data = new SharedUserData(GetNextId());
     aSurface->AddUserData(&sSharedKey, data, DestroySharedUserData);
+  } else if (!OwnsId(data->Id())) {
+    // If the ID isn't owned by us, that means the bridge was reinitialized, due
+    // to the GPU process crashing. All previous mappings have been released.
+    MOZ_ASSERT(OtherPid() != base::GetCurrentProcId());
+    data->SetId(GetNextId());
   } else if (data->IsShared()) {
     // If the id is valid, we know it has already been shared. Now we just need
     // to regenerate the image key if it doesn't match the last image this layer
@@ -199,8 +224,10 @@ void
 SharedSurfaceBridgeChild::UnshareInternal(uint64_t aId)
 {
   if (OtherPid() == base::GetCurrentProcId()) {
+    MOZ_ASSERT(OwnsId(aId));
     SharedSurfaceBridgeParent::Remove(aId);
-  } else {
+  } else if (OwnsId(aId)) {
+    // Only attempt to release current mappings in the GPU process.
     SendRemove(aId);
   }
 }

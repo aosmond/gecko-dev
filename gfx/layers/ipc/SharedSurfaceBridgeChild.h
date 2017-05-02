@@ -26,6 +26,7 @@ class SharedSurfaceBridgeChild : public PSharedSurfaceBridgeChild
 
 public:
   static void Init(uint32_t aNamespace);
+  static void Reinit(uint32_t aNamespace);
   static void Shutdown();
   static nsresult Share(SourceSurfaceSharedData* aSurface, uint64_t& aId);
   void ActorDestroy(ActorDestroyReason aReason) override;
@@ -45,6 +46,7 @@ private:
   nsresult ShareInternal(SourceSurfaceSharedData* aSurface, uint64_t& aId);
   void UnshareInternal(uint64_t aId);
 
+  bool OwnsId(uint64_t aId) const;
   uint64_t GetNextId();
 
   uint32_t mNamespace;
