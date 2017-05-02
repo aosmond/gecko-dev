@@ -5,6 +5,8 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #include "SharedSurfaceBridgeParent.h"
+#include "mozilla/StaticPtr.h"
+#include "nsRefPtrHashtable.h"
 
 namespace mozilla {
 namespace layers {
@@ -28,11 +30,12 @@ public:
     MOZ_ASSERT(NS_IsMainThread());
   }
 
-  void Add(RefPtr<DataSourceSurface>&& aSurface, uint64_t aId)
+  void Add(uint64_t aId, already_AddRefed<DataSourceSurface> aSurface)
   {
     MOZ_ASSERT(NS_IsMainThread());
     MOZ_ASSERT(!mSurfaces.Contains(aId));
-    mSurfaces.Put(aId, Move(aSurface));
+    RefPtr<DataSourceSurface> surf = aSurface;
+    mSurfaces.Put(aId, surf.forget());
   }
 
   void Remove(uint64_t aId)
@@ -49,7 +52,7 @@ private:
   nsRefPtrHashtable<nsUint64HashKey, DataSourceSurface> mSurfaces;
 };
 
-static StaticRefPtr<SharedSurfaceManagerImpl> sManager = nullptr;
+static StaticRefPtr<SharedSurfaceManagerImpl> sManager;
 
 SharedSurfaceBridgeParent::SharedSurfaceBridgeParent()
 {
@@ -68,7 +71,7 @@ SharedSurfaceBridgeParent::RecvAdd(const uint64_t& aId,
   }
 
   if (sManager) {
-    sManager->Add(Move(surface), aId);
+    sManager->Add(aId, surface.forget());
   }
   return IPC_OK();
 }
