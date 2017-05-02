@@ -8,11 +8,13 @@
 
 #include <stdint.h>                     // for uint32_t, uint64_t
 #include "mozilla/Attributes.h"         // for override
+#include "mozilla/StaticPtr.h"          // for StaticRefPtr
 #include "mozilla/RefPtr.h"             // for already_AddRefed
 #include "mozilla/ipc/SharedMemory.h"   // for SharedMemory, etc
 #include "mozilla/gfx/2D.h"             // for SurfaceFormat
 #include "mozilla/gfx/Point.h"          // for IntSize
 #include "mozilla/layers/PSharedSurfaceBridgeParent.h"
+#include "nsRefPtrHashtable.h"
 
 namespace mozilla {
 namespace gfx {
@@ -21,20 +23,16 @@ class SourceSurfaceSharedData;
 
 namespace layers {
 
-class SharedSurfaceManager final
-{
-public:
-  static already_AddRefed<DataSourceSurface> Get(uint64_t aId);
-  static nsresult ShareToParent(SourceSurfaceSharedData* aSurface, uint64_t& aId);
-private:
-  SharedSurfaceManager() = delete;
-  ~SharedSurfaceManager() = delete;
-};
+class SharedSurfaceBridgeChild;
 
 class SharedSurfaceBridgeParent final : public PSharedSurfaceBridgeParent
 {
+  NS_INLINE_DECL_REFCOUNTING(SharedSurfaceBridgeParent)
+
 public:
-  SharedSurfaceBridgeParent();
+  static void Init();
+  static void Shutdown();
+  static already_AddRefed<DataSourceSurface> Get(uint64_t aId);
 
   mozilla::ipc::IPCResult RecvAdd(const uint64_t& aId,
                                   const gfx::IntSize& aSize,
@@ -43,6 +41,22 @@ public:
                                   const mozilla::ipc::SharedMemoryBasic::Handle& aHandle) override;
 
   mozilla::ipc::IPCResult RecvRemove(const uint64_t& aId) override;
+
+  void ActorDestroy(ActorDestroyReason aReason) override;
+
+private:
+  friend class SharedSurfaceBridgeChild;
+
+  static void Insert(uint64_t aId, already_AddRefed<DataSourceSurface> aSurface);
+  static void Remove(uint64_t aId);
+  static StaticRefPtr<SharedSurfaceBridgeParent> sInstance;
+
+  SharedSurfaceBridgeParent();
+
+  ~SharedSurfaceBridgeParent() override
+  { }
+
+  nsRefPtrHashtable<nsUint64HashKey, DataSourceSurface> mSurfaces;
 };
 
 } // namespace layers

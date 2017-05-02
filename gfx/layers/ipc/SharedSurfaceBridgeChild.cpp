@@ -4,7 +4,9 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #include "SharedSurfaceBridgeChild.h"
+#include "SharedSurfaceBridgeParent.h"
 #include "SourceSurfaceSharedData.h"
+#include "mozilla/StaticPtr.h"          // for StaticRefPtr
 #include "MainThreadUtils.h"            // for NS_IsMainThread
 
 namespace mozilla {
@@ -12,19 +14,22 @@ namespace layers {
 
 using namespace mozilla::gfx;
 
-class SharedUserData final
+StaticRefPtr<SharedSurfaceBridgeChild> SharedSurfaceBridgeChild::sInstance;
+
+class SharedSurfaceBridgeChild::SharedUserData final
 {
 public:
-  explicit SharedUserData(SharedSurfaceBridgeChild* aBridge,
-                                uint64_t aId)
-    : mBridge(aBridge)
-    , mId(aId)
+  explicit SharedUserData(uint64_t aId)
+    : mId(aId)
     , mShared(false)
   { }
 
   ~SharedUserData()
   {
-    Release();
+    if (mShared) {
+      SharedSurfaceBridgeChild::Unshare(mId);
+      mShared = false;
+    }
   }
 
   uint64_t Id() const
@@ -43,41 +48,13 @@ public:
     mShared = true;
   }
 
-  bool UpdateBridge(SharedSurfaceBridgeChild* aBridge)
-  {
-    if (MOZ_UNLIKELY(aBridge != mBridge)) {
-      Unused << NS_WARN_IF(Release());
-      mBridge = aBridge;
-      return true;
-    }
-    return false;
-  }
-
 private:
-  bool Release()
-  {
-    bool released = false;
-    if (mShared) {
-      mShared = false;
-      MOZ_ASSERT(mBridge);
-
-      // If the channel is closed, then we already freed the image in the WR
-      // process.
-      if (mBridge->IPCOpen()) {
-        mBridge->SendRemove(mId);
-        released = true;
-      }
-    }
-    return released;
-  }
-
-  RefPtr<SharedSurfaceBridgeChild> mBridge;
   uint64_t mId;
   bool mShared : 1;
 };
 
-static void
-DestroySharedUserData(void* aClosure)
+/* static */ void
+SharedSurfaceBridgeChild::DestroySharedUserData(void* aClosure)
 {
   MOZ_ASSERT(aClosure);
 
@@ -89,8 +66,47 @@ DestroySharedUserData(void* aClosure)
     return;
   }
 
-  SharedUserData* data = static_cast<SharedUserData*>(aClosure);
+  auto data = static_cast<SharedUserData*>(aClosure);
   delete data;
+}
+
+/* static */ void
+SharedSurfaceBridgeChild::Init(uint32_t aNamespace)
+{
+  MOZ_ASSERT(NS_IsMainThread());
+  if (NS_WARN_IF(sInstance)) {
+    MOZ_ASSERT_UNREACHABLE("Already initalized");
+    return;
+  }
+
+  sInstance = new SharedSurfaceBridgeChild(aNamespace);
+}
+
+/* static */ void
+SharedSurfaceBridgeChild::Shutdown()
+{
+  MOZ_ASSERT(NS_IsMainThread());
+  MOZ_ASSERT(sInstance);
+  sInstance = nullptr;
+}
+
+/* static */ nsresult
+SharedSurfaceBridgeChild::Share(SourceSurfaceSharedData* aSurface,
+                                uint64_t& aId)
+{
+  if (!sInstance) {
+    return NS_ERROR_NOT_INITIALIZED;
+  }
+  return sInstance->ShareInternal(aSurface, aId);
+}
+
+/* static */ void
+SharedSurfaceBridgeChild::Unshare(uint64_t aId)
+{
+  if (!sInstance) {
+    return;
+  }
+  sInstance->UnshareInternal(aId);
 }
 
 SharedSurfaceBridgeChild::SharedSurfaceBridgeChild(uint32_t aNamespace)
@@ -108,27 +124,17 @@ SharedSurfaceBridgeChild::GetNextId()
 }
 
 nsresult
-SharedSurfaceBridgeChild::Share(SourceSurfaceSharedData* aSurface,
-                                uint64_t& aId)
+SharedSurfaceBridgeChild::ShareInternal(SourceSurfaceSharedData* aSurface,
+                                        uint64_t& aId)
 {
   MOZ_ASSERT(NS_IsMainThread());
-
-  auto pid = OtherPid();
-
-  if (pid == base::GetCurrentProcId()) {
-    return NS_ERROR_NOT_IMPLEMENTED;
-  }
 
   static UserDataKey sSharedKey;
   SharedUserData* data =
     static_cast<SharedUserData*>(aSurface->GetUserData(&sSharedKey));
   if (!data) {
-    data = new SharedUserData(this, GetNextId());
+    data = new SharedUserData(GetNextId());
     aSurface->AddUserData(&sSharedKey, data, DestroySharedUserData);
-  } else if (MOZ_UNLIKELY(data->UpdateBridge(this))) {
-    // FIXME: Is there a better way to clean this up if the bridge gets
-    // reinitialized to ensure we release it in a timely manner? Perhaps
-    // SurfaceCacheUtils::DiscardAll or something similar for shared images?
   } else if (data->IsShared()) {
     // If the id is valid, we know it has already been shared. Now we just need
     // to regenerate the image key if it doesn't match the last image this layer
@@ -143,6 +149,18 @@ SharedSurfaceBridgeChild::Share(SourceSurfaceSharedData* aSurface,
   // while we are in the processing of sharing our newly reallocated handle.
   // Once this goes out of scope, it will request release as well.
   SourceSurfaceSharedData::HandleLock lock(aSurface);
+
+  // If we live in the same process, then it is a simple matter of directly
+  // asking the parent instance to store a pointer to the same surface, no need
+  // to map the data into our memory space twice.
+  auto pid = OtherPid();
+  if (pid == base::GetCurrentProcId()) {
+    RefPtr<DataSourceSurface> surf = aSurface;
+    SharedSurfaceBridgeParent::Insert(data->Id(), surf.forget());
+    data->MarkShared();
+    aId = data->Id();
+    return NS_OK;
+  }
 
   // Attempt to share a handle with the parent process. The handle may not yet
   // be closed because we may be the first process to want access to the image
@@ -175,6 +193,21 @@ SharedSurfaceBridgeChild::Share(SourceSurfaceSharedData* aSurface,
   aId = data->Id();
   SendAdd(aId, size, aSurface->Stride(), format, handle);
   return NS_OK;
+}
+
+void
+SharedSurfaceBridgeChild::UnshareInternal(uint64_t aId)
+{
+  if (OtherPid() == base::GetCurrentProcId()) {
+    SharedSurfaceBridgeParent::Remove(aId);
+  } else {
+    SendRemove(aId);
+  }
+}
+
+void
+SharedSurfaceBridgeChild::ActorDestroy(ActorDestroyReason aReason)
+{
 }
 
 } // namespace layers

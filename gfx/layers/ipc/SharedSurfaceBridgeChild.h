@@ -10,6 +10,7 @@
 #include <stdint.h>                     // for uint32_t, uint64_t
 #include "mozilla/Attributes.h"         // for override
 #include "mozilla/RefPtr.h"             // for already_AddRefed
+#include "mozilla/StaticPtr.h"          // for StaticRefPtr
 #include "mozilla/layers/PSharedSurfaceBridgeChild.h"
 
 namespace mozilla {
@@ -24,14 +25,25 @@ class SharedSurfaceBridgeChild : public PSharedSurfaceBridgeChild
   NS_INLINE_DECL_REFCOUNTING(SharedSurfaceBridgeChild)
 
 public:
-  SharedSurfaceBridgeChild(uint32_t aNamespace);
-
-  nsresult Share(SourceSurfaceSharedData* aSurface, uint64_t& aId);
-  bool IPCOpen() const { return true; } // FIXME
+  static void Init(uint32_t aNamespace);
+  static void Shutdown();
+  static nsresult Share(SourceSurfaceSharedData* aSurface, uint64_t& aId);
+  void ActorDestroy(ActorDestroyReason aReason) override;
 
 private:
+  class SharedUserData;
+
+  static void Unshare(uint64_t aId);
+  static void DestroySharedUserData(void* aClosure);
+  static StaticRefPtr<SharedSurfaceBridgeChild> sInstance;
+
+  SharedSurfaceBridgeChild(uint32_t aNamespace);
+
   ~SharedSurfaceBridgeChild() override
   { }
+
+  nsresult ShareInternal(SourceSurfaceSharedData* aSurface, uint64_t& aId);
+  void UnshareInternal(uint64_t aId);
 
   uint64_t GetNextId();
 

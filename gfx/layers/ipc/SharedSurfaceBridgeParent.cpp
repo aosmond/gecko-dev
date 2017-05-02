@@ -5,102 +5,71 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #include "SharedSurfaceBridgeParent.h"
-#include "mozilla/StaticPtr.h"
-#include "nsRefPtrHashtable.h"
+#include "mozilla/StaticPtr.h"                // for StaticRefPtr
 
 namespace mozilla {
 namespace layers {
 
-class SharedSurfaceManagerImpl final : public nsIObserver
-{
-  NS_DECL_ISUPPORTS
-
-public:
-  already_AddRefed<DataSourceSurface> Get(uint64_t aId)
-  {
-    MOZ_ASSERT(NS_IsMainThread());
-    RefPtr<DataSourceSurface> surface;
-    mSurfaces.Get(aId, getter_AddRefs(surface));
-    return surface.forget();
-  }
-
-  nsresult ShareToParent(SourceSurfaceSharedData* aSurface, uint64_t& aId)
-  {
-    MOZ_ASSERT(NS_IsMainThread());
-  }
-
-  void Add(uint64_t aId, already_AddRefed<DataSourceSurface> aSurface)
-  {
-    MOZ_ASSERT(NS_IsMainThread());
-    MOZ_ASSERT(!mSurfaces.Contains(aId));
-    RefPtr<DataSourceSurface> surf = aSurface;
-    mSurfaces.Put(aId, surf.forget());
-  }
-
-  void Remove(uint64_t aId)
-  {
-    MOZ_ASSERT(NS_IsMainThread());
-    MOZ_ASSERT(mSurfaces.Contains(aId));
-    mSurfaces.Remove(aId);
-  }
-
-  nsresult Observe(nsISupports* aSubject,
-                   const char* aTopic,
-                   const char16_t* aData) override
-  {
-    MOZ_ASSERT(NS_IsMainThread());
-    if (!nsCRT::strcmp(aTopic, NS_XPCOM_SHUTDOWN_OBSERVER_ID)) {
-      sInstance = nullptr;
-      sShutdown = true;
-    }
-    return NS_OK;
-  }
-
-  static SharedSurfaceManagerImpl* GetInstance()
-  {
-    MOZ_ASSERT(NS_IsMainThread());
-    if (MOZ_UNLIKELY(!sInstance && !sShutdown)) {
-      sInstance = new SharedSurfaceManagerImpl();
-      nsCOMPtr<nsIObserverService> service =
-        mozilla::services::GetObserverService();
-      if (service) {
-        service->AddObserver(sInstance, NS_XPCOM_SHUTDOWN_OBSERVER_ID, true);
-      }
-    }
-    return sInstance;
-  }
-
-private:
-  SharedSurfaceManagerImpl()
-  { }
-
-  ~SharedSurfaceManagerImpl()
-  {
-    nsCOMPtr<nsIObserverService> service =
-      mozilla::services::GetObserverService();
-    if (service) {
-      service->RemoveObserver(this, NS_XPCOM_SHUTDOWN_OBSERVER_ID);
-    }
-  }
-
-  nsRefPtrHashtable<nsUint64HashKey, DataSourceSurface> mSurfaces;
-  static StaticRefPtr<SharedSurfaceManagerImpl> sInstance;
-  static bool sShutdown;
-};
-
-StaticRefPtr<SharedSurfaceManagerImpl> SharedSurfaceManagerImpl::sInstance;
-bool SharedSurfaceManagerImpl::sShutdown = false;
-
-NS_IMPL_ISUPPORTS(SharedSurfaceManagerImpl, nsIObserver);
+StaticRefPtr<SharedSurfaceBridgeParent> SharedSurfaceBridgeParent::sInstance;
 
 /* static */ already_AddRefed<DataSourceSurface>
-SharedSurfaceManager::Get(uint64_t aId)
+SharedSurfaceBridgeParent::Get(uint64_t aId)
 {
-  auto mgr = SharedSurfaceManagerImpl::GetInstance();
-  if (!mgr) {
+  MOZ_ASSERT(NS_IsMainThread());
+  if (!sInstance) {
     return nullptr;
   }
-  return mgr->Get(aId);
+
+  RefPtr<DataSourceSurface> surface;
+  sInstance->mSurfaces.Get(aId, getter_AddRefs(surface));
+  return surface.forget();
+}
+
+/* static */ void
+SharedSurfaceBridgeParent::Insert(uint64_t aId,
+                                  already_AddRefed<DataSourceSurface> aSurface)
+{
+  MOZ_ASSERT(XRE_IsParentProcess());
+  MOZ_ASSERT(NS_IsMainThread());
+  if (!sInstance) {
+    return;
+  }
+
+  RefPtr<DataSourceSurface> surface = aSurface;
+  MOZ_ASSERT(!sInstance->mSurfaces.Contains(aId));
+  sInstance->mSurfaces.Put(aId, surface.forget());
+}
+
+/* static */ void
+SharedSurfaceBridgeParent::Remove(uint64_t aId)
+{
+  MOZ_ASSERT(XRE_IsParentProcess());
+  MOZ_ASSERT(NS_IsMainThread());
+  if (!sInstance) {
+    return;
+  }
+
+  MOZ_ASSERT(sInstance->mSurfaces.Contains(aId));
+  sInstance->mSurfaces.Remove(aId);
+}
+
+/* static */ void
+SharedSurfaceBridgeParent::Init()
+{
+  MOZ_ASSERT(NS_IsMainThread());
+  if (NS_WARN_IF(sInstance)) {
+    MOZ_ASSERT_UNREACHABLE("Already initalized");
+    return;
+  }
+  sInstance = new SharedSurfaceBridgeParent();
+}
+
+/* static */ void
+SharedSurfaceBridgeParent::Shutdown()
+{
+  MOZ_ASSERT(NS_IsMainThread());
+  MOZ_ASSERT(sInstance);
+  sInstance = nullptr;
 }
 
 SharedSurfaceBridgeParent::SharedSurfaceBridgeParent()
@@ -114,26 +83,30 @@ SharedSurfaceBridgeParent::RecvAdd(const uint64_t& aId,
                                    const gfx::SurfaceFormat& aFormat,
                                    const mozilla::ipc::SharedMemoryBasic::Handle& aHandle)
 {
+  MOZ_ASSERT(NS_IsMainThread());
+
   RefPtr<SourceSurfaceSharedDataWrapper> surface = new SourceSurfaceSharedDataWrapper();
   if (NS_WARN_IF(!surface->Init(aSize, aStride, aFormat, aHandle))) {
     return IPC_OK();
   }
 
-  auto mgr = SharedSurfaceManagerImpl::GetInstance();
-  if (mgr) {
-    mgr->Add(aId, surface.forget());
-  }
+  MOZ_ASSERT(!mSurfaces.Contains(aId));
+  mSurfaces.Put(aId, surface.forget());
   return IPC_OK();
 }
 
 mozilla::ipc::IPCResult
 SharedSurfaceBridgeParent::RecvRemove(const uint64_t& aId)
 {
-  auto mgr = SharedSurfaceManagerImpl::GetInstance();
-  if (mgr) {
-    mgr->Remove(aId);
-  }
+  MOZ_ASSERT(NS_IsMainThread());
+  MOZ_ASSERT(mSurfaces.Contains(aId));
+  mSurfaces.Remove(aId);
   return IPC_OK();
+}
+
+void
+SharedSurfaceBridgeParent::ActorDestroy(ActorDestroyReason aReason)
+{
 }
 
 } // namespace layers
