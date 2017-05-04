@@ -492,7 +492,7 @@ WebRenderBridgeParent::ProcessWebRenderCommands(const gfx::IntSize &aSize,
         const OpAddSharedSurface& op = cmd.get_OpAddSharedSurface();
         wr::ImageKey key = op.key();
         RefPtr<DataSourceSurface> dSurf =
-          SharedSurfaceBridgeParent::Get(OtherPid(), op.externalImageId());
+          SharedSurfaceBridgeParent::GetOrWait(OtherPid(), op.externalImageId());
         MOZ_ASSERT(dSurf);
         MOZ_ASSERT(!mActiveKeys.Get(wr::AsUint64(key), nullptr));
         mActiveKeys.Put(wr::AsUint64(key), key);

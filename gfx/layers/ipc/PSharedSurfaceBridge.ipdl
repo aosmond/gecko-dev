@@ -20,7 +20,7 @@ namespace layers {
 sync protocol PSharedSurfaceBridge
 {
 parent:
-  sync Add(ExternalImageId aId, SurfaceDescriptorShared aDesc);
+  async Add(ExternalImageId aId, SurfaceDescriptorShared aDesc);
   async Remove(ExternalImageId aId);
 };
 

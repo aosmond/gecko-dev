@@ -40,6 +40,41 @@ SharedSurfaceBridgeParent::Get(base::ProcessId aPid, const wr::ExternalImageId& 
   return surface.forget();
 }
 
+/* static */ already_AddRefed<DataSourceSurface>
+SharedSurfaceBridgeParent::GetOrWait(base::ProcessId aPid, const wr::ExternalImageId& aId)
+{
+  MOZ_ASSERT(CompositorThreadHolder::IsInCompositorThread());
+  uint32_t wait = 0;
+
+  do {
+    RefPtr<DataSourceSurface> surface = Get(aPid, aId);
+    if (surface) {
+      printf_stderr("[AO] waited for %u messages\n", wait);
+      return surface.forget();
+    } else {
+      mozilla::ipc::MessageChannel* channel = nullptr;
+
+      {
+        StaticMutexAutoLock lock(sMutex);
+        RefPtr<SharedSurfaceBridgeParent> bridge = GetInstance(aPid);
+        if (NS_WARN_IF(!bridge)) {
+          return nullptr;
+        }
+
+        channel = bridge->GetIPCChannel();
+        if (NS_WARN_IF(!channel)) {
+          return nullptr;
+        }
+      }
+
+      ++wait;
+      if (!channel->WaitForIncomingMessage()) {
+        return nullptr;
+      }
+    }
+  } while(true);
+}
+
 /* static */ void
 SharedSurfaceBridgeParent::AddSameProcess(const wr::ExternalImageId& aId,
                                              SourceSurfaceSharedData* aSurface)

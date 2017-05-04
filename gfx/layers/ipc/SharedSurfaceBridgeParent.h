@@ -38,6 +38,8 @@ public:
   static void ShutdownSameProcess();
   static already_AddRefed<gfx::DataSourceSurface> Get(base::ProcessId aPid,
                                                       const wr::ExternalImageId& aId);
+  static already_AddRefed<gfx::DataSourceSurface> GetOrWait(base::ProcessId aPid,
+                                                            const wr::ExternalImageId& aId);
 
   mozilla::ipc::IPCResult RecvAdd(const wr::ExternalImageId& aId,
                                   const SurfaceDescriptorShared& aDesc) override;
