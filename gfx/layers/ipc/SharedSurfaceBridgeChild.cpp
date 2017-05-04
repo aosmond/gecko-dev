@@ -146,10 +146,20 @@ SharedSurfaceBridgeChild::Unshare(const wr::ExternalImageId& aId)
   sInstance->UnshareInternal(aId);
 }
 
+/* static */ void
+SharedSurfaceBridgeChild::Flush()
+{
+  if (!sInstance) {
+    return;
+  }
+  sInstance->FlushInternal();
+}
+
 SharedSurfaceBridgeChild::SharedSurfaceBridgeChild(uint32_t aNamespace)
   : mClosed(true)
   , mNamespace(aNamespace)
   , mResourceId(0)
+  , mOutstandingAdds(0)
 {
   SetOtherProcessId(base::GetCurrentProcId());
 }
@@ -159,6 +169,7 @@ SharedSurfaceBridgeChild::SharedSurfaceBridgeChild(Endpoint<PSharedSurfaceBridge
   : mClosed(true)
   , mNamespace(aNamespace)
   , mResourceId(0)
+  , mOutstandingAdds(0)
 {
   if (aEndpoint.Bind(this)) {
     mClosed = false;
@@ -207,23 +218,21 @@ SharedSurfaceBridgeChild::ShareInternal(SourceSurfaceSharedData* aSurface,
     data = new SharedUserData(GetNextId());
     aSurface->AddUserData(&sSharedKey, data, DestroySharedUserData);
   } else if (!OwnsId(data->Id())) {
-    // If the ID isn't owned by us, that means the bridge was reinitialized, due
+    // If the id isn't owned by us, that means the bridge was reinitialized, due
     // to the GPU process crashing. All previous mappings have been released.
     MOZ_ASSERT(OtherPid() != base::GetCurrentProcId());
     data->SetId(GetNextId());
   } else if (data->IsShared()) {
-    // If the id is valid, we know it has already been shared. Now we just need
-    // to regenerate the image key if it doesn't match the last image this layer
-    // has rendered.
+    // It has already been shared with the GPU process, reuse the id.
     aId = data->Id();
     return NS_OK;
   }
 
   // Ensure that the handle doesn't get released until after we have finished
-  // sending the buffer to WebRender and/or reallocating it. FinishedSharing is
-  // not a sufficient condition because another thread may decide we are done
-  // while we are in the processing of sharing our newly reallocated handle.
-  // Once this goes out of scope, it will request release as well.
+  // sending the buffer to the GPU process and/or reallocating it.
+  // FinishedSharing is not a sufficient condition because another thread may
+  // decide we are done while we are in the processing of sharing our newly
+  // reallocated handle. Once it goes out of scope, it may release the handle.
   SourceSurfaceSharedData::HandleLock lock(aSurface);
 
   // If we live in the same process, then it is a simple matter of directly
@@ -237,20 +246,20 @@ SharedSurfaceBridgeChild::ShareInternal(SourceSurfaceSharedData* aSurface,
     return NS_OK;
   }
 
-  // Attempt to share a handle with the parent process. The handle may not yet
-  // be closed because we may be the first process to want access to the image
-  // or the image has yet to be finalized.
+  // Attempt to share a handle with the GPU process. The handle may or may not
+  // be available -- it will only be available if it is either not yet finalized
+  // and/or if it has been finalized but never used for drawing in process.
   ipc::SharedMemoryBasic::Handle handle = ipc::SharedMemoryBasic::NULLHandle();
   nsresult rv = aSurface->ShareToProcess(pid, handle);
   if (rv == NS_ERROR_NOT_AVAILABLE) {
-    // Since we close the handle after we share the image, or after we determine
-    // it will not be shared (i.e. imgFrame::Draw was called), we must attempt
-    // to realloc the shared buffer and reshare the new file handle.
+    // It is at least as expensive to copy the image to the GPU process if we
+    // have already closed the handle necessary to share, but if we reallocate
+    // the shared buffer to get a new handle, we can save some memory.
     if (NS_WARN_IF(!aSurface->ReallocHandle())) {
       return NS_ERROR_OUT_OF_MEMORY;
     }
 
-    // Reattempt the sharing of the handle to the parent process.
+    // Reattempt the sharing of the handle to the GPU process.
     rv = aSurface->ShareToProcess(pid, handle);
   }
 
@@ -268,6 +277,7 @@ SharedSurfaceBridgeChild::ShareInternal(SourceSurfaceSharedData* aSurface,
   SendAdd(aId, SurfaceDescriptorShared(aSurface->GetSize(),
                                        aSurface->Stride(),
                                        format, handle));
+  ++mOutstandingAdds;
   return NS_OK;
 }
 
@@ -287,6 +297,21 @@ SharedSurfaceBridgeChild::UnshareInternal(const wr::ExternalImageId& aId)
     // crashed / was restarted, and then we freed the surface. In that case
     // we know the mapping has already been freed.
     SendRemove(aId);
+  }
+}
+
+void
+SharedSurfaceBridgeChild::FlushInternal()
+{
+  MOZ_ASSERT(NS_IsMainThread());
+
+  // Message order is preserved even between async and sync. Since flush is
+  // sync, the caller can use this to ensure all of its share requests have been
+  // received before continuing.
+  if (mOutstandingAdds) {
+    printf_stderr("flush %u images\n", mOutstandingAdds);
+    mOutstandingAdds = 0;
+    SendFlush();
   }
 }
 

@@ -242,5 +242,11 @@ SharedSurfaceBridgeParent::RecvRemove(const wr::ExternalImageId& aId)
   return IPC_OK();
 }
 
+mozilla::ipc::IPCResult
+SharedSurfaceBridgeParent::RecvFlush()
+{
+  return IPC_OK();
+}
+
 } // namespace layers
 } // namespace mozilla

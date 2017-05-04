@@ -44,6 +44,8 @@ public:
 
   mozilla::ipc::IPCResult RecvRemove(const wr::ExternalImageId& aId) override;
 
+  mozilla::ipc::IPCResult RecvFlush() override;
+
   void ActorDestroy(ActorDestroyReason aReason) override;
 
 private:

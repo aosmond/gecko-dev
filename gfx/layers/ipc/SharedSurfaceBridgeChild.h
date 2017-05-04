@@ -34,6 +34,7 @@ public:
                      uint32_t aNamespace);
   static void Shutdown();
   static nsresult Share(gfx::SourceSurfaceSharedData* aSurface, wr::ExternalImageId& aId);
+  static void Flush();
   void ActorDestroy(ActorDestroyReason aReason) override;
 
 private:
@@ -55,6 +56,7 @@ private:
 
   nsresult ShareInternal(gfx::SourceSurfaceSharedData* aSurface, wr::ExternalImageId& aId);
   void UnshareInternal(const wr::ExternalImageId& aId);
+  void FlushInternal();
 
   bool OwnsId(const wr::ExternalImageId& aId) const;
   wr::ExternalImageId GetNextId();
@@ -62,6 +64,7 @@ private:
   bool mClosed;
   uint32_t mNamespace;
   uint32_t mResourceId;
+  uint32_t mOutstandingAdds;
 };
 
 } // namespace layers
