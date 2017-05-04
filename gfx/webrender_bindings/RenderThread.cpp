@@ -235,6 +235,17 @@ RenderThread::RegisterExternalImage(uint64_t aExternalImageId, RenderTextureHost
 void
 RenderThread::UnregisterExternalImage(uint64_t aExternalImageId)
 {
+  // While the mutex is sufficient protection for getting and adding, we need to
+  // post to the render thread to remove, because the render thread may still be
+  // accessing the images. While it holds an internal lock on the texture, it
+  // relies upon mRenderTexture to hold the reference.
+  if (!IsInRenderThread()) {
+    Loop()->PostTask(NewRunnableMethod<uint64_t>(
+      this, &RenderThread::UnregisterExternalImage, aExternalImageId
+    ));
+    return;
+  }
+
   MutexAutoLock lock(mRenderTextureMapLock);
   MOZ_ASSERT(mRenderTextures.Get(aExternalImageId).get());
   mRenderTextures.Remove(aExternalImageId);
