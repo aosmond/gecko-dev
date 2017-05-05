@@ -19,6 +19,7 @@ include protocol PHal;
 include protocol PHeapSnapshotTempFileHelper;
 include protocol PProcessHangMonitor;
 include protocol PImageBridge;
+include protocol PSharedSurfaceBridge;
 include protocol PIPCBlobInputStream;
 include protocol PMedia;
 include protocol PMemoryStream;
@@ -363,6 +364,7 @@ child:
       Endpoint<PImageBridgeChild> imageBridge,
       Endpoint<PVRManagerChild> vr,
       Endpoint<PVideoDecoderManagerChild> video,
+      Endpoint<PSharedSurfaceBridgeChild> sharedSurfaceBridge,
       uint32_t[] namespaces);
 
     // Re-create the rendering stack using the given endpoints. This is sent
@@ -373,6 +375,7 @@ child:
       Endpoint<PImageBridgeChild> bridge,
       Endpoint<PVRManagerChild> vr,
       Endpoint<PVideoDecoderManagerChild> video,
+      Endpoint<PSharedSurfaceBridgeChild> sharedSurfaceBridge,
       uint32_t[] namespaces);
 
     // Re-create the rendering stack for a device reset.
