@@ -36,6 +36,11 @@ struct OpAddExternalVideoImage {
   ImageKey[] keys;
 };
 
+struct OpAddSharedSurface {
+  ExternalImageId externalImageId;
+  ImageKey key;
+};
+
 struct OpAddCompositorAnimations {
   CompositorAnimations data;
   OptionalTransform transform;
@@ -45,6 +50,7 @@ struct OpAddCompositorAnimations {
 union WebRenderParentCommand {
   OpAddExternalImage;
   OpAddExternalVideoImage;
+  OpAddSharedSurface;
   CompositableOperation;
   OpAddCompositorAnimations;
 };
