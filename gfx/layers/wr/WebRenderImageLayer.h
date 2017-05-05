@@ -35,6 +35,10 @@ public:
 
 protected:
   CompositableType GetImageClientType();
+  void DiscardKeyIfShared();
+  bool TryShared(Image* aImage);
+  bool TryExternal();
+  bool TryMaskExternal();
 
   void AddWRVideoImage(size_t aChannelNumber);
 
@@ -57,6 +61,7 @@ protected:
   CompositableType mImageClientTypeContainer;
   Maybe<wr::PipelineId> mPipelineId;
   MozPromiseRequestHolder<PipelineIdPromise> mPipelineIdRequest;
+  bool mIsShared;
 };
 
 } // namespace layers

@@ -7,11 +7,13 @@
 #include "mozilla/layers/WebRenderBridgeChild.h"
 
 #include "gfxPlatform.h"
+#include "mozilla/gfx/2D.h"
 #include "mozilla/layers/CompositableClient.h"
 #include "mozilla/layers/CompositorBridgeChild.h"
 #include "mozilla/layers/ImageDataSerializer.h"
 #include "mozilla/layers/StackingContextHelper.h"
 #include "mozilla/layers/PTextureChild.h"
+#include "mozilla/layers/SharedSurfaceBridgeChild.h"
 #include "mozilla/webrender/WebRenderAPI.h"
 
 namespace mozilla {
@@ -102,9 +104,12 @@ WebRenderBridgeChild::DPEnd(wr::DisplayListBuilder &aBuilder,
   MOZ_ASSERT(!mDestroyed);
   MOZ_ASSERT(mIsInTransaction);
 
+  SharedSurfaceBridgeChild::Flush();
+
   wr::BuiltDisplayList dl;
   WrSize contentSize;
   aBuilder.Finalize(contentSize, dl);
+
   ByteBuffer dlData(Move(dl.dl));
 
   if (aIsSync) {

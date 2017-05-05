@@ -10,6 +10,8 @@
 #include "mozilla/gfx/gfxVars.h"
 #include "mozilla/layers/ImageClient.h"
 #include "mozilla/layers/ScrollingLayersHelper.h"
+#include "mozilla/layers/SharedSurfaceBridgeChild.h"
+#include "mozilla/layers/SourceSurfaceSharedData.h"
 #include "mozilla/layers/StackingContextHelper.h"
 #include "mozilla/layers/TextureClientRecycleAllocator.h"
 #include "mozilla/layers/TextureWrapperImage.h"
@@ -24,6 +26,7 @@ using namespace gfx;
 WebRenderImageLayer::WebRenderImageLayer(WebRenderLayerManager* aLayerManager)
   : ImageLayer(aLayerManager, static_cast<WebRenderLayer*>(this))
   , mImageClientTypeContainer(CompositableType::UNKNOWN)
+  , mIsShared(false)
 {
   MOZ_COUNT_CTOR(WebRenderImageLayer);
 }
@@ -40,7 +43,7 @@ WebRenderImageLayer::~WebRenderImageLayer()
     WrManager()->AddImageKeyForDiscard(mKey.value());
   }
 
-  if (mExternalImageId.isSome()) {
+  if (!mIsShared && mExternalImageId.isSome()) {
     WrBridge()->DeallocExternalImageId(mExternalImageId.ref());
   }
 }
@@ -102,16 +105,83 @@ WebRenderImageLayer::AddWRVideoImage(size_t aChannelNumber)
 }
 
 void
-WebRenderImageLayer::RenderLayer(wr::DisplayListBuilder& aBuilder,
-                                 const StackingContextHelper& aSc)
+WebRenderImageLayer::DiscardKeyIfShared()
 {
-  if (!mContainer) {
-     return;
+  if (mIsShared) {
+    // No need to free the external image ID if it is a shared image. The
+    // surface itself owns it.
+    MOZ_ASSERT(mExternalImageId.isSome());
+    mExternalImageId = Nothing();
+
+    // We are responsible for freeing the ImageKey however.
+    if (mKey.isSome()) {
+      WrManager()->AddImageKeyForDiscard(mKey.value());
+      mKey = Nothing();
+    }
+
+    mIsShared = false;
   }
+}
+
+bool
+WebRenderImageLayer::TryShared(Image* aImage)
+{
+  RefPtr<gfx::SourceSurface> surface = aImage->GetAsSourceSurface();
+  if (!surface || surface->GetType() != SurfaceType::DATA_SHARED) {
+    DiscardKeyIfShared();
+    return false;
+  }
+
+  wr::ExternalImageId id;
+  auto sharedSurf = static_cast<gfx::SourceSurfaceSharedData*>(surface.get());
+  nsresult rv = SharedSurfaceBridgeChild::Share(sharedSurf, id);
+  if (NS_FAILED(rv)) {
+    DiscardKeyIfShared();
+    return false;
+  }
+
+  if (mExternalImageId.isSome()) {
+    if (mIsShared) {
+      // If we have a new shared surface, we need to discard the old ImageKey
+      // bound to the old surface, and replace the external image ID to generate
+      // a new key.
+      if (!(mExternalImageId.ref() == id)) {
+        DiscardKeyIfShared();
+      }
+    } else {
+      // Last image used was an external image, but we are now switching to a
+      // shared surface -- since we are the owner of the external image ID, we
+      // need to discard it before using the new ID, along with the ImageKey
+      // paired with it.
+      if (mKey.isSome()) {
+        WrManager()->AddImageKeyForDiscard(mKey.value());
+        mKey = Nothing();
+      }
+      WrBridge()->DeallocExternalImageId(mExternalImageId.ref());
+      mExternalImageId = Nothing();
+    }
+  }
+
+  if (mExternalImageId.isNothing()) {
+    mExternalImageId.emplace(id);
+  } else {
+    MOZ_ASSERT(mExternalImageId.ref() == id);
+  }
+
+  mKey = UpdateImageKey(mKey, sharedSurf->IsFinalized(), id);
+  MOZ_ASSERT(mKey.isSome());
+  mIsShared = true;
+  return true;
+}
+
+bool
+WebRenderImageLayer::TryExternal()
+{
+  MOZ_ASSERT(!mIsShared);
 
   CompositableType type = GetImageClientType();
   if (type == CompositableType::UNKNOWN) {
-    return;
+    return false;
   }
 
   MOZ_ASSERT(GetImageClientType() != CompositableType::UNKNOWN);
@@ -139,7 +209,7 @@ WebRenderImageLayer::RenderLayer(wr::DisplayListBuilder& aBuilder,
                                                   WrBridge(),
                                                   TextureFlags::DEFAULT);
     if (!mImageClient) {
-      return;
+      return false;
     }
     mImageClient->Connect();
   }
@@ -154,15 +224,6 @@ WebRenderImageLayer::RenderLayer(wr::DisplayListBuilder& aBuilder,
       mExternalImageId = Some(WrBridge()->AllocExternalImageIdForCompositable(mImageClient));
     }
   }
-  MOZ_ASSERT(mExternalImageId.isSome());
-
-  // XXX Not good for async ImageContainer case.
-  AutoLockImage autoLock(mContainer);
-  Image* image = autoLock.GetImage();
-  if (!image) {
-    return;
-  }
-  gfx::IntSize size = image->GetSize();
 
   if (GetImageClientType() != CompositableType::IMAGE_BRIDGE) {
     // Handle CompositableType::IMAGE case
@@ -199,6 +260,36 @@ WebRenderImageLayer::RenderLayer(wr::DisplayListBuilder& aBuilder,
     AddWRVideoImage(1);
 #endif
   }
+
+  if (mKey.isNothing()) {
+    return false;
+  }
+
+  return true;
+}
+
+void
+WebRenderImageLayer::RenderLayer(wr::DisplayListBuilder& aBuilder,
+                                 const StackingContextHelper& aSc)
+{
+  if (!mContainer) {
+     return;
+  }
+
+  // XXX Not good for async ImageContainer case.
+  AutoLockImage autoLock(mContainer);
+  Image* image = autoLock.GetImage();
+  if (!image) {
+    return;
+  }
+
+  if (!TryShared(image) && !TryExternal()) {
+    return;
+  }
+
+  MOZ_ASSERT(mExternalImageId.isSome());
+  MOZ_ASSERT(mKey.isSome());
+  gfx::IntSize size = image->GetSize();
 
   ScrollingLayersHelper scroller(this, aBuilder, aSc);
   StackingContextHelper sc(aSc, aBuilder, this);
@@ -257,21 +348,17 @@ WebRenderImageLayer::RenderLayer(wr::DisplayListBuilder& aBuilder,
   }
 }
 
-Maybe<WrImageMask>
-WebRenderImageLayer::RenderMaskLayer(const gfx::Matrix4x4& aTransform)
+bool
+WebRenderImageLayer::TryMaskExternal()
 {
-  if (!mContainer) {
-     return Nothing();
-  }
-
   CompositableType type = GetImageClientType();
   if (type == CompositableType::UNKNOWN) {
-    return Nothing();
+    return false;
   }
 
   MOZ_ASSERT(GetImageClientType() == CompositableType::IMAGE);
   if (GetImageClientType() != CompositableType::IMAGE) {
-    return Nothing();
+    return false;
   }
 
   if (!mImageClient) {
@@ -279,7 +366,7 @@ WebRenderImageLayer::RenderMaskLayer(const gfx::Matrix4x4& aTransform)
                                                   WrBridge(),
                                                   TextureFlags::DEFAULT);
     if (!mImageClient) {
-      return Nothing();
+      return false;
     }
     mImageClient->Connect();
   }
@@ -288,18 +375,32 @@ WebRenderImageLayer::RenderMaskLayer(const gfx::Matrix4x4& aTransform)
     mExternalImageId = Some(WrBridge()->AllocExternalImageIdForCompositable(mImageClient));
   }
 
-  AutoLockImage autoLock(mContainer);
-  Image* image = autoLock.GetImage();
-  if (!image) {
-    return Nothing();
-  }
-
   MOZ_ASSERT(mImageClient->AsImageClientSingle());
   mKey = UpdateImageKey(mImageClient->AsImageClientSingle(),
                         mContainer,
                         mKey,
                         mExternalImageId.ref());
   if (mKey.isNothing()) {
+    return false;
+  }
+
+  return true;
+}
+
+Maybe<WrImageMask>
+WebRenderImageLayer::RenderMaskLayer(const gfx::Matrix4x4& aTransform)
+{
+  if (!mContainer) {
+     return Nothing();
+  }
+
+  AutoLockImage autoLock(mContainer);
+  Image* image = autoLock.GetImage();
+  if (!image) {
+    return Nothing();
+  }
+
+  if (!TryShared(image) && !TryMaskExternal()) {
     return Nothing();
   }
 
