@@ -30,6 +30,7 @@ class CompositorSession;
 class CompositorUpdateObserver;
 class PCompositorBridgeChild;
 class PImageBridgeChild;
+class PSharedSurfaceBridgeChild;
 class RemoteCompositorSession;
 class UiCompositorControllerChild;
 } // namespace layers
@@ -66,6 +67,7 @@ class GPUProcessManager final : public GPUProcessHost::Listener
   typedef layers::LayerManager LayerManager;
   typedef layers::PCompositorBridgeChild PCompositorBridgeChild;
   typedef layers::PImageBridgeChild PImageBridgeChild;
+  typedef layers::PSharedSurfaceBridgeChild PSharedSurfaceBridgeChild;
   typedef layers::RemoteCompositorSession RemoteCompositorSession;
   typedef layers::UiCompositorControllerChild UiCompositorControllerChild;
 
@@ -98,6 +100,7 @@ public:
     ipc::Endpoint<PImageBridgeChild>* aOutImageBridge,
     ipc::Endpoint<PVRManagerChild>* aOutVRBridge,
     ipc::Endpoint<dom::PVideoDecoderManagerChild>* aOutVideoManager,
+    ipc::Endpoint<PSharedSurfaceBridgeChild>* aOutSharedSurfaceBridge,
     nsTArray<uint32_t>* aNamespaces);
 
   // This returns a reference to the APZCTreeManager to which
@@ -184,6 +187,8 @@ private:
                               ipc::Endpoint<PVRManagerChild>* aOutEndpoint);
   void CreateContentVideoDecoderManager(base::ProcessId aOtherProcess,
                                         ipc::Endpoint<dom::PVideoDecoderManagerChild>* aOutEndPoint);
+  bool CreateContentSharedSurfaceBridge(base::ProcessId aOtherProcess,
+                                        ipc::Endpoint<PSharedSurfaceBridgeChild>* aOutEndpoint);
 
   // Called from RemoteCompositorSession. We track remote sessions so we can
   // notify their owning widgets that the session must be restarted.
@@ -209,6 +214,7 @@ private:
 
   void EnsureImageBridgeChild();
   void EnsureVRManager();
+  void EnsureSharedSurfaceBridgeChild();
 
 #if defined(MOZ_WIDGET_ANDROID)
   already_AddRefed<UiCompositorControllerChild> CreateUiCompositorController(nsBaseWidget* aWidget, const uint64_t aId);

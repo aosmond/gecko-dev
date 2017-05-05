@@ -161,6 +161,7 @@ public:
     Endpoint<PImageBridgeChild>&& aImageBridge,
     Endpoint<PVRManagerChild>&& aVRBridge,
     Endpoint<PVideoDecoderManagerChild>&& aVideoManager,
+    Endpoint<PSharedSurfaceBridgeChild>&& aSharedSurfaceBridge,
     nsTArray<uint32_t>&& namespaces) override;
 
   mozilla::ipc::IPCResult
@@ -169,6 +170,7 @@ public:
     Endpoint<PImageBridgeChild>&& aImageBridge,
     Endpoint<PVRManagerChild>&& aVRBridge,
     Endpoint<PVideoDecoderManagerChild>&& aVideoManager,
+    Endpoint<PSharedSurfaceBridgeChild>&& aSharedSurfaceBridge,
     nsTArray<uint32_t>&& namespaces) override;
 
   mozilla::ipc::IPCResult RecvReinitRenderingForDeviceReset() override;

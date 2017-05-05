@@ -38,6 +38,7 @@ public:
   mozilla::ipc::IPCResult RecvInitImageBridge(Endpoint<PImageBridgeParent>&& aEndpoint) override;
   mozilla::ipc::IPCResult RecvInitVRManager(Endpoint<PVRManagerParent>&& aEndpoint) override;
   mozilla::ipc::IPCResult RecvInitUiCompositorController(const uint64_t& aRootLayerTreeId, Endpoint<PUiCompositorControllerParent>&& aEndpoint) override;
+  mozilla::ipc::IPCResult RecvInitSharedSurfaceBridge(Endpoint<PSharedSurfaceBridgeParent>&& aEndpoint) override;
   mozilla::ipc::IPCResult RecvUpdatePref(const GfxPrefSetting& pref) override;
   mozilla::ipc::IPCResult RecvUpdateVar(const GfxVarUpdate& pref) override;
   mozilla::ipc::IPCResult RecvNewWidgetCompositor(
@@ -51,6 +52,7 @@ public:
   mozilla::ipc::IPCResult RecvNewContentImageBridge(Endpoint<PImageBridgeParent>&& aEndpoint) override;
   mozilla::ipc::IPCResult RecvNewContentVRManager(Endpoint<PVRManagerParent>&& aEndpoint) override;
   mozilla::ipc::IPCResult RecvNewContentVideoDecoderManager(Endpoint<PVideoDecoderManagerParent>&& aEndpoint) override;
+  mozilla::ipc::IPCResult RecvNewContentSharedSurfaceBridge(Endpoint<PSharedSurfaceBridgeParent>&& aEndpoint) override;
   mozilla::ipc::IPCResult RecvGetDeviceStatus(GPUDeviceData* aOutStatus) override;
   mozilla::ipc::IPCResult RecvAddLayerTreeIdMapping(const LayerTreeIdMapping& aMapping) override;
   mozilla::ipc::IPCResult RecvRemoveLayerTreeIdMapping(const LayerTreeIdMapping& aMapping) override;

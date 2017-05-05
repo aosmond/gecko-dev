@@ -58,6 +58,7 @@
 #include "mozilla/layers/CompositorBridgeChild.h"
 #include "mozilla/layers/ContentProcessController.h"
 #include "mozilla/layers/ImageBridgeChild.h"
+#include "mozilla/layers/SharedSurfaceBridgeChild.h"
 #include "mozilla/layout/RenderFrameChild.h"
 #include "mozilla/loader/ScriptCacheActors.h"
 #include "mozilla/net/NeckoChild.h"
@@ -1144,9 +1145,10 @@ ContentChild::RecvInitRendering(Endpoint<PCompositorBridgeChild>&& aCompositor,
                                 Endpoint<PImageBridgeChild>&& aImageBridge,
                                 Endpoint<PVRManagerChild>&& aVRBridge,
                                 Endpoint<PVideoDecoderManagerChild>&& aVideoManager,
+                                Endpoint<PSharedSurfaceBridgeChild>&& aSharedSurfaceBridge,
                                 nsTArray<uint32_t>&& namespaces)
 {
-  MOZ_ASSERT(namespaces.Length() == 2);
+  MOZ_ASSERT(namespaces.Length() == 3);
 
   if (!CompositorBridgeChild::InitForContent(Move(aCompositor), namespaces[0])) {
     return IPC_FAIL_NO_REASON(this);
@@ -1158,6 +1160,7 @@ ContentChild::RecvInitRendering(Endpoint<PCompositorBridgeChild>&& aCompositor,
     return IPC_FAIL_NO_REASON(this);
   }
   VideoDecoderManagerChild::InitForContent(Move(aVideoManager));
+  SharedSurfaceBridgeChild::Init(Move(aSharedSurfaceBridge), namespaces[2]);
   return IPC_OK();
 }
 
@@ -1166,9 +1169,10 @@ ContentChild::RecvReinitRendering(Endpoint<PCompositorBridgeChild>&& aCompositor
                                   Endpoint<PImageBridgeChild>&& aImageBridge,
                                   Endpoint<PVRManagerChild>&& aVRBridge,
                                   Endpoint<PVideoDecoderManagerChild>&& aVideoManager,
+                                  Endpoint<PSharedSurfaceBridgeChild>&& aSharedSurfaceBridge,
                                   nsTArray<uint32_t>&& namespaces)
 {
-  MOZ_ASSERT(namespaces.Length() == 2);
+  MOZ_ASSERT(namespaces.Length() == 3);
   nsTArray<RefPtr<TabChild>> tabs = TabChild::GetAll();
 
   // Zap all the old layer managers we have lying around.
@@ -1197,6 +1201,7 @@ ContentChild::RecvReinitRendering(Endpoint<PCompositorBridgeChild>&& aCompositor
   }
 
   VideoDecoderManagerChild::InitForContent(Move(aVideoManager));
+  SharedSurfaceBridgeChild::Reinit(Move(aSharedSurfaceBridge), namespaces[2]);
   return IPC_OK();
 }
 

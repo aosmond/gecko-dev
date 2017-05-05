@@ -27,6 +27,7 @@
 #include "mozilla/layers/CompositorBridgeParent.h"
 #include "mozilla/layers/CompositorThread.h"
 #include "mozilla/layers/ImageBridgeParent.h"
+#include "mozilla/layers/SharedSurfaceBridgeParent.h"
 #include "mozilla/layers/LayerTreeOwnerTracker.h"
 #include "mozilla/layers/UiCompositorControllerParent.h"
 #include "mozilla/webrender/RenderThread.h"
@@ -241,6 +242,13 @@ GPUParent::RecvInitUiCompositorController(const uint64_t& aRootLayerTreeId, Endp
 }
 
 mozilla::ipc::IPCResult
+GPUParent::RecvInitSharedSurfaceBridge(Endpoint<PSharedSurfaceBridgeParent>&& aEndpoint)
+{
+  SharedSurfaceBridgeParent::Create(Move(aEndpoint));
+  return IPC_OK();
+}
+
+mozilla::ipc::IPCResult
 GPUParent::RecvUpdatePref(const GfxPrefSetting& setting)
 {
   gfxPrefs::Pref* pref = gfxPrefs::all()[setting.index()];
@@ -353,6 +361,13 @@ GPUParent::RecvNewContentVideoDecoderManager(Endpoint<PVideoDecoderManagerParent
   if (!dom::VideoDecoderManagerParent::CreateForContent(Move(aEndpoint))) {
     return IPC_FAIL_NO_REASON(this);
   }
+  return IPC_OK();
+}
+
+mozilla::ipc::IPCResult
+GPUParent::RecvNewContentSharedSurfaceBridge(Endpoint<PSharedSurfaceBridgeParent>&& aEndpoint)
+{
+  SharedSurfaceBridgeParent::Create(Move(aEndpoint));
   return IPC_OK();
 }
 

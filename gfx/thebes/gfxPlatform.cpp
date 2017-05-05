@@ -6,6 +6,7 @@
 #include "mozilla/layers/CompositorBridgeChild.h"
 #include "mozilla/layers/CompositorThread.h"
 #include "mozilla/layers/ImageBridgeChild.h"
+#include "mozilla/layers/SharedSurfaceBridgeChild.h"
 #include "mozilla/layers/ISurfaceAllocator.h"     // for GfxMemoryImageReporter
 #include "mozilla/webrender/RenderThread.h"
 #include "mozilla/gfx/gfxVars.h"
@@ -971,11 +972,13 @@ gfxPlatform::ShutdownLayersIPC()
         if (gfxPrefs::ChildProcessShutdown()) {
           layers::CompositorBridgeChild::ShutDown();
           layers::ImageBridgeChild::ShutDown();
+          layers::SharedSurfaceBridgeChild::Shutdown();
         }
     } else if (XRE_IsParentProcess()) {
         gfx::VRManagerChild::ShutDown();
         layers::CompositorBridgeChild::ShutDown();
         layers::ImageBridgeChild::ShutDown();
+        layers::SharedSurfaceBridgeChild::Shutdown();
         // This has to happen after shutting down the child protocols.
         layers::CompositorThreadHolder::Shutdown();
         if (gfxVars::UseWebRender()) {

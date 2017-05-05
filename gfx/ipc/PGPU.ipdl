@@ -8,6 +8,7 @@ include ProfilerTypes;
 include MemoryReportTypes;
 include protocol PCompositorBridge;
 include protocol PImageBridge;
+include protocol PSharedSurfaceBridge;
 include protocol PVRManager;
 include protocol PVsyncBridge;
 include protocol PUiCompositorController;
@@ -59,6 +60,7 @@ parent:
   async InitImageBridge(Endpoint<PImageBridgeParent> endpoint);
   async InitVRManager(Endpoint<PVRManagerParent> endpoint);
   async InitUiCompositorController(uint64_t rootLayerTreeId, Endpoint<PUiCompositorControllerParent> endpoint);
+  async InitSharedSurfaceBridge(Endpoint<PSharedSurfaceBridgeParent> endpoint);
 
   // Called to update a gfx preference or variable.
   async UpdatePref(GfxPrefSetting pref);
@@ -77,6 +79,7 @@ parent:
   async NewContentImageBridge(Endpoint<PImageBridgeParent> endpoint);
   async NewContentVRManager(Endpoint<PVRManagerParent> endpoint);
   async NewContentVideoDecoderManager(Endpoint<PVideoDecoderManagerParent> endpoint);
+  async NewContentSharedSurfaceBridge(Endpoint<PSharedSurfaceBridgeParent> endpoint);
 
   // Called to notify the GPU process of who owns a layersId.
   sync AddLayerTreeIdMapping(LayerTreeIdMapping mapping);

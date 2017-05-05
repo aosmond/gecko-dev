@@ -83,6 +83,7 @@
 #include "mozilla/layers/PAPZParent.h"
 #include "mozilla/layers/CompositorThread.h"
 #include "mozilla/layers/ImageBridgeParent.h"
+#include "mozilla/layers/SharedSurfaceBridgeParent.h"
 #include "mozilla/layers/LayerTreeOwnerTracker.h"
 #include "mozilla/layout/RenderFrameParent.h"
 #include "mozilla/loader/ScriptCacheActors.h"
@@ -2304,6 +2305,7 @@ ContentParent::InitInternal(ProcessPriority aInitialPriority,
       Endpoint<PImageBridgeChild> imageBridge;
       Endpoint<PVRManagerChild> vrBridge;
       Endpoint<PVideoDecoderManagerChild> videoManager;
+      Endpoint<PSharedSurfaceBridgeChild> sharedSurfaceBridge;
       nsTArray<uint32_t> namespaces;
 
       DebugOnly<bool> opened = gpm->CreateContentBridges(
@@ -2312,6 +2314,7 @@ ContentParent::InitInternal(ProcessPriority aInitialPriority,
         &imageBridge,
         &vrBridge,
         &videoManager,
+        &sharedSurfaceBridge,
         &namespaces);
       MOZ_ASSERT(opened);
 
@@ -2320,6 +2323,7 @@ ContentParent::InitInternal(ProcessPriority aInitialPriority,
         Move(imageBridge),
         Move(vrBridge),
         Move(videoManager),
+        Move(sharedSurfaceBridge),
         Move(namespaces));
 
       gpm->AddListener(this);
@@ -2465,6 +2469,7 @@ ContentParent::OnCompositorUnexpectedShutdown()
   Endpoint<PImageBridgeChild> imageBridge;
   Endpoint<PVRManagerChild> vrBridge;
   Endpoint<PVideoDecoderManagerChild> videoManager;
+  Endpoint<PSharedSurfaceBridgeChild> sharedSurfaceBridge;
   nsTArray<uint32_t> namespaces;
 
   DebugOnly<bool> opened = gpm->CreateContentBridges(
@@ -2473,6 +2478,7 @@ ContentParent::OnCompositorUnexpectedShutdown()
     &imageBridge,
     &vrBridge,
     &videoManager,
+    &sharedSurfaceBridge,
     &namespaces);
   MOZ_ASSERT(opened);
 
@@ -2481,6 +2487,7 @@ ContentParent::OnCompositorUnexpectedShutdown()
     Move(imageBridge),
     Move(vrBridge),
     Move(videoManager),
+    Move(sharedSurfaceBridge),
     Move(namespaces));
 }
 
