@@ -113,13 +113,7 @@ public:
   MOZ_DECLARE_WEAKREFERENCE_TYPENAME(ProgressTracker)
   NS_INLINE_DECL_THREADSAFE_REFCOUNTING(ProgressTracker)
 
-  ProgressTracker()
-    : mImageMutex("ProgressTracker::mImage")
-    , mImage(nullptr)
-    , mObservers(new ObserverTable)
-    , mProgress(NoProgress)
-    , mIsMultipart(false)
-  { }
+  ProgressTracker();
 
   bool HasImage() const { MutexAutoLock lock(mImageMutex); return mImage; }
   already_AddRefed<Image> GetImage() const
@@ -192,6 +186,9 @@ public:
   bool RemoveObserver(IProgressObserver* aObserver);
   uint32_t ObserverCount() const;
 
+  // Get the event target we should currently dispatch events to.
+  already_AddRefed<nsIEventTarget> GetEventTarget() const;
+
   // Resets our weak reference to our image. Image subclasses should call this
   // in their destructor.
   void ResetImage();
@@ -233,6 +230,9 @@ private:
 
   // Whether this is a progress tracker for a multipart image.
   bool mIsMultipart;
+
+  nsCOMPtr<nsIEventTarget> mEventTarget;
+  uint32_t mObserversWithTargets;
 };
 
 } // namespace image
