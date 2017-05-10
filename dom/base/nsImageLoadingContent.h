@@ -225,7 +225,7 @@ protected:
 
 private:
   /**
-   * Struct used to manage the image observers.
+   * Struct used to manage the native image observers.
    */
   struct ImageObserver {
     explicit ImageObserver(imgINotificationObserver* aObserver);
@@ -233,6 +233,23 @@ private:
 
     nsCOMPtr<imgINotificationObserver> mObserver;
     ImageObserver* mNext;
+  };
+
+  /**
+   * Struct used to manage the scripted/XPCOM image observers.
+   */
+  struct ScriptedImageObserver {
+    ScriptedImageObserver();
+    ScriptedImageObserver(imgINotificationObserver* aObserver,
+                          RefPtr<imgRequestProxy>&& aCurrentRequest,
+                          RefPtr<imgRequestProxy>&& aPendingRequest);
+    ~ScriptedImageObserver();
+    void CancelRequests();
+
+    ScriptedImageObserver* mNext;
+    nsCOMPtr<imgINotificationObserver> mObserver;
+    RefPtr<imgRequestProxy> mCurrentRequest;
+    RefPtr<imgRequestProxy> mPendingRequest;
   };
 
   /**
@@ -410,6 +427,24 @@ protected:
 
 private:
   /**
+   * Clones the given "current" or "pending" request for each scripted observer.
+   */
+  void CloneScriptedRequests(imgRequestProxy* aRequest);
+
+  /**
+   * Cancels and nulls-out the "current" or "pending" requests if they exist
+   * for each scripted observer.
+   */
+  void ClearScriptedRequests(int32_t aRequestType, nsresult aReason);
+
+  /**
+   * Moves the "pending" request into the "current" request for each scripted
+   * observer. If there is an existing "current" request, it will cancel it
+   * first.
+   */
+  void MakePendingScriptedRequestsCurrent();
+
+  /**
    * Typically we will have only one observer (our frame in the screen
    * prescontext), so we want to only make space for one and to
    * heap-allocate anything past that (saves memory and malloc churn
@@ -418,6 +453,13 @@ private:
    * to it.
    */
   ImageObserver mObserverList;
+
+  /**
+   * Typically we will have no scripted observers, as this is only used by
+   * chrome, legacy extensions, and some mochitests. Thus we only make space
+   * for a pointer to the head of a linked list.
+   */
+  ScriptedImageObserver* mScriptedObserverList;
 
   /**
    * When mIsImageStateForced is true, this holds the ImageState that we'll
