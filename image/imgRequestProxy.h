@@ -70,6 +70,7 @@ public:
   // (although not immediately after) doing so.
   nsresult Init(imgRequest* aOwner,
                 nsILoadGroup* aLoadGroup,
+                nsIDocument* aLoadingDocument,
                 ImageURL* aURI,
                 imgINotificationObserver* aObserver);
 
@@ -119,6 +120,9 @@ public:
     mDeferNotifications = aDeferNotifications;
   }
 
+  bool IsOnEventTarget() const;
+  already_AddRefed<nsIEventTarget> GetEventTarget() const override;
+
   // Removes all animation consumers that were created with
   // IncrementAnimationConsumers. This is necessary since we need
   // to do it before the proxy itself is destroyed. See
@@ -126,6 +130,7 @@ public:
   void ClearAnimationConsumers();
 
   virtual nsresult Clone(imgINotificationObserver* aObserver,
+                         nsIDocument* aLoadingDocument,
                          imgRequestProxy** aClone);
   nsresult GetStaticRequest(imgRequestProxy** aReturn);
 
@@ -184,6 +189,7 @@ protected:
   imgRequest* GetOwner() const;
 
   nsresult PerformClone(imgINotificationObserver* aObserver,
+                        nsIDocument* aLoadingDocument,
                         imgRequestProxy* (aAllocFn)(imgRequestProxy*),
                         imgRequestProxy** aClone);
 
@@ -197,6 +203,8 @@ private:
   friend class imgCacheValidator;
   friend imgRequestProxy* NewStaticProxy(imgRequestProxy* aThis);
 
+  void AddProxy(nsIDocument* aLoadingDocument);
+
   // The URI of our request.
   RefPtr<ImageURL> mURI;
 
@@ -208,6 +216,7 @@ private:
                                            "they are destroyed") mListener;
 
   nsCOMPtr<nsILoadGroup> mLoadGroup;
+  nsCOMPtr<nsIEventTarget> mEventTarget;
 
   nsLoadFlags mLoadFlags;
   uint32_t    mLockCount;
@@ -235,6 +244,7 @@ public:
   using imgRequestProxy::Clone;
 
   virtual nsresult Clone(imgINotificationObserver* aObserver,
+                         nsIDocument* aLoadingDocument,
                          imgRequestProxy** aClone) override;
 
 protected:

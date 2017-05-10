@@ -13,6 +13,7 @@
 #include "nsError.h"
 #include "nsCRTGlue.h"
 #include "imgINotificationObserver.h"
+#include "mozilla/dom/DocGroup.h"
 
 using namespace mozilla::image;
 
@@ -154,6 +155,7 @@ imgRequestProxy::~imgRequestProxy()
 nsresult
 imgRequestProxy::Init(imgRequest* aOwner,
                       nsILoadGroup* aLoadGroup,
+                      nsIDocument* aLoadingDocument,
                       ImageURL* aURI,
                       imgINotificationObserver* aObserver)
 {
@@ -178,9 +180,7 @@ imgRequestProxy::Init(imgRequest* aOwner,
   mURI = aURI;
 
   // Note: AddProxy won't send all the On* notifications immediately
-  if (GetOwner()) {
-    GetOwner()->AddProxy(this);
-  }
+  AddProxy(aLoadingDocument);
 
   return NS_OK;
 }
@@ -224,7 +224,7 @@ imgRequestProxy::ChangeOwner(imgRequest* aNewOwner)
     IncrementAnimationConsumers();
   }
 
-  GetOwner()->AddProxy(this);
+  AddProxy(nullptr);
 
   // If we'd previously requested a synchronous decode, request a decode on the
   // new image.
@@ -233,6 +233,60 @@ imgRequestProxy::ChangeOwner(imgRequest* aNewOwner)
   }
 
   return NS_OK;
+}
+
+bool
+imgRequestProxy::IsOnEventTarget() const
+{
+  if (mEventTarget) {
+    // XXX(aosmond): Note this depends on bug 1363474 landing.
+    // If we are on the main thread, but executing in the context of a different
+    // scheduler group than that of the given event target, we may need to
+    // dispatch again.
+    bool current = false;
+    mEventTarget->IsOnCurrentThread(&current);
+    return current;
+  }
+
+  MOZ_ASSERT(!mListener);
+  return true;
+}
+
+already_AddRefed<nsIEventTarget>
+imgRequestProxy::GetEventTarget() const
+{
+  nsCOMPtr<nsIEventTarget> target = mEventTarget;
+  return target.forget();
+}
+
+void
+imgRequestProxy::AddProxy(nsIDocument* aLoadingDocument)
+{
+  // An imgRequestProxy can be initialized with neither a listener nor a
+  // document. The caller could follow up later by cloning the canonical
+  // imgRequestProxy with the actual listener. This is possible because
+  // imgLoader::LoadImage does not require a valid listener to be provided.
+  //
+  // Without a listener, we don't need to update our event target, because
+  // we have nothing to signal. However if we were told what document this
+  // is for, it is likely that future listeners will belong to the same
+  // document or tab group.
+  //
+  // With a listener, we always need to update our event target. A null
+  // DocGroup is a valid if no document was given, but that means we will
+  // use the most generic event target possible.
+  RefPtr<mozilla::dom::DocGroup> docGroup;
+  if (aLoadingDocument) {
+    mEventTarget = aLoadingDocument->EventTargetFor(mozilla::TaskCategory::Other);
+  } else if (mListener) {
+    mEventTarget = do_GetMainThread();
+  }
+
+  if (!GetOwner()) {
+    return;
+  }
+
+  GetOwner()->AddProxy(this);
 }
 
 void
@@ -627,19 +681,21 @@ imgRequestProxy::Clone(imgINotificationObserver* aObserver,
 {
   nsresult result;
   imgRequestProxy* proxy;
-  result = Clone(aObserver, &proxy);
+  result = Clone(aObserver, nullptr, &proxy);
   *aClone = proxy;
   return result;
 }
 
 nsresult imgRequestProxy::Clone(imgINotificationObserver* aObserver,
+                                nsIDocument* aLoadingDocument,
                                 imgRequestProxy** aClone)
 {
-  return PerformClone(aObserver, NewProxy, aClone);
+  return PerformClone(aObserver, aLoadingDocument, NewProxy, aClone);
 }
 
 nsresult
 imgRequestProxy::PerformClone(imgINotificationObserver* aObserver,
+                              nsIDocument* aLoadingDocument,
                               imgRequestProxy* (aAllocFn)(imgRequestProxy*),
                               imgRequestProxy** aClone)
 {
@@ -658,7 +714,7 @@ imgRequestProxy::PerformClone(imgINotificationObserver* aObserver,
   // request to the loadgroup.
   clone->SetLoadFlags(mLoadFlags);
   nsresult rv = clone->Init(mBehaviour->GetOwner(), mLoadGroup,
-                            mURI, aObserver);
+                            aLoadingDocument, mURI, aObserver);
   if (NS_FAILED(rv)) {
     return rv;
   }
@@ -814,6 +870,17 @@ imgRequestProxy::Notify(int32_t aType, const mozilla::gfx::IntRect* aRect)
   // Make sure the listener stays alive while we notify.
   nsCOMPtr<imgINotificationObserver> listener(mListener);
 
+  if (!IsOnEventTarget()) {
+    nsCOMPtr<imgIRequest> self(this);
+    const mozilla::gfx::IntRect rect = *aRect;
+    mEventTarget->Dispatch(NS_NewRunnableFunction(
+                             "imgRequestProxy::Notify",
+                             [listener, self, rect, aType]() -> void {
+      listener->Notify(self, aType, &rect);
+    }), NS_DISPATCH_NORMAL);
+    return;
+  }
+
   listener->Notify(this, aType, aRect);
 }
 
@@ -835,7 +902,16 @@ imgRequestProxy::OnLoadComplete(bool aLastPart)
   if (mListener && !mCanceled) {
     // Hold a ref to the listener while we call it, just in case.
     nsCOMPtr<imgINotificationObserver> listener(mListener);
-    listener->Notify(this, imgINotificationObserver::LOAD_COMPLETE, nullptr);
+    if (IsOnEventTarget()) {
+      listener->Notify(this, imgINotificationObserver::LOAD_COMPLETE, nullptr);
+    } else {
+      nsCOMPtr<imgIRequest> self(this);
+      mEventTarget->Dispatch(NS_NewRunnableFunction(
+                               "imgRequestProxy::OnLoadComplete",
+                               [listener, self]() -> void {
+        listener->Notify(self, imgINotificationObserver::LOAD_COMPLETE, nullptr);
+      }), NS_DISPATCH_NORMAL);
+    }
   }
 
   // If we're expecting more data from a multipart channel, re-add ourself
@@ -874,9 +950,21 @@ imgRequestProxy::BlockOnload()
   }
 
   nsCOMPtr<imgIOnloadBlocker> blocker = do_QueryInterface(mListener);
-  if (blocker) {
-    blocker->BlockOnload(this);
+  if (!blocker) {
+    return;
   }
+
+  if (!IsOnEventTarget()) {
+    nsCOMPtr<imgIRequest> self(this);
+    mEventTarget->Dispatch(NS_NewRunnableFunction(
+                             "imgRequestProxy::BlockOnload",
+                             [blocker, self]() -> void {
+      blocker->BlockOnload(self);
+    }), NS_DISPATCH_NORMAL);
+    return;
+  }
+
+  blocker->BlockOnload(this);
 }
 
 void
@@ -890,9 +978,21 @@ imgRequestProxy::UnblockOnload()
   }
 
   nsCOMPtr<imgIOnloadBlocker> blocker = do_QueryInterface(mListener);
-  if (blocker) {
-    blocker->UnblockOnload(this);
+  if (!blocker) {
+    return;
   }
+
+  if (!IsOnEventTarget()) {
+    nsCOMPtr<imgIRequest> self(this);
+    mEventTarget->Dispatch(NS_NewRunnableFunction(
+                             "imgRequestProxy::UnblockOnload",
+                             [blocker, self]() -> void {
+      blocker->UnblockOnload(self);
+    }), NS_DISPATCH_NORMAL);
+    return;
+  }
+
+  blocker->UnblockOnload(this);
 }
 
 void
@@ -911,6 +1011,8 @@ imgRequestProxy::NullOutListener()
   } else {
     mListener = nullptr;
   }
+
+  mEventTarget = nullptr;
 }
 
 NS_IMETHODIMP
@@ -950,7 +1052,7 @@ imgRequestProxy::GetStaticRequest(imgRequestProxy** aReturn)
   GetImagePrincipal(getter_AddRefs(currentPrincipal));
   RefPtr<imgRequestProxy> req = new imgRequestProxyStatic(frozenImage,
                                                             currentPrincipal);
-  req->Init(nullptr, nullptr, mURI, nullptr);
+  req->Init(nullptr, nullptr, nullptr, mURI, nullptr);
 
   NS_ADDREF(*aReturn = req);
 
@@ -1105,7 +1207,8 @@ imgRequestProxyStatic::GetImagePrincipal(nsIPrincipal** aPrincipal)
 
 nsresult
 imgRequestProxyStatic::Clone(imgINotificationObserver* aObserver,
+                             nsIDocument* aLoadingDocument,
                              imgRequestProxy** aClone)
 {
-  return PerformClone(aObserver, NewStaticProxy, aClone);
+  return PerformClone(aObserver, aLoadingDocument, NewStaticProxy, aClone);
 }
