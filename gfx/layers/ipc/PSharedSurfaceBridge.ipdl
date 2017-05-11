@@ -22,6 +22,14 @@ sync protocol PSharedSurfaceBridge
 parent:
   async Add(ExternalImageId aId, SurfaceDescriptorShared aDesc);
   async Remove(ExternalImageId aId);
+
+  /**
+   * When sharing the IDs used in Add and Remove via another path or IPC
+   * channel, one may not be certain that those messages have been processed
+   * yet due to them being sync. If the module using the image is unable to
+   * handle it not yet being available, Flush may be called prior to sharing
+   * the IDs to ensure they have been mapped into the receiving process.
+   */
   sync Flush();
 };
 

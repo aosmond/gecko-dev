@@ -211,6 +211,11 @@ SharedSurfaceBridgeParent::RecvRemove(const wr::ExternalImageId& aId)
 mozilla::ipc::IPCResult
 SharedSurfaceBridgeParent::RecvFlush()
 {
+  // We don't actually need to do anything special here to ensure that any
+  // pending images have been processed. The IPC contract enforces that messages
+  // be processed in the order they are received, regardless of whether or not
+  // they are async or sync. Thus when a single sync call executes, we know that
+  // all prior async messages have been processed.
   return IPC_OK();
 }
 
