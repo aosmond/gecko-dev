@@ -33,7 +33,6 @@ SharedSurfaceBridgeParent::AddSameProcess(const wr::ExternalImageId& aId,
 {
   MOZ_ASSERT(XRE_IsParentProcess());
   MOZ_ASSERT(NS_IsMainThread());
-  StaticMutexAutoLock lock(sMutex);
 
   // If the child bridge detects it is in the combined UI/GPU process, then it
   // will insert a wrapper surface holding the shared memory buffer directly.
@@ -44,9 +43,9 @@ SharedSurfaceBridgeParent::AddSameProcess(const wr::ExternalImageId& aId,
     new SourceSurfaceSharedDataWrapper();
   surface->Init(aSurface);
 
-  uint64_t id = wr::AsUint64(aId);
-  MOZ_ASSERT(!sSurfaces.Contains(id));
-  sSurfaces.Put(id, surface.forget());
+  StaticMutexAutoLock lock(sMutex);
+  MOZ_ASSERT(sInstance);
+  sInstance->Add(aId, Move(surface));
 }
 
 /* static */ void
@@ -54,13 +53,15 @@ SharedSurfaceBridgeParent::RemoveSameProcess(const wr::ExternalImageId& aId)
 {
   MOZ_ASSERT(XRE_IsParentProcess());
   MOZ_ASSERT(NS_IsMainThread());
-  StaticMutexAutoLock lock(sMutex);
 
   // If the child bridge detects it is in the combined UI/GPU process, then it
   // will remove the wrapper surface directly from the hashtable.
-  uint64_t id = wr::AsUint64(aId);
-  MOZ_ASSERT(sSurfaces.Contains(id));
-  sSurfaces.Remove(id);
+  RefPtr<SourceSurfaceSharedDataWrapper> surface;
+  {
+    StaticMutexAutoLock lock(sMutex);
+    MOZ_ASSERT(sInstance);
+    surface = sInstance->Remove(aId);
+  }
 }
 
 /* static */ void
@@ -92,7 +93,6 @@ SharedSurfaceBridgeParent::CreateSameProcess()
 SharedSurfaceBridgeParent::Create(Endpoint<PSharedSurfaceBridgeParent>&& aEndpoint)
 {
   MOZ_ASSERT(NS_IsMainThread());
-  StaticMutexAutoLock lock(sMutex);
 
   // We are creating a bridge for the content process, inside the GPU process
   // (or UI process if it subsumbed the GPU process).
@@ -130,19 +130,28 @@ SharedSurfaceBridgeParent::ShutdownSameProcess()
 }
 
 SharedSurfaceBridgeParent::SharedSurfaceBridgeParent()
+  : mSurfaceCount(0)
 { }
 
 SharedSurfaceBridgeParent::~SharedSurfaceBridgeParent()
 {
   // Note that the destruction of a parent may not be cheap if it still has a
-  // lot of surfaces still bound that require unmapping.
-  StaticMutexAutoLock lock(sMutex);
-  auto pid = OtherPid();
-  for (auto i = sSurfaces.Iter(); !i.Done(); i.Next()) {
-    if (i.Data()->GetCreatorPid() == pid) {
-      i.Remove();
+  // lot of surfaces still bound that require unmapping. Lets avoid holding the
+  // lock during the actual unmapping.
+  nsTArray<RefPtr<DataSourceSurface>> owned(mSurfaceCount);
+
+  {
+    StaticMutexAutoLock lock(sMutex);
+    auto pid = OtherPid();
+    for (auto i = sSurfaces.Iter(); !i.Done(); i.Next()) {
+      if (i.Data()->GetCreatorPid() == pid) {
+        owned.AppendElement(Move(i.Data()));
+        i.Remove();
+      }
     }
   }
+
+  MOZ_ASSERT(mSurfaceCount == owned.Length());
 }
 
 void
@@ -173,6 +182,40 @@ SharedSurfaceBridgeParent::ActorDestroy(ActorDestroyReason aReason)
 {
 }
 
+void
+SharedSurfaceBridgeParent::Add(const wr::ExternalImageId& aId,
+                               RefPtr<SourceSurfaceSharedDataWrapper>&& aSurface)
+{
+  sMutex.AssertCurrentThreadOwns();
+
+  RefPtr<SourceSurfaceSharedDataWrapper>& entry =
+    sSurfaces.GetOrInsert(wr::AsUint64(aId));
+  if (NS_WARN_IF(entry)) {
+    MOZ_ASSERT_UNREACHABLE("Surface already exists!");
+    return;
+  }
+
+  entry = Move(aSurface);
+  ++mSurfaceCount;
+}
+
+already_AddRefed<SourceSurfaceSharedDataWrapper>
+SharedSurfaceBridgeParent::Remove(const wr::ExternalImageId& aId)
+{
+  sMutex.AssertCurrentThreadOwns();
+
+  RefPtr<SourceSurfaceSharedDataWrapper> surface;
+  if (NS_WARN_IF(!sSurfaces.Remove(wr::AsUint64(aId),
+                                   getter_AddRefs(surface)))) {
+    MOZ_ASSERT_UNREACHABLE("Surface already removed or never added!");
+    return nullptr;
+  }
+
+  MOZ_ASSERT(mSurfaceCount > 0);
+  --mSurfaceCount;
+  return surface.forget();
+}
+
 mozilla::ipc::IPCResult
 SharedSurfaceBridgeParent::RecvAdd(const wr::ExternalImageId& aId,
                                    const SurfaceDescriptorShared& aDesc)
@@ -190,9 +233,7 @@ SharedSurfaceBridgeParent::RecvAdd(const wr::ExternalImageId& aId,
   }
 
   StaticMutexAutoLock lock(sMutex);
-  uint64_t id = wr::AsUint64(aId);
-  MOZ_ASSERT(!sSurfaces.Contains(id));
-  sSurfaces.Put(id, surface.forget());
+  Add(aId, Move(surface));
   return IPC_OK();
 }
 
@@ -202,9 +243,12 @@ SharedSurfaceBridgeParent::RecvRemove(const wr::ExternalImageId& aId)
   MOZ_ASSERT(CompositorThreadHolder::IsInCompositorThread());
   MOZ_ASSERT(OtherPid() != base::GetCurrentProcId());
 
-  StaticMutexAutoLock lock(sMutex);
-  uint64_t id = wr::AsUint64(aId);
-  sSurfaces.Remove(id);
+  RefPtr<SourceSurfaceSharedDataWrapper> surface;
+  {
+    StaticMutexAutoLock lock(sMutex);
+    surface = Remove(aId);
+  }
+
   return IPC_OK();
 }
 

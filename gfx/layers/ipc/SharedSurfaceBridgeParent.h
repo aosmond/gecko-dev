@@ -67,9 +67,14 @@ private:
 
   ~SharedSurfaceBridgeParent() override;
 
+  void Add(const wr::ExternalImageId& aId,
+           RefPtr<gfx::SourceSurfaceSharedDataWrapper>&& aSurface);
+  already_AddRefed<gfx::SourceSurfaceSharedDataWrapper> Remove(const wr::ExternalImageId& aId);
+
   void DeallocPSharedSurfaceBridgeParent() override;
 
   RefPtr<CompositorThreadHolder> mCompositorThreadHolder;
+  uint32_t mSurfaceCount;
 };
 
 } // namespace layers
