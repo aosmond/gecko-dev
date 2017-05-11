@@ -229,7 +229,8 @@ SharedSurfaceBridgeParent::RecvAdd(const wr::ExternalImageId& aId,
   if (NS_WARN_IF(!surface->Init(aDesc.size(), aDesc.stride(),
                                 aDesc.format(), aDesc.handle(),
                                 OtherPid()))) {
-    return IPC_OK();
+    // This would crash later when it could not access the image for rendering.
+    return IPC_FAIL(this, "Unable to map shared surface!");
   }
 
   StaticMutexAutoLock lock(sMutex);
