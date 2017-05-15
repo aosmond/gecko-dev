@@ -22,7 +22,6 @@ namespace mozilla {
 namespace gfx {
 class DataSourceSurface;
 class SourceSurfaceSharedData;
-class SourceSurfaceSharedDataWrapper;
 } // namespace gfx
 
 namespace layers {
@@ -53,12 +52,13 @@ public:
 
 private:
   friend class SharedSurfaceBridgeChild;
+  class SurfaceWrapper;
 
   static void AddSameProcess(const wr::ExternalImageId& aId,
                              gfx::SourceSurfaceSharedData* aSurface);
   static void RemoveSameProcess(const wr::ExternalImageId& aId);
 
-  static nsRefPtrHashtable<nsUint64HashKey, gfx::SourceSurfaceSharedDataWrapper> sSurfaces;
+  static nsDataHashtable<nsUint64HashKey, SurfaceWrapper*> sSurfaces;
   static StaticRefPtr<SharedSurfaceBridgeParent> sInstance;
   static StaticMutex sMutex;
 
@@ -68,8 +68,8 @@ private:
   ~SharedSurfaceBridgeParent() override;
 
   void Add(const wr::ExternalImageId& aId,
-           RefPtr<gfx::SourceSurfaceSharedDataWrapper>&& aSurface);
-  already_AddRefed<gfx::SourceSurfaceSharedDataWrapper> Remove(const wr::ExternalImageId& aId);
+           RefPtr<SurfaceWrapper>&& aSurface);
+  already_AddRefed<SurfaceWrapper> Remove(const wr::ExternalImageId& aId);
 
   void DeallocPSharedSurfaceBridgeParent() override;
 

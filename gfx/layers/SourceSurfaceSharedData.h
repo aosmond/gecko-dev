@@ -15,7 +15,7 @@ namespace gfx {
 
 class SourceSurfaceSharedData;
 
-class SourceSurfaceSharedDataWrapper final : public DataSourceSurface
+class SourceSurfaceSharedDataWrapper : public DataSourceSurface
 {
   typedef mozilla::ipc::SharedMemoryBasic SharedMemoryBasic;
 
@@ -55,16 +55,6 @@ public:
   {
     return false;
   }
-
-  bool Map(MapType, MappedSurface *aMappedSurface) override
-  {
-    aMappedSurface->mData = GetData();
-    aMappedSurface->mStride = mStride;
-    return true;
-  }
-
-  void Unmap() override
-  { }
 
 private:
   size_t GetDataLength() const
