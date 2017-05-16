@@ -1,0 +1,55 @@
+/* -*- Mode: C++; tab-width: 20; indent-tabs-mode: nil; c-basic-offset: 2 -*-
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
+
+#ifndef MOZILLA_GFX_COMPOSITORMANAGERCHILD_H
+#define MOZILLA_GFX_COMPOSITORMANAGERCHILD_H
+
+#include <stddef.h>                     // for size_t
+#include <stdint.h>                     // for uint32_t, uint64_t
+#include "mozilla/Attributes.h"         // for override
+#include "mozilla/RefPtr.h"             // for already_AddRefed
+#include "mozilla/StaticPtr.h"          // for StaticRefPtr
+#include "mozilla/layers/PCompositorManagerChild.h"
+
+namespace mozilla {
+namespace layers {
+
+class CompositorManagerChild : public PCompositorManagerChild
+{
+  NS_INLINE_DECL_REFCOUNTING(CompositorManagerChild)
+
+public:
+  static bool IsInitialized();
+  static void InitSameProcess(uint32_t aNamespace);
+  static void Init(Endpoint<PCompositorManagerChild>&& aEndpoint,
+                   uint32_t aNamespace);
+  static void Reinit(Endpoint<PCompositorManagerChild>&& aEndpoint,
+                     uint32_t aNamespace);
+  static void Shutdown();
+
+  void ActorDestroy(ActorDestroyReason aReason) override;
+
+private:
+  static StaticRefPtr<CompositorManagerChild> sInstance;
+
+  explicit CompositorManagerChild(uint32_t aNamespace);
+
+  CompositorManagerChild(Endpoint<PCompositorManagerChild>&& aEndpoint,
+                         uint32_t aNamespace);
+
+  ~CompositorManagerChild() override
+  { }
+
+  void DeallocPCompositorManagerChild() override;
+
+  bool mClosed;
+  uint32_t mNamespace;
+  uint32_t mResourceId;
+};
+
+} // namespace layers
+} // namespace mozilla
+
+#endif
