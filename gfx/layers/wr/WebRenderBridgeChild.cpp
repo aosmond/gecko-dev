@@ -288,8 +288,11 @@ WebRenderBridgeChild::Connect(CompositableClient* aCompositable,
   MOZ_ASSERT(aCompositable);
 
   static uint64_t sNextID = 1;
-  uint64_t id = sNextID++;
+  //uint64_t id = sNextID++;
+  uint64_t id = GetNamespace();
+  id = id << 32 | sNextID++;
 
+  printf_stderr("[AO] [%u] [%u] [%p] WebRenderBridgeChild::Connect %lu\n", base::GetCurrentProcId(), OtherPid(), this, id);
   mCompositables.Put(id, aCompositable);
 
   CompositableHandle handle(id);

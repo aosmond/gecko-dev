@@ -26,6 +26,8 @@ public:
 
   virtual CompositableType GetType() override { return mTextureInfo.mCompositableType; }
 
+  void DebugMe() const override;
+
   virtual void Composite(Compositor* aCompositor,
                          LayerComposite* aLayer,
                          EffectChain& aEffectChain,

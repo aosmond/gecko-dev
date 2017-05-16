@@ -325,7 +325,11 @@ ImageBridgeChild::Connect(CompositableClient* aCompositable,
   // ImageBridgeChild instances. This is relevant for the GPU process, where
   // we don't want old IDs to potentially leak into a recreated ImageBridge.
   static uint64_t sNextID = 1;
+  //uint64_t id = mNamespace;
+  //id = id << 32 | sNextID++;
   uint64_t id = sNextID++;
+
+  printf_stderr("[AO] [%u] [%u] [%p] ImageBridgeChild::Connect %lu\n", base::GetCurrentProcId(), OtherPid(), this, id);
 
   {
     MutexAutoLock lock(mContainerMapLock);

@@ -81,6 +81,7 @@ int
 ImageComposite::ChooseImageIndex() const
 {
   if (mImages.IsEmpty()) {
+    printf_stderr("[AO] [%u] no images in composite\n", base::GetCurrentProcId());
     return -1;
   }
   TimeStamp now = GetCompositionTime();
@@ -94,6 +95,11 @@ ImageComposite::ChooseImageIndex() const
         return i;
       }
     }
+    printf_stderr("[AO] [%u] [%p] no matching image in composite for frame %d producer %d\n", base::GetCurrentProcId(), this, mLastFrameID, mLastProducerID);
+    for (uint32_t i = 0; i < mImages.Length(); ++i) {
+      printf_stderr("[AO] [%u] [%p] -- %u -> frame %d producer %d\n", base::GetCurrentProcId(), this, i, mImages[i].mFrameID, mImages[i].mProducerID);
+    }
+    DebugMe();
     return -1;
   }
 

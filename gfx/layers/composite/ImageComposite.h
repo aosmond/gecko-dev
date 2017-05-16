@@ -25,6 +25,9 @@ public:
   explicit ImageComposite();
   ~ImageComposite();
 
+  virtual void DebugMe() const
+  { }
+
   int32_t GetFrameID()
   {
     const TimedImage* img = ChooseImage();

@@ -455,9 +455,11 @@ WebRenderBridgeParent::ProcessWebRenderCommands(const gfx::IntSize &aSize,
           NS_ERROR("CompositableHost does not exist");
           break;
         }
+        //host->SetWrCompositableHolder(mCompositableHolder);
         // XXX select Texture for video in CompositeToTarget().
         TextureHost* texture = host->GetAsTextureHostForComposite();
         if (!texture) {
+          printf_stderr("[AO] [%u] [%u] no texture host for %lu\n", base::GetCurrentProcId(), OtherPid(), wr::AsUint64(op.externalImageId()));
           NS_ERROR("TextureHost does not exist");
           break;
         }
@@ -607,6 +609,7 @@ WebRenderBridgeParent::RecvAddExternalImageId(const ExternalImageId& aImageId,
     return IPC_OK();
   }
 
+  printf_stderr("[AO] [%u] [%u] add external image %lu handle %lu\n", base::GetCurrentProcId(), OtherPid(), wr::AsUint64(aImageId), aHandle.Value());
   MOZ_ASSERT(!mExternalImageIds.Get(wr::AsUint64(aImageId)).get());
 
   ImageBridgeParent* imageBridge = ImageBridgeParent::GetInstance(OtherPid());
@@ -638,6 +641,7 @@ WebRenderBridgeParent::RecvAddExternalImageIdForCompositable(const ExternalImage
   if (mDestroyed) {
     return IPC_OK();
   }
+  printf_stderr("[AO] [%u] [%u] add external image for compositable %lu\n", base::GetCurrentProcId(), OtherPid(), wr::AsUint64(aImageId));
   MOZ_ASSERT(!mExternalImageIds.Get(wr::AsUint64(aImageId)).get());
 
   RefPtr<CompositableHost> host = FindCompositable(aHandle);
@@ -660,6 +664,7 @@ WebRenderBridgeParent::RecvRemoveExternalImageId(const ExternalImageId& aImageId
   if (mDestroyed) {
     return IPC_OK();
   }
+  printf_stderr("[AO] [%u] [%u] remove external image %lu\n", base::GetCurrentProcId(), OtherPid(), wr::AsUint64(aImageId));
   MOZ_ASSERT(mExternalImageIds.Get(wr::AsUint64(aImageId)).get());
   WebRenderImageHost* wrHost = mExternalImageIds.Get(wr::AsUint64(aImageId)).get();
   if (wrHost) {

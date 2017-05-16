@@ -35,6 +35,7 @@ WebRenderImageLayer::~WebRenderImageLayer()
     WrManager()->AddImageKeyForDiscard(mKey.value());
   }
   if (mExternalImageId.isSome()) {
+    printf_stderr("[AO] [%p] release external image ID %lu\n", this, wr::AsUint64(mExternalImageId.ref()));
     WrBridge()->DeallocExternalImageId(mExternalImageId.ref());
   }
 }
@@ -130,6 +131,7 @@ WebRenderImageLayer::RenderLayer(wr::DisplayListBuilder& aBuilder,
   if (mExternalImageId.isNothing()) {
     if (GetImageClientType() == CompositableType::IMAGE_BRIDGE) {
       MOZ_ASSERT(!mImageClient);
+      printf_stderr("[AO] [%p] connect %lu\n", this, mContainer->GetAsyncContainerHandle().Value());
       mExternalImageId = Some(WrBridge()->AllocExternalImageId(mContainer->GetAsyncContainerHandle()));
     } else {
       // Handle CompositableType::IMAGE case

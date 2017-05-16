@@ -114,6 +114,12 @@ WebRenderImageHost::RemoveTextureHost(TextureHost* aTexture)
   }
 }
 
+void
+WebRenderImageHost::DebugMe() const
+{
+  printf_stderr("[AO] [%u] [%p] wr bridge %p\n", base::GetCurrentProcId(), this, mWrBridge);
+}
+
 TimeStamp
 WebRenderImageHost::GetCompositionTime() const
 {
@@ -279,6 +285,7 @@ WebRenderImageHost::GetImageSize() const
 void
 WebRenderImageHost::SetWrBridge(WebRenderBridgeParent* aWrBridge)
 {
+  printf_stderr("[AO] [%u] [%p] wr bridge was %p, now %p\n", base::GetCurrentProcId(), this, mWrBridge, aWrBridge);
   SetCurrentTextureHost(nullptr);
   mWrBridge = aWrBridge;
 }
