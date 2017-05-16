@@ -5,6 +5,7 @@
 
 #include "mozilla/layers/WebRenderScrollData.h"
 #include "mozilla/Unused.h"
+#include "Layers.h"
 #include "nsTArray.h"
 
 namespace mozilla {
