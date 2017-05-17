@@ -34,6 +34,7 @@ public:
                                    nsTArray<GfxVarUpdate>&& vars,
                                    const DevicePrefs& devicePrefs,
                                    nsTArray<LayerTreeIdMapping>&& mappings) override;
+  mozilla::ipc::IPCResult RecvInitCompositorManager(Endpoint<PCompositorManagerParent>&& aEndpoint) override;
   mozilla::ipc::IPCResult RecvInitVsyncBridge(Endpoint<PVsyncBridgeParent>&& aVsyncEndpoint) override;
   mozilla::ipc::IPCResult RecvInitImageBridge(Endpoint<PImageBridgeParent>&& aEndpoint) override;
   mozilla::ipc::IPCResult RecvInitVRManager(Endpoint<PVRManagerParent>&& aEndpoint) override;
@@ -47,7 +48,7 @@ public:
       const CompositorOptions& aOptions,
       const bool& aUseExternalSurface,
       const IntSize& aSurfaceSize) override;
-  mozilla::ipc::IPCResult RecvNewContentCompositorBridge(Endpoint<PCompositorBridgeParent>&& aEndpoint) override;
+  mozilla::ipc::IPCResult RecvNewContentCompositorManager(Endpoint<PCompositorManagerParent>&& aEndpoint) override;
   mozilla::ipc::IPCResult RecvNewContentImageBridge(Endpoint<PImageBridgeParent>&& aEndpoint) override;
   mozilla::ipc::IPCResult RecvNewContentVRManager(Endpoint<PVRManagerParent>&& aEndpoint) override;
   mozilla::ipc::IPCResult RecvNewContentVideoDecoderManager(Endpoint<PVideoDecoderManagerParent>&& aEndpoint) override;

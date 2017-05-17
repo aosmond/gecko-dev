@@ -7,6 +7,11 @@
 
 include protocol PCompositorBridge;
 
+using mozilla::TimeDuration from "mozilla/TimeStamp.h";
+using mozilla::CSSToLayoutDeviceScale from "Units.h";
+using mozilla::layers::CompositorOptions from "mozilla/layers/CompositorOptions.h";
+using mozilla::gfx::IntSize from "mozilla/gfx/2D.h";
+
 namespace mozilla {
 namespace layers {
 
@@ -15,7 +20,14 @@ async protocol PCompositorManager
 //  manages PCompositorBridge;
 //child:
 parent:
-  async Foo();
+  // Create a new top-level compositor.
+  async NewWidgetCompositor(Endpoint<PCompositorBridgeParent> endpoint,
+                            CSSToLayoutDeviceScale scale,
+                            TimeDuration vsyncRate,
+                            CompositorOptions options,
+                            bool useExternalSurface,
+                            IntSize surfaceSize);
+
 };
 
 } // layers

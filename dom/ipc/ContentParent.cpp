@@ -82,6 +82,7 @@
 #include "mozilla/jsipc/CrossProcessObjectWrappers.h"
 #include "mozilla/layers/PAPZParent.h"
 #include "mozilla/layers/CompositorThread.h"
+#include "mozilla/layers/CompositorManagerParent.h"
 #include "mozilla/layers/ImageBridgeParent.h"
 #include "mozilla/layers/LayerTreeOwnerTracker.h"
 #include "mozilla/layout/RenderFrameParent.h"
@@ -2289,7 +2290,8 @@ ContentParent::InitInternal(ProcessPriority aInitialPriority,
 
   if (aSetupOffMainThreadCompositing) {
     // NB: internally, this will send an IPC message to the child
-    // process to get it to create the CompositorBridgeChild.  This
+    // process to get it to create the CompositorManagerChild, and
+    // through that sequence, the CompositorBridgeChild. This
     // message goes through the regular IPC queue for this
     // channel, so delivery will happen-before any other messages
     // we send.  The CompositorBridgeChild must be created before any
@@ -2300,7 +2302,7 @@ ContentParent::InitInternal(ProcessPriority aInitialPriority,
     if (useOffMainThreadCompositing) {
       GPUProcessManager* gpm = GPUProcessManager::Get();
 
-      Endpoint<PCompositorBridgeChild> compositor;
+      Endpoint<PCompositorManagerChild> compositorManager;
       Endpoint<PImageBridgeChild> imageBridge;
       Endpoint<PVRManagerChild> vrBridge;
       Endpoint<PVideoDecoderManagerChild> videoManager;
@@ -2308,7 +2310,7 @@ ContentParent::InitInternal(ProcessPriority aInitialPriority,
 
       DebugOnly<bool> opened = gpm->CreateContentBridges(
         OtherPid(),
-        &compositor,
+        &compositorManager,
         &imageBridge,
         &vrBridge,
         &videoManager,
@@ -2316,7 +2318,7 @@ ContentParent::InitInternal(ProcessPriority aInitialPriority,
       MOZ_ASSERT(opened);
 
       Unused << SendInitRendering(
-        Move(compositor),
+        Move(compositorManager),
         Move(imageBridge),
         Move(vrBridge),
         Move(videoManager),
@@ -2461,7 +2463,7 @@ ContentParent::OnCompositorUnexpectedShutdown()
 {
   GPUProcessManager* gpm = GPUProcessManager::Get();
 
-  Endpoint<PCompositorBridgeChild> compositor;
+  Endpoint<PCompositorManagerChild> compositorManager;
   Endpoint<PImageBridgeChild> imageBridge;
   Endpoint<PVRManagerChild> vrBridge;
   Endpoint<PVideoDecoderManagerChild> videoManager;
@@ -2469,7 +2471,7 @@ ContentParent::OnCompositorUnexpectedShutdown()
 
   DebugOnly<bool> opened = gpm->CreateContentBridges(
     OtherPid(),
-    &compositor,
+    &compositorManager,
     &imageBridge,
     &vrBridge,
     &videoManager,
@@ -2477,7 +2479,7 @@ ContentParent::OnCompositorUnexpectedShutdown()
   MOZ_ASSERT(opened);
 
   Unused << SendReinitRendering(
-    Move(compositor),
+    Move(compositorManager),
     Move(imageBridge),
     Move(vrBridge),
     Move(videoManager),

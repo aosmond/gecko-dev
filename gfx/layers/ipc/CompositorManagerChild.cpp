@@ -29,16 +29,17 @@ CompositorManagerChild::InitSameProcess(uint32_t aNamespace)
   sInstance = new CompositorManagerChild(aNamespace);
 }
 
-/* static */ void
+/* static */ bool
 CompositorManagerChild::Init(Endpoint<PCompositorManagerChild>&& aEndpoint,
                              uint32_t aNamespace)
 {
   MOZ_ASSERT(NS_IsMainThread());
   if (NS_WARN_IF(sInstance)) {
     MOZ_ASSERT_UNREACHABLE("Already initalized");
-    return;
+    return false;
   }
   sInstance = new CompositorManagerChild(Move(aEndpoint), aNamespace);
+  return true;
 }
 
 /* static */ void
@@ -49,6 +50,7 @@ CompositorManagerChild::Reinit(Endpoint<PCompositorManagerChild>&& aEndpoint,
   MOZ_ASSERT(sInstance);
   MOZ_ASSERT(sInstance->mNamespace != aNamespace);
   sInstance = new CompositorManagerChild(Move(aEndpoint), aNamespace);
+  return true;
 }
 
 /* static */ void
@@ -65,6 +67,12 @@ CompositorManagerChild::Shutdown()
     CompositorManagerParent::ShutdownSameProcess();
   }
   sInstance = nullptr;
+}
+
+/* static */ bool
+CompositorManagerChild::CreateCompositorBridge(uint32_t aNamespace)
+{
+  return false;
 }
 
 CompositorManagerChild::CompositorManagerChild(uint32_t aNamespace)

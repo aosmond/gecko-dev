@@ -23,11 +23,13 @@ class CompositorManagerChild : public PCompositorManagerChild
 public:
   static bool IsInitialized();
   static void InitSameProcess(uint32_t aNamespace);
-  static void Init(Endpoint<PCompositorManagerChild>&& aEndpoint,
+  static bool Init(Endpoint<PCompositorManagerChild>&& aEndpoint,
                    uint32_t aNamespace);
-  static void Reinit(Endpoint<PCompositorManagerChild>&& aEndpoint,
+  static bool Reinit(Endpoint<PCompositorManagerChild>&& aEndpoint,
                      uint32_t aNamespace);
   static void Shutdown();
+
+  static bool CreateCompositorBridge(uint32_t aNamespace);
 
   void ActorDestroy(ActorDestroyReason aReason) override;
 
