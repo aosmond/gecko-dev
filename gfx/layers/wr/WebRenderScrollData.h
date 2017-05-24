@@ -8,9 +8,9 @@
 
 #include <map>
 
-#include "chrome/common/ipc_message_utils.h"
+#include "ipc/IPCMessageUtils.h"
 #include "FrameMetrics.h"
-#include "LayersTypes.h"
+#include "mozilla/layers/LayerAttributes.h"
 #include "mozilla/Maybe.h"
 #include "nsTArrayForwardDeclare.h"
 
