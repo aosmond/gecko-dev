@@ -481,7 +481,6 @@ CrossProcessCompositorBridgeParent::GetCompositionManager(LayerTransactionParent
 void
 CrossProcessCompositorBridgeParent::DeferredDestroy()
 {
-  mCompositorThreadHolder = nullptr;
   mSelfRef = nullptr;
 }
 

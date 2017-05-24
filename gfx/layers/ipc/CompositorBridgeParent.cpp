@@ -333,7 +333,6 @@ CompositorBridgeParent::CompositorBridgeParent(CompositorManagerParent* aManager
   , mRootLayerTreeID(0)
   , mOverrideComposeReadiness(false)
   , mForceCompositionTask(nullptr)
-  , mCompositorThreadHolder(CompositorThreadHolder::GetSingleton())
   , mCompositorScheduler(nullptr)
   , mAnimationStorage(nullptr)
   , mPaintTime(TimeDuration::Forever())
@@ -490,8 +489,6 @@ CompositorBridgeParent::RecvWillClose()
 void CompositorBridgeParent::DeferredDestroy()
 {
   MOZ_ASSERT(!NS_IsMainThread());
-  MOZ_ASSERT(mCompositorThreadHolder);
-  mCompositorThreadHolder = nullptr;
   mSelfRef = nullptr;
 }
 
