@@ -5,6 +5,7 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #include "mozilla/layers/CompositorManagerParent.h"
+#include "mozilla/layers/CompositorBridgeParent.h"
 #include "mozilla/layers/CompositorThread.h"
 
 namespace mozilla {
@@ -67,6 +68,15 @@ CompositorManagerParent::ShutdownSameProcess()
     MOZ_ASSERT(sInstance);
     parent = sInstance.forget();
   }
+}
+
+/* static */ already_AddRefed<CompositorBridgeParent>
+CompositorManagerParent::CreateSameProcessWidgetCompositorBridge(CSSToLayoutDeviceScale aScale,
+                                                                 const CompositorOptions& aOptions,
+                                                                 bool aUseExternalSurfaceSize,
+                                                                 const gfx::IntSize& aSurfaceSize)
+{
+  return nullptr;
 }
 
 CompositorManagerParent::CompositorManagerParent()

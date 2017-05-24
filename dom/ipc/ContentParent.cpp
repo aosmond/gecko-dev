@@ -2307,7 +2307,7 @@ ContentParent::InitInternal(ProcessPriority aInitialPriority,
     if (useOffMainThreadCompositing) {
       GPUProcessManager* gpm = GPUProcessManager::Get();
 
-      Endpoint<PCompositorBridgeChild> compositor;
+      Endpoint<PCompositorManagerChild> compositor;
       Endpoint<PImageBridgeChild> imageBridge;
       Endpoint<PVRManagerChild> vrBridge;
       Endpoint<PVideoDecoderManagerChild> videoManager;
@@ -2468,7 +2468,7 @@ ContentParent::OnCompositorUnexpectedShutdown()
 {
   GPUProcessManager* gpm = GPUProcessManager::Get();
 
-  Endpoint<PCompositorBridgeChild> compositor;
+  Endpoint<PCompositorManagerChild> compositor;
   Endpoint<PImageBridgeChild> imageBridge;
   Endpoint<PVRManagerChild> vrBridge;
   Endpoint<PVideoDecoderManagerChild> videoManager;
