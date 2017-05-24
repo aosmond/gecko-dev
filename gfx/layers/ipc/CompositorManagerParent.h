@@ -37,7 +37,8 @@ public:
 
   void ActorDestroy(ActorDestroyReason aReason) override;
 
-  ipc::IPCResult RecvIgnoreTemporarySkeletonMessage() override { return IPC_OK(); }
+  bool DeallocPCompositorBridgeParent(PCompositorBridgeParent* aActor) override;
+  PCompositorBridgeParent* AllocPCompositorBridgeParent(const CompositorBridgeOptions& aOpt) override;
 
 private:
   static StaticRefPtr<CompositorManagerParent> sInstance;
@@ -51,6 +52,8 @@ private:
   void DeallocPCompositorManagerParent() override;
 
   RefPtr<CompositorThreadHolder> mCompositorThreadHolder;
+
+  AutoTArray<RefPtr<CompositorBridgeParent>, 1> mPendingCompositorBridges;
 };
 
 } // namespace layers

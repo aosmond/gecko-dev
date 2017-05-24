@@ -9,6 +9,7 @@
 #include "mozilla/dom/ContentChild.h"   // for ContentChild
 #include "mozilla/dom/TabChild.h"       // for TabChild
 #include "mozilla/dom/TabGroup.h"       // for TabGroup
+#include "VsyncSource.h"
 
 namespace mozilla {
 namespace layers {
@@ -74,7 +75,21 @@ CompositorManagerChild::Shutdown()
 /* static */ bool
 CompositorManagerChild::CreateContentCompositorBridge(uint32_t aNamespace)
 {
-  return false;
+  MOZ_ASSERT(NS_IsMainThread());
+  if (NS_WARN_IF(!sInstance)) {
+    return false;
+  }
+
+  CompositorBridgeOptions options = ContentCompositorOptions();
+  PCompositorBridgeChild* pbridge =
+    sInstance->SendPCompositorBridgeConstructor(options);
+  if (NS_WARN_IF(!pbridge)) {
+    return true;
+  }
+
+  auto bridge = static_cast<CompositorBridgeChild*>(pbridge);
+  bridge->InitForContent(aNamespace);
+  return true;
 }
 
 /* static */ already_AddRefed<CompositorBridgeChild>
@@ -86,14 +101,51 @@ CompositorManagerChild::CreateWidgetCompositorBridge(uint64_t aProcessToken,
                                                      bool aUseExternalSurfaceSize,
                                                      const gfx::IntSize& aSurfaceSize)
 {
-  return nullptr;
+  MOZ_ASSERT(XRE_IsParentProcess());
+  MOZ_ASSERT(NS_IsMainThread());
+  if (NS_WARN_IF(!sInstance)) {
+    return nullptr;
+  }
+
+  TimeDuration vsyncRate =
+    gfxPlatform::GetPlatform()->GetHardwareVsync()->GetGlobalDisplay().GetVsyncRate();
+
+  CompositorBridgeOptions options =
+    WidgetCompositorOptions(aScale, vsyncRate, aOptions,
+                            aUseExternalSurfaceSize, aSurfaceSize);
+  PCompositorBridgeChild* pbridge =
+    sInstance->SendPCompositorBridgeConstructor(options);
+  if (NS_WARN_IF(!pbridge)) {
+    return nullptr;
+  }
+
+  RefPtr<CompositorBridgeChild> bridge =
+    static_cast<CompositorBridgeChild*>(pbridge);
+  bridge->InitForWidget(aProcessToken, aLayerManager, aNamespace);
+  return bridge.forget();
 }
 
 /* static */ already_AddRefed<CompositorBridgeChild>
 CompositorManagerChild::CreateSameProcessWidgetCompositorBridge(LayerManager* aLayerManager,
                                                                 uint32_t aNamespace)
 {
-  return nullptr;
+  MOZ_ASSERT(XRE_IsParentProcess());
+  MOZ_ASSERT(NS_IsMainThread());
+  if (NS_WARN_IF(!sInstance)) {
+    return nullptr;
+  }
+
+  CompositorBridgeOptions options = SameProcessWidgetCompositorOptions();
+  PCompositorBridgeChild* pbridge =
+    sInstance->SendPCompositorBridgeConstructor(options);
+  if (NS_WARN_IF(!pbridge)) {
+    return nullptr;
+  }
+
+  RefPtr<CompositorBridgeChild> bridge =
+    static_cast<CompositorBridgeChild*>(pbridge);
+  bridge->InitForWidget(1, aLayerManager, aNamespace);
+  return bridge.forget();
 }
 
 CompositorManagerChild::CompositorManagerChild(CompositorManagerParent* aParent,
@@ -140,6 +192,21 @@ void
 CompositorManagerChild::ActorDestroy(ActorDestroyReason aReason)
 {
   mCanSend = false;
+}
+
+PCompositorBridgeChild*
+CompositorManagerChild::AllocPCompositorBridgeChild(const CompositorBridgeOptions& aOptions)
+{
+  RefPtr<CompositorBridgeChild> child = new CompositorBridgeChild(this);
+  return child.forget().take();
+}
+
+bool
+CompositorManagerChild::DeallocPCompositorBridgeChild(PCompositorBridgeChild* aActor)
+{
+  RefPtr<CompositorBridgeChild> child =
+    dont_AddRef(static_cast<CompositorBridgeChild*>(aActor));
+  return true;
 }
 
 void

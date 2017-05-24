@@ -5,8 +5,11 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #include "mozilla/layers/CompositorManagerParent.h"
+#include "mozilla/gfx/GPUParent.h"
 #include "mozilla/layers/CompositorBridgeParent.h"
+#include "mozilla/layers/CrossProcessCompositorBridgeParent.h"
 #include "mozilla/layers/CompositorThread.h"
+#include "VsyncSource.h"
 
 namespace mozilla {
 namespace layers {
@@ -76,7 +79,22 @@ CompositorManagerParent::CreateSameProcessWidgetCompositorBridge(CSSToLayoutDevi
                                                                  bool aUseExternalSurfaceSize,
                                                                  const gfx::IntSize& aSurfaceSize)
 {
-  return nullptr;
+  MOZ_ASSERT(XRE_IsParentProcess());
+  MOZ_ASSERT(NS_IsMainThread());
+
+  StaticMutexAutoLock lock(sMutex);
+  if (NS_WARN_IF(!sInstance)) {
+    return nullptr;
+  }
+
+  TimeDuration vsyncRate =
+    gfxPlatform::GetPlatform()->GetHardwareVsync()->GetGlobalDisplay().GetVsyncRate();
+
+  RefPtr<CompositorBridgeParent> bridge =
+    new CompositorBridgeParent(sInstance, aScale, vsyncRate, aOptions,
+                               aUseExternalSurfaceSize, aSurfaceSize);
+  sInstance->mPendingCompositorBridges.AppendElement(bridge);
+  return bridge.forget();
 }
 
 CompositorManagerParent::CompositorManagerParent()
@@ -107,6 +125,62 @@ void
 CompositorManagerParent::DeallocPCompositorManagerParent()
 {
   Release();
+}
+
+PCompositorBridgeParent*
+CompositorManagerParent::AllocPCompositorBridgeParent(const CompositorBridgeOptions& aOpt)
+{
+  switch (aOpt.type()) {
+    case CompositorBridgeOptions::TContentCompositorOptions: {
+      RefPtr<CrossProcessCompositorBridgeParent> bridge =
+        new CrossProcessCompositorBridgeParent(this);
+      return bridge.forget().take();
+    }
+    case CompositorBridgeOptions::TWidgetCompositorOptions: {
+      // Only the UI process is allowed to create widget compositors.
+      gfx::GPUParent* gpu = gfx::GPUParent::GetSingleton();
+      if (NS_WARN_IF(!gpu || OtherPid() != gpu->OtherPid())) {
+        MOZ_ASSERT_UNREACHABLE("Child cannot create widget compositor!");
+        break;
+      }
+
+      const WidgetCompositorOptions& opt = aOpt.get_WidgetCompositorOptions();
+      RefPtr<CompositorBridgeParent> bridge =
+        new CompositorBridgeParent(this, opt.scale(), opt.vsyncRate(),
+                                   opt.options(), opt.useExternalSurfaceSize(),
+                                   opt.surfaceSize());
+      return bridge.forget().take();
+    }
+    case CompositorBridgeOptions::TSameProcessWidgetCompositorOptions: {
+      // If the GPU and UI process are combined, we actually already created the
+      // CompositorBridgeParent, so we need to reuse that to inject it into the
+      // IPDL framework.
+      if (NS_WARN_IF(OtherPid() != base::GetCurrentProcId())) {
+        MOZ_ASSERT_UNREACHABLE("Child cannot create same process compositor!");
+        break;
+      }
+
+      StaticMutexAutoLock lock(sMutex);
+      MOZ_ASSERT(sInstance == this);
+      MOZ_ASSERT(!mPendingCompositorBridges.IsEmpty());
+
+      auto bridge = mPendingCompositorBridges[0].forget().take();
+      mPendingCompositorBridges.RemoveElementAt(0);
+      return bridge;
+    }
+    default:
+      break;
+  }
+
+  return nullptr;
+}
+
+bool
+CompositorManagerParent::DeallocPCompositorBridgeParent(PCompositorBridgeParent* aActor)
+{
+  RefPtr<CompositorBridgeParentBase> bridge =
+    dont_AddRef(static_cast<CompositorBridgeParentBase*>(aActor));
+  return true;
 }
 
 } // namespace layers
