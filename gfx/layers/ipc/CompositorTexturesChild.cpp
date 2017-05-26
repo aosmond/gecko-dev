@@ -10,6 +10,9 @@ namespace mozilla {
 namespace layers {
 
 CompositorTexturesChild::CompositorTexturesChild()
+  : mMessageLoop(MessageLoop::current())
+  , mSectionAllocator(nullptr)
+  , mCanSend(true)
 { }
 
 CompositorTexturesChild::~CompositorTexturesChild()
@@ -17,7 +20,9 @@ CompositorTexturesChild::~CompositorTexturesChild()
 
 void
 CompositorTexturesChild::ActorDestroy(ActorDestroyReason aReason)
-{ }
+{
+  mCanSend = false;
+}
 
 ipc::IPCResult
 CompositorTexturesChild::RecvParentAsyncMessages(InfallibleTArray<AsyncParentMessageData>&& aMessages)
@@ -40,6 +45,71 @@ bool
 CompositorTexturesChild::DeallocPTextureChild(PTextureChild* actor)
 {
   return TextureClient::DestroyIPDLActor(actor);
+}
+
+bool
+CompositorTexturesChild::AllocShmem(size_t aSize,
+                                    ipc::SharedMemory::SharedMemoryType aShmType,
+                                    ipc::Shmem* aShmem)
+{
+  return PCompositorTexturesChild::AllocShmem(aSize, aShmType, aShmem);
+}
+
+bool CompositorTexturesChild::AllocUnsafeShmem(size_t aSize,
+                        ipc::SharedMemory::SharedMemoryType aShmType,
+                        ipc::Shmem* aShmem)
+{
+  return PCompositorTexturesChild::AllocUnsafeShmem(aSize, aShmType, aShmem);
+}
+
+bool CompositorTexturesChild::DeallocShmem(ipc::Shmem& aShmem)
+{
+  return PCompositorTexturesChild::DeallocShmem(aShmem);
+}
+
+bool CompositorTexturesChild::IsSameProcess() const
+{
+  return OtherPid() == base::GetCurrentProcId();
+}
+
+base::ProcessId
+CompositorTexturesChild::GetParentPid() const
+{
+  return OtherPid();
+}
+
+MessageLoop*
+CompositorTexturesChild::GetMessageLoop() const
+{
+  return mMessageLoop;
+}
+
+FixedSizeSmallShmemSectionAllocator*
+CompositorTexturesChild::GetTileLockAllocator()
+{
+  return mSectionAllocator;
+}
+
+void
+CompositorTexturesChild::CancelWaitForRecycle(uint64_t aTextureId)
+{
+}
+
+wr::MaybeExternalImageId
+CompositorTexturesChild::GetNextExternalImageId()
+{
+  return Nothing();
+}
+
+PTextureChild*
+CompositorTexturesChild::CreateTexture(const SurfaceDescriptor& aSharedData,
+                                       LayersBackend aLayersBackend,
+                                       TextureFlags aFlags,
+                                       uint64_t aSerial,
+                                       wr::MaybeExternalImageId& aExternalImageId,
+                                       nsIEventTarget* aTarget)
+{
+  return nullptr;
 }
 
 } // namespace layers
