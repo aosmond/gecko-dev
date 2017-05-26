@@ -66,6 +66,10 @@ public:
 
   bool DeallocPCompositorBridgeChild(PCompositorBridgeChild* aActor) override;
 
+  PCompositorTexturesChild* AllocPCompositorTexturesChild() override;
+
+  bool DeallocPCompositorTexturesChild(PCompositorTexturesChild* aActor) override;
+
 private:
   static StaticRefPtr<CompositorManagerChild> sInstance;
 

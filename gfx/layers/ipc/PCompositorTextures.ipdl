@@ -1,0 +1,35 @@
+/* -*- Mode: C++; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 2 -*-
+ * vim: sw=2 ts=8 et :
+ */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
+
+include LayersSurfaces;
+include LayersMessages;
+include protocol PCompositorManager;
+include protocol PTexture;
+
+using mozilla::layers::LayersBackend from "mozilla/layers/LayersTypes.h";
+using mozilla::layers::TextureFlags from "mozilla/layers/CompositorTypes.h";
+using mozilla::wr::MaybeExternalImageId from "mozilla/webrender/WebRenderTypes.h";
+
+namespace mozilla {
+namespace layers {
+
+sync protocol PCompositorTextures
+{
+  manager PCompositorManager;
+  manages PTexture;
+
+child:
+  async ParentAsyncMessages(AsyncParentMessageData[] aMessages);
+
+parent:
+  async __delete__();
+
+  async PTexture(SurfaceDescriptor aSharedData, LayersBackend aBackend, TextureFlags aTextureFlags, uint64_t id, uint64_t aSerial, MaybeExternalImageId aExternalImageId);
+};
+
+} // layers
+} // mozilla

@@ -40,6 +40,9 @@ public:
   bool DeallocPCompositorBridgeParent(PCompositorBridgeParent* aActor) override;
   PCompositorBridgeParent* AllocPCompositorBridgeParent(const CompositorBridgeOptions& aOpt) override;
 
+  PCompositorTexturesParent* AllocPCompositorTexturesParent() override;
+  bool DeallocPCompositorTexturesParent(PCompositorTexturesParent* aActor) override;
+
 private:
   static StaticRefPtr<CompositorManagerParent> sInstance;
   static StaticMutex sMutex;

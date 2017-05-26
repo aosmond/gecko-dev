@@ -6,6 +6,7 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 include protocol PCompositorBridge;
+include protocol PCompositorTextures;
 
 using struct mozilla::void_t from "ipc/IPCMessageUtils.h";
 using mozilla::TimeDuration from "mozilla/TimeStamp.h";
@@ -54,6 +55,7 @@ union CompositorBridgeOptions {
 sync protocol PCompositorManager
 {
   manages PCompositorBridge;
+  manages PCompositorTextures;
 
 parent:
   /**
@@ -68,6 +70,8 @@ parent:
    * See gfx/layers/ipc/PCompositorBridge.ipdl for more details.
    */
   async PCompositorBridge(CompositorBridgeOptions options);
+
+  async PCompositorTextures();
 };
 
 } // layers

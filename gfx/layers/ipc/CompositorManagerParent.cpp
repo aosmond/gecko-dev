@@ -7,6 +7,7 @@
 #include "mozilla/layers/CompositorManagerParent.h"
 #include "mozilla/gfx/GPUParent.h"
 #include "mozilla/layers/CompositorBridgeParent.h"
+#include "mozilla/layers/CompositorTexturesParent.h"
 #include "mozilla/layers/CrossProcessCompositorBridgeParent.h"
 #include "mozilla/layers/CompositorThread.h"
 #include "VsyncSource.h"
@@ -180,6 +181,21 @@ CompositorManagerParent::DeallocPCompositorBridgeParent(PCompositorBridgeParent*
 {
   RefPtr<CompositorBridgeParentBase> bridge =
     dont_AddRef(static_cast<CompositorBridgeParentBase*>(aActor));
+  return true;
+}
+
+PCompositorTexturesParent*
+CompositorManagerParent::AllocPCompositorTexturesParent()
+{
+  RefPtr<CompositorTexturesParent> parent = new CompositorTexturesParent();
+  return parent.forget().take();
+}
+
+bool
+CompositorManagerParent::DeallocPCompositorTexturesParent(PCompositorTexturesParent* aActor)
+{
+  RefPtr<CompositorTexturesParent> parent =
+    dont_AddRef(static_cast<CompositorTexturesParent*>(aActor));
   return true;
 }
 

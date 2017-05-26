@@ -8,6 +8,7 @@
 include LayersSurfaces;
 include protocol PLayerTransaction;
 include protocol PCompositorBridge;
+include protocol PCompositorTextures;
 include protocol PImageBridge;
 include protocol PVRManager;
 include protocol PVideoBridge;
@@ -23,7 +24,7 @@ namespace layers {
  * PTexture is the IPDL glue between a TextureClient and a TextureHost.
  */
 sync protocol PTexture {
-    manager PImageBridge or PCompositorBridge or PVRManager or PVideoBridge;
+    manager PImageBridge or PCompositorBridge or PVRManager or PVideoBridge or PCompositorTextures;
 
 child:
     async __delete__();

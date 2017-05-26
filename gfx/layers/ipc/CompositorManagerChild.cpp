@@ -6,6 +6,7 @@
 #include "mozilla/layers/CompositorManagerChild.h"
 #include "mozilla/layers/CompositorManagerParent.h"
 #include "mozilla/layers/CompositorBridgeChild.h"
+#include "mozilla/layers/CompositorTexturesChild.h"
 #include "mozilla/dom/ContentChild.h"   // for ContentChild
 #include "mozilla/dom/TabChild.h"       // for TabChild
 #include "mozilla/dom/TabGroup.h"       // for TabGroup
@@ -206,6 +207,21 @@ CompositorManagerChild::DeallocPCompositorBridgeChild(PCompositorBridgeChild* aA
 {
   RefPtr<CompositorBridgeChild> child =
     dont_AddRef(static_cast<CompositorBridgeChild*>(aActor));
+  return true;
+}
+
+PCompositorTexturesChild*
+CompositorManagerChild::AllocPCompositorTexturesChild()
+{
+  RefPtr<CompositorTexturesChild> child = new CompositorTexturesChild();
+  return child.forget().take();
+}
+
+bool
+CompositorManagerChild::DeallocPCompositorTexturesChild(PCompositorTexturesChild* aActor)
+{
+  RefPtr<CompositorTexturesChild> child =
+    dont_AddRef(static_cast<CompositorTexturesChild*>(aActor));
   return true;
 }
 
