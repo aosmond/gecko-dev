@@ -4,6 +4,7 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #include "mozilla/layers/CompositorTexturesChild.h"
+#include "mozilla/layers/TextureClient.h"
 
 namespace mozilla {
 namespace layers {
@@ -32,13 +33,13 @@ CompositorTexturesChild::AllocPTextureChild(const SurfaceDescriptor& aSharedData
                                             const uint64_t& aSerial,
                                             const wr::MaybeExternalImageId& aExternalImageId)
 {
-  return nullptr;
+  return TextureClient::CreateIPDLActor();
 }
 
 bool
 CompositorTexturesChild::DeallocPTextureChild(PTextureChild* actor)
 {
-  return true;
+  return TextureClient::DestroyIPDLActor(actor);
 }
 
 } // namespace layers

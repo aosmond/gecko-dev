@@ -10,14 +10,15 @@
 #include "mozilla/Attributes.h"         // for override
 #include "mozilla/RefPtr.h"             // for already_AddRefed
 #include "mozilla/layers/PCompositorTexturesParent.h"
+#include "mozilla/layers/ISurfaceAllocator.h"
 
 namespace mozilla {
 namespace layers {
 
 class CompositorTexturesParent final : public PCompositorTexturesParent
+                                     , public HostIPCAllocator
+                                     , public ShmemAllocator
 {
-  NS_INLINE_DECL_THREADSAFE_REFCOUNTING(CompositorTexturesParent)
-
 public:
   CompositorTexturesParent();
 
@@ -34,8 +35,30 @@ public:
 
   bool DeallocPTextureParent(PTextureParent* actor) override;
 
+  // ISurfaceAllocator (HostIPCAllocator)
+  ShmemAllocator* AsShmemAllocator() override { return this; }
+  bool UsesCompositorTextures() const override { return true; }
+  bool IPCOpen() const override { return mCanSend; }
+  bool IsSameProcess() const override;
+
+  // HostIPCAllocator
+  base::ProcessId GetChildProcessId() override;
+  void NotifyNotUsed(PTextureParent* aTexture, uint64_t aTransactionId) override;
+  void SendAsyncMessage(const InfallibleTArray<AsyncParentMessageData>& aMessage) override;
+
+  // ShmemAllocator
+  bool AllocShmem(size_t aSize,
+                  ipc::SharedMemory::SharedMemoryType aShmType,
+                  ipc::Shmem* aShmem) override;
+  bool AllocUnsafeShmem(size_t aSize,
+                        ipc::SharedMemory::SharedMemoryType aShmType,
+                        ipc::Shmem* aShmem) override;
+  void DeallocShmem(ipc::Shmem& aShmem) override;
+
 private:
   ~CompositorTexturesParent() override;
+
+  bool mCanSend;
 };
 
 } // namespace layers

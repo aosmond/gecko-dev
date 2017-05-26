@@ -102,6 +102,8 @@ public:
 
   virtual bool UsesWebRenderBridge() const { return false; }
 
+  virtual bool UsesCompositorTextures() const { return false; }
+
 protected:
   void Finalize() {}
 
