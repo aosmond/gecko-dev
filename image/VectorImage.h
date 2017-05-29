@@ -94,6 +94,7 @@ private:
                         const Maybe<SVGImageContext>& aSVGContext,
                         uint32_t aFlags);
 
+  void UpdateImageContainer();
   void DrawInternal(const SVGDrawingParameters& aParams, bool aContextPaint);
   void CreateSurfaceAndShow(const SVGDrawingParameters& aParams,
                             gfx::BackendType aBackend);

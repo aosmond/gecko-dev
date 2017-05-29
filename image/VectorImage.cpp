@@ -576,6 +576,8 @@ VectorImage::SendInvalidationNotifications()
     mProgressTracker->SyncNotifyProgress(FLAG_FRAME_COMPLETE,
                                          GetMaxSizedIntRect());
   }
+
+  UpdateImageContainer();
 }
 
 NS_IMETHODIMP_(IntRect)
@@ -794,14 +796,111 @@ VectorImage::GetFrameInternal(const IntSize& aSize,
 NS_IMETHODIMP_(bool)
 VectorImage::IsImageContainerAvailable(LayerManager* aManager, uint32_t aFlags)
 {
-  return false;
+  if (mError || !mIsFullyLoaded) {
+    return false;
+  }
+
+  IntSize size = GetSizeInternal();
+  if (size.IsEmpty()) {
+    return false;
+  }
+
+  int32_t maxTextureSize = aManager->GetMaxTextureSize();
+  return size.width <= maxTextureSize &&
+         size.height <= maxTextureSize;
 }
 
 //******************************************************************************
 NS_IMETHODIMP_(already_AddRefed<ImageContainer>)
 VectorImage::GetImageContainer(LayerManager* aManager, uint32_t aFlags)
 {
-  return nullptr;
+  if (mError || !mIsFullyLoaded) {
+    return nullptr;
+  }
+
+  IntSize size = GetSizeInternal();
+  if (NS_WARN_IF(size.IsEmpty())) {
+    return nullptr;
+  }
+
+  int32_t maxTextureSize = aManager->GetMaxTextureSize();
+  if (NS_WARN_IF(size.width > maxTextureSize ||
+                 size.height > maxTextureSize)) {
+    return nullptr;
+  }
+
+  if (mAnimationConsumers == 0) {
+    SendOnUnlockedDraw(aFlags);
+  }
+
+  RefPtr<ImageContainer> container = mImageContainer.get();
+  if (!container) {
+    container = LayerManager::CreateImageContainer();
+    mImageContainer = container;
+    mLastImageContainerDrawResult = DrawResult::NOT_READY;
+  }
+
+  switch (mLastImageContainerDrawResult) {
+    case DrawResult::SUCCESS:
+      return container.forget();
+    case DrawResult::NOT_READY:
+    case DrawResult::INCOMPLETE:
+    case DrawResult::TEMPORARY_ERROR:
+      // Temporary conditions we need to redraw to recover from.
+      break;
+    case DrawResult::BAD_IMAGE:
+    case DrawResult::BAD_ARGS:
+    case DrawResult::WRONG_SIZE:
+      return nullptr;
+    default:
+      MOZ_ASSERT_UNREACHABLE("Unhandled DrawResult type!");
+      return nullptr;
+  }
+
+  DrawResult result;
+  RefPtr<SourceSurface> surface;
+  Tie(result, surface) = GetFrameInternal(size, FRAME_CURRENT, aFlags);
+  if (!surface) {
+    return nullptr;
+  }
+
+  mLastImageContainerDrawResult = result;
+  RefPtr<layers::Image> image = new layers::SourceSurfaceImage(surface);
+  AutoTArray<ImageContainer::NonOwningImage, 1> imageList;
+  imageList.AppendElement(ImageContainer::NonOwningImage(image, TimeStamp(),
+                                                         mLastFrameID++,
+                                                         mImageProducerID));
+  mImageContainer->SetCurrentImagesInTransaction(imageList);
+  return container.forget();
+}
+
+void
+VectorImage::UpdateImageContainer()
+{
+  RefPtr<ImageContainer> container = mImageContainer.get();
+  if (!container) {
+    return;
+  }
+
+  nsIntSize size = GetSizeInternal();
+  if (size.IsEmpty()) {
+    return;
+  }
+
+  DrawResult result;
+  RefPtr<SourceSurface> surface;
+  Tie(result, surface) = GetFrameInternal(size, FRAME_CURRENT, FLAG_NONE);
+  if (!surface) {
+    return;
+  }
+
+  mLastImageContainerDrawResult = result;
+  RefPtr<layers::Image> image = new layers::SourceSurfaceImage(surface);
+  AutoTArray<ImageContainer::NonOwningImage, 1> imageList;
+  imageList.AppendElement(ImageContainer::NonOwningImage(image, TimeStamp(),
+                                                         mLastFrameID++,
+                                                         mImageProducerID));
+  mImageContainer->SetCurrentImages(imageList);
 }
 
 //******************************************************************************
