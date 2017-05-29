@@ -51,6 +51,13 @@ ImageMemoryCounter::ImageMemoryCounter(Image* aImage,
 ///////////////////////////////////////////////////////////////////////////////
 
 // Constructor
+Image::Image()
+  : mImageProducerID(ImageContainer::AllocateProducerID())
+  , mLastFrameID(0)
+  , mLastImageContainerDrawResult(DrawResult::NOT_READY)
+{ }
+
+// Constructor
 ImageResource::ImageResource(ImageURL* aURI) :
   mURI(aURI),
   mInnerWindowId(0),

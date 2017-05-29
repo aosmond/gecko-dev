@@ -11,6 +11,7 @@
 #include "gfx2DGlue.h"
 #include "imgIContainer.h"
 #include "ImageURL.h"
+#include "ImageContainer.h"
 #include "nsStringFwd.h"
 #include "ProgressTracker.h"
 #include "SurfaceCache.h"
@@ -227,6 +228,24 @@ public:
   virtual ImageURL* GetURI() = 0;
 
   virtual void ReportUseCounters() { }
+
+protected:
+  explicit Image();
+
+  virtual bool IsUnlocked() const { return false; }
+
+  virtual void SendOnUnlockedDraw(uint32_t aFlags) { }
+
+  // A weak pointer to our ImageContainer, which stays alive only as long as
+  // the layer system needs it.
+  WeakPtr<layers::ImageContainer> mImageContainer;
+
+  layers::ImageContainer::ProducerID mImageProducerID;
+  layers::ImageContainer::FrameID mLastFrameID;
+
+  // If mImageContainer is non-null, this contains the DrawResult we obtained
+  // the last time we updated it.
+  DrawResult mLastImageContainerDrawResult;
 };
 
 class ImageResource : public Image
@@ -310,7 +329,7 @@ protected:
   virtual nsresult StartAnimation() = 0;
   virtual nsresult StopAnimation() = 0;
 
-  void SendOnUnlockedDraw(uint32_t aFlags);
+  void SendOnUnlockedDraw(uint32_t aFlags) override;
 
   // Member data shared by all implementations of this abstract class
   RefPtr<ProgressTracker>     mProgressTracker;
