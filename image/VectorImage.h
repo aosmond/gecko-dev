@@ -81,6 +81,8 @@ protected:
   virtual bool     ShouldAnimate() override;
 
 private:
+  bool IsUnlocked() const override;
+
   Pair<DrawResult, RefPtr<SourceSurface>>
     GetFrameInternal(const IntSize& aSize,
                      uint32_t aWhichFrame,
