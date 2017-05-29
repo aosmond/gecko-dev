@@ -8,6 +8,7 @@
 
 #include "Image.h"
 #include "nsIStreamListener.h"
+#include "mozilla/Pair.h"
 #include "mozilla/MemoryReporting.h"
 
 class nsIRequest;
@@ -80,10 +81,22 @@ protected:
   virtual bool     ShouldAnimate() override;
 
 private:
-  /// Attempt to find a cached surface matching @aParams in the SurfaceCache.
-  already_AddRefed<gfxDrawable>
-    LookupCachedSurface(const SVGDrawingParameters& aParams);
+  IntSize GetSizeInternal();
 
+  Pair<DrawResult, RefPtr<SourceSurface>>
+    GetFrameInternal(const IntSize& aSize,
+                     uint32_t aWhichFrame,
+                     uint32_t aFlags);
+
+  void UpdateImageContainer();
+
+  /// Attempt to find a matching cached surface in the SurfaceCache.
+  already_AddRefed<SourceSurface>
+    LookupCachedSurface(const IntSize& aSize,
+                        const Maybe<SVGImageContext>& aSVGContext,
+                        uint32_t aFlags);
+
+  void DrawInternal(const SVGDrawingParameters& aParams, bool aContextPaint);
   void CreateSurfaceAndShow(const SVGDrawingParameters& aParams,
                             gfx::BackendType aBackend);
   void Show(gfxDrawable* aDrawable, const SVGDrawingParameters& aParams);
