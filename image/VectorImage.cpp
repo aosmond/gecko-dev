@@ -16,6 +16,7 @@
 #include "mozilla/dom/SVGSVGElement.h"
 #include "mozilla/gfx/2D.h"
 #include "mozilla/RefPtr.h"
+#include "mozilla/Tuple.h"
 #include "nsIDOMEvent.h"
 #include "nsIPresShell.h"
 #include "nsIStreamListener.h"
@@ -714,29 +715,37 @@ VectorImage::GetFrameAtSize(const IntSize& aSize,
                             uint32_t aWhichFrame,
                             uint32_t aFlags)
 {
+  return GetFrameInternal(aSize, aWhichFrame, aFlags).second().forget();
+}
+
+Pair<DrawResult, RefPtr<SourceSurface>>
+VectorImage::GetFrameInternal(const IntSize& aSize,
+                              uint32_t aWhichFrame,
+                              uint32_t aFlags)
+{
   MOZ_ASSERT(aWhichFrame <= FRAME_MAX_VALUE);
 
-  if (aSize.IsEmpty()) {
-    return nullptr;
+  if (aSize.IsEmpty() || aWhichFrame > FRAME_MAX_VALUE) {
+    return MakePair(DrawResult::BAD_ARGS, RefPtr<SourceSurface>());
   }
 
-  if (aWhichFrame > FRAME_MAX_VALUE) {
-    return nullptr;
+  if (mError) {
+    return MakePair(DrawResult::BAD_IMAGE, RefPtr<SourceSurface>());
   }
 
-  if (mError || !mIsFullyLoaded) {
-    return nullptr;
+  if (!mIsFullyLoaded) {
+    return MakePair(DrawResult::NOT_READY, RefPtr<SourceSurface>());
   }
 
   RefPtr<SourceSurface> sourceSurface =
     LookupCachedSurface(aSize, Nothing(), aFlags);
   if (sourceSurface) {
-    return sourceSurface.forget();
+    return MakePair(DrawResult::SUCCESS, Move(sourceSurface));
   }
 
   if (mIsDrawing) {
     NS_WARNING("Refusing to make re-entrant call to VectorImage::Draw");
-    return nullptr;
+    return MakePair(DrawResult::TEMPORARY_ERROR, RefPtr<SourceSurface>());
   }
 
   // Make our surface the size of what will ultimately be drawn to it.
@@ -745,7 +754,7 @@ VectorImage::GetFrameAtSize(const IntSize& aSize,
     CreateOffscreenContentDrawTarget(aSize, SurfaceFormat::B8G8R8A8);
   if (!dt || !dt->IsValid()) {
     NS_ERROR("Could not create a DrawTarget");
-    return nullptr;
+    return MakePair(DrawResult::TEMPORARY_ERROR, RefPtr<SourceSurface>());
   }
 
   RefPtr<gfxContext> context = gfxContext::CreateOrNull(dt);
@@ -757,7 +766,8 @@ VectorImage::GetFrameAtSize(const IntSize& aSize,
                               aFlags, 1.0);
 
   DrawInternal(params, false);
-  return dt->Snapshot();
+  sourceSurface = dt->Snapshot();
+  return MakePair(DrawResult::SUCCESS, Move(sourceSurface));
 }
 
 NS_IMETHODIMP_(bool)
