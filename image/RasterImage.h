@@ -320,7 +320,7 @@ private:
   // that for animated images because in EnsureAnimExists we lock the image and
   // never unlock so that animated images always have their lock count >= 1. In
   // that case we use our animation consumers count as a proxy for lock count.
-  bool IsUnlocked() {
+  bool IsUnlocked() const override {
     return (mLockCount == 0 ||
             (!gfxPrefs::ImageMemAnimatedDiscardable() &&
              (mAnimationState && mAnimationConsumers == 0)));
@@ -408,17 +408,6 @@ private: // data
   // How many times we've decoded this image.
   // This is currently only used for statistics
   int32_t                        mDecodeCount;
-
-  // A weak pointer to our ImageContainer, which stays alive only as long as
-  // the layer system needs it.
-  WeakPtr<layers::ImageContainer> mImageContainer;
-
-  layers::ImageContainer::ProducerID mImageProducerID;
-  layers::ImageContainer::FrameID mLastFrameID;
-
-  // If mImageContainer is non-null, this contains the DrawResult we obtained
-  // the last time we updated it.
-  DrawResult mLastImageContainerDrawResult;
 
 #ifdef DEBUG
   uint32_t                       mFramesNotified;
