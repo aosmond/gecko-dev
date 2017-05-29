@@ -9,6 +9,7 @@
 #include "Image.h"
 #include "nsIStreamListener.h"
 #include "mozilla/MemoryReporting.h"
+#include "mozilla/Pair.h"
 
 class nsIRequest;
 class gfxDrawable;
@@ -80,6 +81,13 @@ protected:
   virtual bool     ShouldAnimate() override;
 
 private:
+  IntSize GetSizeInternal();
+
+  Pair<DrawResult, RefPtr<SourceSurface>>
+    GetFrameInternal(const IntSize& aSize,
+                     uint32_t aWhichFrame,
+                     uint32_t aFlags) override;
+
   /// Attempt to find a matching cached surface in the SurfaceCache.
   already_AddRefed<SourceSurface>
     LookupCachedSurface(const IntSize& aSize,
