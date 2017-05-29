@@ -83,6 +83,8 @@ protected:
 private:
   IntSize GetSizeInternal();
 
+  bool IsUnlocked() const override;
+
   Pair<DrawResult, RefPtr<SourceSurface>>
     GetFrameInternal(const IntSize& aSize,
                      uint32_t aWhichFrame,

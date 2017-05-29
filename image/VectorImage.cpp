@@ -576,6 +576,12 @@ VectorImage::SendInvalidationNotifications()
     mProgressTracker->SyncNotifyProgress(FLAG_FRAME_COMPLETE,
                                          GetMaxSizedIntRect());
   }
+
+  IntSize size = GetSizeInternal();
+  if (size.IsEmpty()) {
+    return;
+  }
+  UpdateImageContainer(size);
 }
 
 NS_IMETHODIMP_(IntRect)
@@ -704,6 +710,10 @@ VectorImage::WillDrawOpaqueNow()
 IntSize
 VectorImage::GetSizeInternal()
 {
+  if (mError || !mIsFullyLoaded) {
+    return IntSize(0, 0);
+  }
+
   // Look up height & width
   // ----------------------
   SVGSVGElement* svgElem = mSVGDocumentWrapper->GetRootSVGElem();
@@ -721,7 +731,7 @@ VectorImage::GetFrame(uint32_t aWhichFrame, uint32_t aFlags)
     return nullptr;
   }
 
-  nsIntSize imageIntSize = GetSizeInternal();
+  IntSize imageIntSize = GetSizeInternal();
   if (imageIntSize.IsEmpty()) {
     // We'll get here if our SVG doc has a percent-valued or negative width or
     // height.
@@ -737,6 +747,12 @@ VectorImage::GetFrameAtSize(const IntSize& aSize,
                             uint32_t aFlags)
 {
   return GetFrameInternal(aSize, aWhichFrame, aFlags).second().forget();
+}
+
+bool
+VectorImage::IsUnlocked() const
+{
+  return mAnimationConsumers == 0;
 }
 
 Pair<DrawResult, RefPtr<SourceSurface>>
@@ -794,14 +810,26 @@ VectorImage::GetFrameInternal(const IntSize& aSize,
 NS_IMETHODIMP_(bool)
 VectorImage::IsImageContainerAvailable(LayerManager* aManager, uint32_t aFlags)
 {
-  return false;
+  IntSize size = GetSizeInternal();
+  if (size.IsEmpty()) {
+    return false;
+  }
+
+  int32_t maxTextureSize = aManager->GetMaxTextureSize();
+  return size.width <= maxTextureSize &&
+         size.height <= maxTextureSize;
 }
 
 //******************************************************************************
 NS_IMETHODIMP_(already_AddRefed<ImageContainer>)
 VectorImage::GetImageContainer(LayerManager* aManager, uint32_t aFlags)
 {
-  return nullptr;
+  IntSize size = GetSizeInternal();
+  if (NS_WARN_IF(size.IsEmpty())) {
+    return nullptr;
+  }
+
+  return GetImageContainerImpl(aManager, size, aFlags);
 }
 
 //******************************************************************************
@@ -831,7 +859,7 @@ VectorImage::Draw(gfxContext* aContext,
     return DrawResult::NOT_READY;
   }
 
-  if (mAnimationConsumers == 0) {
+  if (IsUnlocked()) {
     SendOnUnlockedDraw(aFlags);
   }
 
