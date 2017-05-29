@@ -576,6 +576,11 @@ VectorImage::SendInvalidationNotifications()
     mProgressTracker->SyncNotifyProgress(FLAG_FRAME_COMPLETE,
                                          GetMaxSizedIntRect());
   }
+
+  if (!mHasSize || mSize.IsEmpty()) {
+    return;
+  }
+  UpdateImageContainer(mSize);
 }
 
 NS_IMETHODIMP_(IntRect)
@@ -718,6 +723,12 @@ VectorImage::GetFrameAtSize(const IntSize& aSize,
   return GetFrameInternal(aSize, aWhichFrame, aFlags).second().forget();
 }
 
+bool
+VectorImage::IsUnlocked() const
+{
+  return mAnimationConsumers == 0;
+}
+
 Pair<DrawResult, RefPtr<SourceSurface>>
 VectorImage::GetFrameInternal(const IntSize& aSize,
                               uint32_t aWhichFrame,
@@ -773,14 +784,20 @@ VectorImage::GetFrameInternal(const IntSize& aSize,
 NS_IMETHODIMP_(bool)
 VectorImage::IsImageContainerAvailable(LayerManager* aManager, uint32_t aFlags)
 {
-  return false;
+  if (mError || !mHasSize || mSize.IsEmpty()) {
+    return false;
+  }
+
+  int32_t maxTextureSize = aManager->GetMaxTextureSize();
+  return mSize.width <= maxTextureSize &&
+         mSize.height <= maxTextureSize;
 }
 
 //******************************************************************************
 NS_IMETHODIMP_(already_AddRefed<ImageContainer>)
 VectorImage::GetImageContainer(LayerManager* aManager, uint32_t aFlags)
 {
-  return nullptr;
+  return GetImageContainerImpl(aManager, mSize, aFlags);
 }
 
 //******************************************************************************
@@ -810,7 +827,7 @@ VectorImage::Draw(gfxContext* aContext,
     return DrawResult::NOT_READY;
   }
 
-  if (mAnimationConsumers == 0) {
+  if (IsUnlocked()) {
     SendOnUnlockedDraw(aFlags);
   }
 
