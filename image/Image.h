@@ -20,6 +20,10 @@ class nsIRequest;
 class nsIInputStream;
 
 namespace mozilla {
+namespace layers {
+class LayerManager;
+}
+
 namespace image {
 
 class Image;
@@ -228,6 +232,49 @@ public:
   virtual ImageURL* GetURI() = 0;
 
   virtual void ReportUseCounters() { }
+
+protected:
+  explicit Image();
+ 
+  virtual bool IsUnlocked() const = 0;
+
+  already_AddRefed<layers::ImageContainer>
+    GetImageContainerInternal(layers::LayerManager* aManager,
+                              const gfx::IntSize& aSize,
+                              uint32_t aFlags);
+
+  virtual Pair<DrawResult, RefPtr<gfx::SourceSurface>>
+    GetFrameInternal(const gfx::IntSize& aSize,
+                     uint32_t aWhichFrame,
+                     uint32_t aFlags) = 0;
+
+  virtual void SendOnUnlockedDraw(uint32_t aFlags) { };
+
+  void UpdateImageContainers();
+
+  struct ImageContainerEntry {
+    ImageContainerEntry(const gfx::IntSize& aSize,
+                        layers::ImageContainer* aContainer,
+                        DrawResult aDrawResult)
+      : mSize(aSize)
+      , mContainer(aContainer)
+      , mLastDrawResult(aDrawResult)
+    {
+    }
+
+    gfx::IntSize                        mSize;
+    // A weak pointer to our ImageContainer, which stays alive only as long as
+    // the layer system needs it.
+    WeakPtr<layers::ImageContainer>     mContainer;
+    // If mContainer is non-null, this contains the DrawResult we obtained
+    // the last time we updated it.
+    DrawResult                          mLastDrawResult;
+  };
+
+  AutoTArray<ImageContainerEntry, 1> mImageContainers;
+
+  layers::ImageContainer::ProducerID mImageProducerID;
+  layers::ImageContainer::FrameID mLastFrameID;
 };
 
 class ImageResource : public Image
@@ -310,8 +357,8 @@ protected:
 
   virtual nsresult StartAnimation() = 0;
   virtual nsresult StopAnimation() = 0;
-
-  void SendOnUnlockedDraw(uint32_t aFlags);
+  
+  void SendOnUnlockedDraw(uint32_t aFlags) override;
 
   // Member data shared by all implementations of this abstract class
   RefPtr<ProgressTracker>     mProgressTracker;
@@ -323,17 +370,6 @@ protected:
   bool                          mInitialized:1; // Have we been initalized?
   bool                          mAnimating:1;   // Are we currently animating?
   bool                          mError:1;       // Error handling
-
-  // A weak pointer to our ImageContainer, which stays alive only as long as
-  // the layer system needs it.
-  WeakPtr<layers::ImageContainer> mImageContainer;
-
-  layers::ImageContainer::ProducerID mImageProducerID;
-  layers::ImageContainer::FrameID mLastFrameID;
-
-  // If mImageContainer is non-null, this contains the DrawResult we obtained
-  // the last time we updated it.
-  DrawResult mLastImageContainerDrawResult;
 };
 
 } // namespace image

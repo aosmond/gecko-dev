@@ -62,6 +62,13 @@ protected:
   {
     MOZ_ASSERT(aInnerImage, "Need an image to wrap");
   }
+  
+  bool IsUnlocked() const override;
+
+  Pair<DrawResult, RefPtr<gfx::SourceSurface>>
+    GetFrameInternal(const gfx::IntSize& aSize,
+                     uint32_t aWhichFrame,
+                     uint32_t aFlags) override;
 
   virtual ~ImageWrapper() { }
 

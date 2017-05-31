@@ -309,18 +309,13 @@ private:
   Pair<DrawResult, RefPtr<gfx::SourceSurface>>
     GetFrameInternal(const gfx::IntSize& aSize,
                      uint32_t aWhichFrame,
-                     uint32_t aFlags);
-
-  Pair<DrawResult, RefPtr<layers::Image>>
-    GetCurrentImage(layers::ImageContainer* aContainer, uint32_t aFlags);
-
-  void UpdateImageContainer();
+                     uint32_t aFlags) override;
 
   // We would like to just check if we have a zero lock count, but we can't do
   // that for animated images because in EnsureAnimExists we lock the image and
   // never unlock so that animated images always have their lock count >= 1. In
   // that case we use our animation consumers count as a proxy for lock count.
-  bool IsUnlocked() {
+  bool IsUnlocked() const override {
     return (mLockCount == 0 ||
             (!gfxPrefs::ImageMemAnimatedDiscardable() &&
              (mAnimationState && mAnimationConsumers == 0)));

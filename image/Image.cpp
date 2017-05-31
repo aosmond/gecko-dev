@@ -4,10 +4,15 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #include "Image.h"
+#include "Layers.h"
 #include "nsRefreshDriver.h"
 #include "mozilla/TimeStamp.h"
 
 namespace mozilla {
+
+using namespace layers;
+using namespace gfx;
+
 namespace image {
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -50,6 +55,11 @@ ImageMemoryCounter::ImageMemoryCounter(Image* aImage,
 // Image Base Types
 ///////////////////////////////////////////////////////////////////////////////
 
+Image::Image()
+  : mImageProducerID(ImageContainer::AllocateProducerID())
+  , mLastFrameID(0)
+{ }
+
 // Constructor
 ImageResource::ImageResource(ImageURL* aURI) :
   mURI(aURI),
@@ -59,9 +69,6 @@ ImageResource::ImageResource(ImageURL* aURI) :
   mInitialized(false),
   mAnimating(false),
   mError(false),
-  mImageProducerID(ImageContainer::AllocateProducerID()),
-  mLastFrameID(0),
-  mLastImageContainerDrawResult(DrawResult::NOT_READY)
 { }
 
 ImageResource::~ImageResource()
@@ -166,6 +173,147 @@ ImageResource::SendOnUnlockedDraw(uint32_t aFlags)
         tracker->OnUnlockedDraw();
       }
     }));
+  }
+}
+
+already_AddRefed<ImageContainer>
+Image::GetImageContainerInternal(LayerManager* aManager, const IntSize& aSize, uint32_t aFlags)
+{
+  MOZ_ASSERT(aManager);
+  MOZ_ASSERT((aFlags & ~(FLAG_SYNC_DECODE |
+                         FLAG_SYNC_DECODE_IF_FAST |
+                         FLAG_ASYNC_NOTIFY |
+                         FLAG_HIGH_QUALITY_SCALING))
+               == FLAG_NONE,
+             "Unsupported flag passed to GetImageContainer");
+
+  if (!IsImageContainerAvailable(aManager, aFlags)) {
+    printf_stderr("[AO] [%p] ImageResource::GetImageContainerInternal -- n/a\n", this);
+    return nullptr;
+  }
+
+  if (IsUnlocked()) {
+    SendOnUnlockedDraw(aFlags);
+  }
+
+  RefPtr<ImageContainer> container;
+  ImageContainerEntry* entry = nullptr;
+  int i = mImageContainers.Length() - 1;
+  for (; i >= 0; --i) {
+    entry = &mImageContainers[i];
+    container = entry->mContainer.get();
+    if (aSize == entry->mSize) {
+      if (!container) {
+        // Force recreation of the image container and fetching of the surface.
+        entry->mLastDrawResult = DrawResult::NOT_READY;
+      }
+      break;
+    } else if (!container) {
+      // Stop tracking if our weak pointer to the image container was freed.
+      mImageContainers.RemoveElementAt(i);
+    }
+  }
+
+  if (i >= 0) {
+    MOZ_ASSERT(entry);
+    switch (entry->mLastDrawResult) {
+      case DrawResult::SUCCESS:
+        // The container already contains the latest image.
+        return container.forget();
+      case DrawResult::NOT_READY:
+      case DrawResult::INCOMPLETE:
+      case DrawResult::TEMPORARY_ERROR:
+        // Temporary conditions we need to redraw to recover from.
+        break;
+      case DrawResult::BAD_IMAGE:
+      case DrawResult::BAD_ARGS:
+      case DrawResult::WRONG_SIZE:
+        printf_stderr("[AO] [%p] ImageResource::GetImageContainerInternal -- bad draw\n", this);
+        return nullptr;
+      default:
+        MOZ_ASSERT_UNREACHABLE("Unhandled DrawResult type!");
+        return nullptr;
+    }
+  }
+
+  DrawResult result;
+  RefPtr<SourceSurface> surface;
+  Tie(result, surface) = GetFrameInternal(aSize, FRAME_CURRENT, aFlags);
+  if (!surface) {
+    // The OS threw out some or all of our buffer. We'll need to wait for the
+    // redecode (which was automatically triggered by GetFrame) to complete.
+    MOZ_ASSERT(result != DrawResult::SUCCESS);
+    if (entry) {
+      entry->mLastDrawResult = result;
+    }
+    printf_stderr("[AO] [%p] ImageResource::GetImageContainerInternal -- no surface\n", this);
+    return nullptr;
+  }
+
+  if (!container) {
+    container = LayerManager::CreateImageContainer();
+  }
+
+  if (entry) {
+    entry->mLastDrawResult = result;
+  } else {
+    entry = mImageContainers.AppendElement(
+      ImageContainerEntry(aSize, container.get(), result));
+  }
+
+  // |image| holds a reference to a SourceSurface which in turn holds a lock on
+  // the current frame's data buffer, ensuring that it doesn't get freed as
+  // long as the layer system keeps this ImageContainer alive.
+  RefPtr<layers::Image> image = new layers::SourceSurfaceImage(surface);
+
+  // We can share the producer ID with other containers because it is only
+  // used internally to validate the frames given to a particular container
+  // so that another object cannot add its own. Similarly the frame ID is
+  // only used internally to ensure it is always increasing, and skipping
+  // IDs from an individual container's perspective is acceptable.
+  AutoTArray<ImageContainer::NonOwningImage, 1> imageList;
+  imageList.AppendElement(ImageContainer::NonOwningImage(image, TimeStamp(),
+                                                         mLastFrameID++,
+                                                         mImageProducerID));
+  container->SetCurrentImagesInTransaction(imageList);
+
+  return container.forget();
+}
+
+void
+Image::UpdateImageContainers()
+{
+  for (int i = mImageContainers.Length() - 1; i >= 0; --i) {
+    ImageContainerEntry& entry = mImageContainers[i];
+    RefPtr<ImageContainer> container = entry.mContainer.get();
+    if (container) {
+      DrawResult result;
+      RefPtr<SourceSurface> surface;
+      Tie(result, surface) =
+        GetFrameInternal(entry.mSize, FRAME_CURRENT, FLAG_NONE);
+
+      entry.mLastDrawResult = result;
+      if (!surface) {
+        MOZ_ASSERT(result != DrawResult::SUCCESS);
+        container->ClearAllImages();
+        continue;
+      }
+
+      // We can share the producer ID with other containers because it is only
+      // used internally to validate the frames given to a particular container
+      // so that another object cannot add its own. Similarly the frame ID is
+      // only used internally to ensure it is always increasing, and skipping
+      // IDs from an individual container's perspective is acceptable.
+      RefPtr<layers::Image> image = new layers::SourceSurfaceImage(surface);
+      AutoTArray<ImageContainer::NonOwningImage, 1> imageList;
+      imageList.AppendElement(ImageContainer::NonOwningImage(image, TimeStamp(),
+                                                             mLastFrameID++,
+                                                             mImageProducerID));
+      container->SetCurrentImages(imageList);
+    } else {
+      // Stop tracking if our weak pointer to the image container was freed.
+      mImageContainers.RemoveElementAt(i);
+    }
   }
 }
 

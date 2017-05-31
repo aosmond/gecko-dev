@@ -217,6 +217,16 @@ DynamicImage::IsImageContainerAvailable(LayerManager* aManager, uint32_t aFlags)
 NS_IMETHODIMP_(already_AddRefed<ImageContainer>)
 DynamicImage::GetImageContainer(LayerManager* aManager, uint32_t aFlags)
 {
+  printf_stderr("[AO] [%p] DynamicImage::GetImageContainer --\n", this);
+  return nullptr;
+}
+
+NS_IMETHODIMP_(already_AddRefed<ImageContainer>)
+DynamicImage::GetImageContainerAtSize(LayerManager* aManager,
+                                      const IntSize& aSize,
+                                      uint32_t aFlags)
+{
+  printf_stderr("[AO] [%p] DynamicImage::GetImageContainerAtSize --\n", this);
   return nullptr;
 }
 

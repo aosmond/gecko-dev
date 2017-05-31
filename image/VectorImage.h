@@ -80,21 +80,22 @@ protected:
   virtual nsresult StopAnimation() override;
   virtual bool     ShouldAnimate() override;
 
+  bool IsUnlocked() const override;
+
+  Pair<DrawResult, RefPtr<gfx::SourceSurface>>
+    GetFrameInternal(const IntSize& aSize,
+                     uint32_t aWhichFrame,
+                     uint32_t aFlags) override;
+
 private:
   IntSize GetSizeInternal();
 
-  Pair<DrawResult, RefPtr<SourceSurface>>
-    GetFrameInternal(const IntSize& aSize,
-                     uint32_t aWhichFrame,
-                     uint32_t aFlags);
-
   /// Attempt to find a matching cached surface in the SurfaceCache.
-  already_AddRefed<SourceSurface>
+  already_AddRefed<gfx::SourceSurface>
     LookupCachedSurface(const IntSize& aSize,
                         const Maybe<SVGImageContext>& aSVGContext,
                         uint32_t aFlags);
 
-  void UpdateImageContainer();
   void DrawInternal(const SVGDrawingParameters& aParams, bool aContextPaint);
   void CreateSurfaceAndShow(const SVGDrawingParameters& aParams,
                             gfx::BackendType aBackend);

@@ -284,9 +284,7 @@ ClippedImage::GetFrameInternal(const nsIntSize& aSize,
                                float aOpacity)
 {
   if (!ShouldClip()) {
-    RefPtr<SourceSurface> surface = InnerImage()->GetFrame(aWhichFrame, aFlags);
-    return MakePair(surface ? DrawResult::SUCCESS : DrawResult::NOT_READY,
-                    Move(surface));
+    return InnerImage()->GetFrameInternal(aSize, aWhichFrame, aFlags);
   }
 
   float frameToDraw = InnerImage()->GetFrameIndex(aWhichFrame);
@@ -331,29 +329,18 @@ ClippedImage::GetFrameInternal(const nsIntSize& aSize,
   return MakePair(mCachedSurface->GetDrawResult(), Move(surface));
 }
 
-NS_IMETHODIMP_(bool)
-ClippedImage::IsImageContainerAvailable(LayerManager* aManager, uint32_t aFlags)
-{
-  if (!ShouldClip()) {
-    return InnerImage()->IsImageContainerAvailable(aManager, aFlags);
-  }
-  return false;
-}
-
 NS_IMETHODIMP_(already_AddRefed<ImageContainer>)
 ClippedImage::GetImageContainer(LayerManager* aManager, uint32_t aFlags)
 {
-  // XXX(seth): We currently don't have a way of clipping the result of
-  // GetImageContainer. We work around this by always returning null, but if it
-  // ever turns out that ClippedImage is widely used on codepaths that can
-  // actually benefit from GetImageContainer, it would be a good idea to fix
-  // that method for performance reasons.
+  return GetImageContainerInternal(aManager, mClip.Size(), aFlags);
+}
 
-  if (!ShouldClip()) {
-    return InnerImage()->GetImageContainer(aManager, aFlags);
-  }
-
-  return nullptr;
+NS_IMETHODIMP_(already_AddRefed<ImageContainer>)
+ClippedImage::GetImageContainerAtSize(LayerManager* aManager,
+                                      const IntSize& aSize,
+                                      uint32_t aFlags)
+{
+  return GetImageContainerInternal(aManager, aSize, aFlags);
 }
 
 static bool

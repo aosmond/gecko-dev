@@ -68,6 +68,16 @@ FrozenImage::GetImageContainer(layers::LayerManager* aManager, uint32_t aFlags)
   // turns out that FrozenImage is widely used on codepaths that can actually
   // benefit from GetImageContainer, it would be a good idea to fix that method
   // for performance reasons.
+  printf_stderr("[AO] [%p] FrozenImage::GetImageContainer --\n", this);
+  return nullptr;
+}
+
+NS_IMETHODIMP_(already_AddRefed<ImageContainer>)
+FrozenImage::GetImageContainerAtSize(LayerManager* aManager,
+                                     const IntSize& aSize,
+                                     uint32_t aFlags)
+{
+  printf_stderr("[AO] [%p] FrozenImage::GetImageContainerAtSize --\n", this);
   return nullptr;
 }
 

@@ -47,6 +47,10 @@ public:
   NS_IMETHOD_(already_AddRefed<layers::ImageContainer>)
     GetImageContainer(layers::LayerManager* aManager,
                       uint32_t aFlags) override;
+  NS_IMETHOD_(already_AddRefed<layers::ImageContainer>)
+    GetImageContainerAtSize(layers::LayerManager* aManager,
+                            const nsIntSize& aSize,
+                            uint32_t aFlags) override;
   NS_IMETHOD_(DrawResult) Draw(gfxContext* aContext,
                                const nsIntSize& aSize,
                                const ImageRegion& aRegion,

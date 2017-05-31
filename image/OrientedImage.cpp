@@ -170,6 +170,20 @@ OrientedImage::GetImageContainer(LayerManager* aManager, uint32_t aFlags)
     return InnerImage()->GetImageContainer(aManager, aFlags);
   }
 
+  printf_stderr("[AO] [%p] OrientedImage::GetImageContainer -- reoriented\n", this);
+  return nullptr;
+}
+
+NS_IMETHODIMP_(already_AddRefed<ImageContainer>)
+OrientedImage::GetImageContainerAtSize(LayerManager* aManager,
+                                       const IntSize& aSize,
+                                       uint32_t aFlags)
+{
+  if (mOrientation.IsIdentity()) {
+    return InnerImage()->GetImageContainerAtSize(aManager, aSize, aFlags);
+  }
+
+  printf_stderr("[AO] [%p] OrientedImage::GetImageContainerAtSize -- reoriented\n", this);
   return nullptr;
 }
 
