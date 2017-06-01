@@ -600,6 +600,14 @@ RasterImage::GetImageContainer(LayerManager* aManager, uint32_t aFlags)
   return GetImageContainerImpl(aManager, mSize, aFlags);
 }
 
+NS_IMETHODIMP_(already_AddRefed<ImageContainer>)
+RasterImage::GetImageContainerAtSize(LayerManager* aManager,
+                                     const IntSize& aSize,
+                                     uint32_t aFlags)
+{
+  return GetImageContainerImpl(aManager, aSize, aFlags);
+}
+
 size_t
 RasterImage::SizeOfSourceWithComputedFallback(MallocSizeOf aMallocSizeOf) const
 {
