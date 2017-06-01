@@ -104,17 +104,26 @@ Image::GetImageContainerImpl(LayerManager* aManager,
 
   RefPtr<layers::ImageContainer> container = mImageContainer.get();
 
-  bool mustRedecode =
-    (aFlags & (FLAG_SYNC_DECODE | FLAG_SYNC_DECODE_IF_FAST)) &&
-    mLastImageContainerDrawResult != DrawResult::SUCCESS &&
-    mLastImageContainerDrawResult != DrawResult::BAD_IMAGE;
-
-  if (container && !mustRedecode) {
-    return container.forget();
+  if (container) {
+    switch (mLastImageContainerDrawResult) {
+      case DrawResult::SUCCESS:
+      case DrawResult::BAD_IMAGE:
+      case DrawResult::BAD_ARGS:
+      case DrawResult::WRONG_SIZE:
+        return container.forget();
+      case DrawResult::NOT_READY:
+      case DrawResult::INCOMPLETE:
+      case DrawResult::TEMPORARY_ERROR:
+        // Temporary conditions where we need to rerequest the frame to recover.
+        break;
+      default:
+        MOZ_ASSERT_UNREACHABLE("Unhandled DrawResult type!");
+        return container.forget();
+    }
+  } else {
+    // We need a new ImageContainer, so create one.
+    container = LayerManager::CreateImageContainer();
   }
-
-  // We need a new ImageContainer, so create one.
-  container = LayerManager::CreateImageContainer();
 
   DrawResult drawResult;
   RefPtr<layers::Image> image;
