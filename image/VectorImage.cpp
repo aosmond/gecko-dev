@@ -838,6 +838,15 @@ VectorImage::GetImageContainer(LayerManager* aManager, uint32_t aFlags)
 }
 
 //******************************************************************************
+NS_IMETHODIMP_(already_AddRefed<ImageContainer>)
+VectorImage::GetImageContainerAtSize(LayerManager* aManager,
+                                     const IntSize& aSize,
+                                     uint32_t aFlags)
+{
+  return GetImageContainerImpl(aManager, aSize, aFlags);
+}
+
+//******************************************************************************
 NS_IMETHODIMP_(DrawResult)
 VectorImage::Draw(gfxContext* aContext,
                   const nsIntSize& aSize,
