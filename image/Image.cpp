@@ -59,6 +59,28 @@ Image::Image()
   , mLastImageContainerDrawResult(DrawResult::NOT_READY)
 { }
 
+Pair<DrawResult, RefPtr<layers::Image>>
+Image::GetCurrentImage(ImageContainer* aContainer,
+                       const IntSize& aSize,
+                       uint32_t aFlags)
+{
+  MOZ_ASSERT(NS_IsMainThread());
+  MOZ_ASSERT(aContainer);
+
+  DrawResult drawResult;
+  RefPtr<SourceSurface> surface;
+  Tie(drawResult, surface) =
+    GetFrameInternal(aSize, FRAME_CURRENT, aFlags | FLAG_ASYNC_NOTIFY);
+  if (!surface) {
+    // The OS threw out some or all of our buffer. We'll need to wait for the
+    // redecode (which was automatically triggered by GetFrame) to complete.
+    return MakePair(drawResult, RefPtr<layers::Image>());
+  }
+
+  RefPtr<layers::Image> image = new layers::SourceSurfaceImage(surface);
+  return MakePair(drawResult, Move(image));
+}
+
 already_AddRefed<ImageContainer>
 Image::GetImageContainerImpl(LayerManager* aManager,
                              const IntSize& aSize,
@@ -96,7 +118,7 @@ Image::GetImageContainerImpl(LayerManager* aManager,
 
   DrawResult drawResult;
   RefPtr<layers::Image> image;
-  Tie(drawResult, image) = GetCurrentImage(container, aFlags);
+  Tie(drawResult, image) = GetCurrentImage(container, aSize, aFlags);
   if (!image) {
     return nullptr;
   }
@@ -117,7 +139,7 @@ Image::GetImageContainerImpl(LayerManager* aManager,
 }
 
 void
-Image::UpdateImageContainer()
+Image::UpdateImageContainer(const IntSize& aSize)
 {
   MOZ_ASSERT(NS_IsMainThread());
 
@@ -128,7 +150,7 @@ Image::UpdateImageContainer()
 
   DrawResult drawResult;
   RefPtr<layers::Image> image;
-  Tie(drawResult, image) = GetCurrentImage(container, FLAG_NONE);
+  Tie(drawResult, image) = GetCurrentImage(container, aSize, FLAG_NONE);
   if (!image) {
     return;
   }

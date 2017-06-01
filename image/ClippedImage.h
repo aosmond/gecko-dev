@@ -71,6 +71,8 @@ protected:
   virtual ~ClippedImage();
 
 private:
+  using Image::GetFrameInternal;
+
   Pair<DrawResult, RefPtr<SourceSurface>>
     GetFrameInternal(const nsIntSize& aSize,
                      const Maybe<SVGImageContext>& aSVGContext,
