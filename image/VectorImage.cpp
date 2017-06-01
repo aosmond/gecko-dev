@@ -763,6 +763,7 @@ VectorImage::GetFrameAtSize(const IntSize& aSize,
   return result == DrawResult::SUCCESS ? dt->Snapshot() : nullptr;
 }
 
+//******************************************************************************
 NS_IMETHODIMP_(bool)
 VectorImage::IsImageContainerAvailable(LayerManager* aManager, uint32_t aFlags)
 {
@@ -772,6 +773,24 @@ VectorImage::IsImageContainerAvailable(LayerManager* aManager, uint32_t aFlags)
 //******************************************************************************
 NS_IMETHODIMP_(already_AddRefed<ImageContainer>)
 VectorImage::GetImageContainer(LayerManager* aManager, uint32_t aFlags)
+{
+  return nullptr;
+}
+
+//******************************************************************************
+NS_IMETHODIMP_(bool)
+VectorImage::IsImageContainerAvailableAtSize(LayerManager* aManager,
+                                             const IntSize& aSize,
+                                             uint32_t aFlags)
+{
+  return false;
+}
+
+//******************************************************************************
+NS_IMETHODIMP_(already_AddRefed<ImageContainer>)
+VectorImage::GetImageContainerAtSize(LayerManager* aManager,
+                                     const IntSize& aSize,
+                                     uint32_t aFlags)
 {
   return nullptr;
 }
