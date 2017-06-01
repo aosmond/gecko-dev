@@ -717,7 +717,12 @@ VectorImage::GetFrameAtSize(const IntSize& aSize,
                             uint32_t aWhichFrame,
                             uint32_t aFlags)
 {
-  return GetFrameInternal(aSize, aWhichFrame, aFlags).second().forget();
+  RefPtr<SourceSurface> surf =
+    GetFrameInternal(aSize, aWhichFrame, aFlags).second().forget();
+  // If we are here, it suggests the image is embedded in a canvas or some
+  // other path besides layers, and we won't need the file handle.
+  MarkSurfaceShared(surf);
+  return surf.forget();
 }
 
 bool
@@ -1033,6 +1038,10 @@ VectorImage::CreateSurfaceAndShow(const SVGDrawingParameters& aParams, BackendTy
   NotNull<RefPtr<ISurfaceProvider>> provider =
     WrapNotNull(new SimpleSurfaceProvider(ImageKey(this), surfaceKey, frame));
   SurfaceCache::Insert(provider);
+
+  // Image got put into a painted layer, it will not be shared with another
+  // process.
+  MarkSurfaceShared(surface);
 
   // Draw.
   RefPtr<gfxDrawable> drawable =
