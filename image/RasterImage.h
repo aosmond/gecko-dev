@@ -309,10 +309,7 @@ private:
   Pair<DrawResult, RefPtr<gfx::SourceSurface>>
     GetFrameInternal(const gfx::IntSize& aSize,
                      uint32_t aWhichFrame,
-                     uint32_t aFlags);
-
-  Pair<DrawResult, RefPtr<layers::Image>>
-    GetCurrentImage(layers::ImageContainer* aContainer, uint32_t aFlags) override;
+                     uint32_t aFlags) override;
 
   // We would like to just check if we have a zero lock count, but we can't do
   // that for animated images because in EnsureAnimExists we lock the image and
