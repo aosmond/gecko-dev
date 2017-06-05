@@ -325,6 +325,15 @@ private:
   void InvalidateSelf(const nsIntRect* aLayerInvalidRect,
                       const nsRect* aFrameInvalidRect);
 
+  /**
+   * Get the predicted image size, if any. This is the size we used when
+   * requesting a decode for an image. Empty if not available.
+   */
+  const nsIntSize& GetPredictedImageSize() const
+  {
+    return mPredictedImageSize;
+  }
+
   RefPtr<nsImageMap> mImageMap;
 
   nsCOMPtr<imgINotificationObserver> mListener;
@@ -334,6 +343,7 @@ private:
   nsSize mComputedSize;
   mozilla::IntrinsicSize mIntrinsicSize;
   nsSize mIntrinsicRatio;
+  nsIntSize mPredictedImageSize;
 
   bool mDisplayingIcon;
   bool mFirstFrameComplete;

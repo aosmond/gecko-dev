@@ -719,14 +719,17 @@ nsImageFrame::MaybeDecodeForPredictedSize()
 {
   // Check that we're ready to decode.
   if (!mImage) {
+    mPredictedImageSize.SizeTo(0, 0);
     return;  // Nothing to do yet.
   }
 
   if (mComputedSize.IsEmpty()) {
+    mPredictedImageSize.SizeTo(0, 0);
     return;  // We won't draw anything, so no point in decoding.
   }
 
   if (GetVisibility() != Visibility::APPROXIMATELY_VISIBLE) {
+    mPredictedImageSize.SizeTo(0, 0);
     return;  // We're not visible, so don't decode.
   }
 
@@ -750,6 +753,7 @@ nsImageFrame::MaybeDecodeForPredictedSize()
   const ScreenSize predictedScreenSize = destRect.Size() * resolutionToScreen;
   const ScreenIntSize predictedScreenIntSize = RoundedToInt(predictedScreenSize);
   if (predictedScreenIntSize.IsEmpty()) {
+    mPredictedImageSize.SizeTo(0, 0);
     return;
   }
 
@@ -760,13 +764,13 @@ nsImageFrame::MaybeDecodeForPredictedSize()
     nsLayoutUtils::GetSamplingFilterForFrame(this);
   gfxSize gfxPredictedScreenSize = gfxSize(predictedScreenIntSize.width,
                                            predictedScreenIntSize.height);
-  nsIntSize predictedImageSize =
+  mPredictedImageSize =
     mImage->OptimalImageSizeForDest(gfxPredictedScreenSize,
                                     imgIContainer::FRAME_CURRENT,
                                     samplingFilter, flags);
 
   // Request a decode.
-  mImage->RequestDecodeForSize(predictedImageSize, flags);
+  mImage->RequestDecodeForSize(mPredictedImageSize, flags);
 }
 
 nsRect
@@ -1664,8 +1668,11 @@ nsDisplayImage::BuildLayer(nsDisplayListBuilder* aBuilder,
     flags |= imgIContainer::FLAG_SYNC_DECODE;
   }
 
-  RefPtr<ImageContainer> container =
-    mImage->GetImageContainer(aManager, flags);
+  nsImageFrame* f = static_cast<nsImageFrame*>(Frame());
+  nsIntSize predictedImageSize = f->GetPredictedImageSize();
+  RefPtr<ImageContainer> container = predictedImageSize.IsEmpty()
+    ? mImage->GetImageContainer(aManager, flags)
+    : mImage->GetImageContainerAtSize(aManager, predictedImageSize, flags);
   if (!container) {
     return nullptr;
   }
