@@ -375,7 +375,6 @@ private:
   void OnSurfaceDiscardedInternal(bool aAnimatedFramesDiscarded);
 
 private: // data
-  nsIntSize                  mSize;
   nsTArray<nsIntSize>        mNativeSizes;
   Orientation                mOrientation;
 
@@ -408,7 +407,6 @@ private: // data
   NotNull<RefPtr<SourceBuffer>>  mSourceBuffer;
 
   // Boolean flags (clustered together to conserve space):
-  bool                       mHasSize:1;        // Has SetSize() been called?
   bool                       mTransient:1;      // Is the image short-lived?
   bool                       mSyncLoad:1;       // Are we loading synchronously?
   bool                       mDiscardable:1;    // Is container discardable?
