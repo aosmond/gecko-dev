@@ -2658,8 +2658,10 @@ public:
   virtual bool CanOptimizeToImageLayer(LayerManager* aManager,
                                        nsDisplayListBuilder* aBuilder);
 
-  already_AddRefed<ImageContainer> GetContainer(LayerManager* aManager,
-                                                nsDisplayListBuilder* aBuilder);
+  virtual already_AddRefed<ImageContainer>
+    GetContainer(LayerManager* aManager,
+                 nsDisplayListBuilder* aBuilder);
+
   void ConfigureLayer(ImageLayer* aLayer,
                       const ContainerLayerParameters& aParameters);
 

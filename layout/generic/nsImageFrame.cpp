@@ -719,14 +719,17 @@ nsImageFrame::MaybeDecodeForPredictedSize()
 {
   // Check that we're ready to decode.
   if (!mImage) {
+    mPredictedImageSize.SizeTo(0, 0);
     return;  // Nothing to do yet.
   }
 
   if (mComputedSize.IsEmpty()) {
+    mPredictedImageSize.SizeTo(0, 0);
     return;  // We won't draw anything, so no point in decoding.
   }
 
   if (GetVisibility() != Visibility::APPROXIMATELY_VISIBLE) {
+    mPredictedImageSize.SizeTo(0, 0);
     return;  // We're not visible, so don't decode.
   }
 
@@ -750,6 +753,7 @@ nsImageFrame::MaybeDecodeForPredictedSize()
   const ScreenSize predictedScreenSize = destRect.Size() * resolutionToScreen;
   const ScreenIntSize predictedScreenIntSize = RoundedToInt(predictedScreenSize);
   if (predictedScreenIntSize.IsEmpty()) {
+    mPredictedImageSize.SizeTo(0, 0);
     return;
   }
 
@@ -760,13 +764,13 @@ nsImageFrame::MaybeDecodeForPredictedSize()
     nsLayoutUtils::GetSamplingFilterForFrame(this);
   gfxSize gfxPredictedScreenSize = gfxSize(predictedScreenIntSize.width,
                                            predictedScreenIntSize.height);
-  nsIntSize predictedImageSize =
+  mPredictedImageSize =
     mImage->OptimalImageSizeForDest(gfxPredictedScreenSize,
                                     imgIContainer::FRAME_CURRENT,
                                     samplingFilter, flags);
 
   // Request a decode.
-  mImage->RequestDecodeForSize(predictedImageSize, flags);
+  mImage->RequestDecodeForSize(mPredictedImageSize, flags);
 }
 
 nsRect
@@ -1659,18 +1663,36 @@ nsDisplayImage::GetOpaqueRegion(nsDisplayListBuilder* aBuilder,
   return nsRegion();
 }
 
-already_AddRefed<Layer>
-nsDisplayImage::BuildLayer(nsDisplayListBuilder* aBuilder,
-                           LayerManager* aManager,
-                           const ContainerLayerParameters& aParameters)
+already_AddRefed<ImageContainer>
+nsDisplayImage::GetContainer(LayerManager* aManager,
+                             nsDisplayListBuilder* aBuilder)
 {
+  if (!mImage) {
+    MOZ_ASSERT_UNREACHABLE("Must call CanOptimizeToImage() and get true "
+                           "before calling GetContainer()");
+    return nullptr;
+  }
+
   uint32_t flags = imgIContainer::FLAG_ASYNC_NOTIFY;
   if (aBuilder->ShouldSyncDecodeImages()) {
     flags |= imgIContainer::FLAG_SYNC_DECODE;
   }
 
-  RefPtr<ImageContainer> container =
-    mImage->GetImageContainer(aManager, flags);
+  nsImageFrame* f = static_cast<nsImageFrame*>(mFrame);
+  const nsIntSize& predictedImageSize = f->GetPredictedImageSize();
+
+  if (predictedImageSize.IsEmpty()) {
+    return mImage->GetImageContainer(aManager, flags);
+  }
+  return mImage->GetImageContainerAtSize(aManager, predictedImageSize, flags);
+}
+
+already_AddRefed<Layer>
+nsDisplayImage::BuildLayer(nsDisplayListBuilder* aBuilder,
+                           LayerManager* aManager,
+                           const ContainerLayerParameters& aParameters)
+{
+  RefPtr<ImageContainer> container = GetContainer(aManager, aBuilder);
   if (!container) {
     return nullptr;
   }
