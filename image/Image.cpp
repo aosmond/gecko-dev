@@ -198,6 +198,7 @@ ImageResource::ImageResource(ImageURL* aURI) :
   mInitialized(false),
   mAnimating(false),
   mError(false),
+  mHasSize(false),
   mImageProducerID(ImageContainer::AllocateProducerID()),
   mLastFrameID(0)
 { }
