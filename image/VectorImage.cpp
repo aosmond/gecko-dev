@@ -501,7 +501,7 @@ VectorImage::SetAnimationStartTime(const TimeStamp& aTime)
 NS_IMETHODIMP
 VectorImage::GetWidth(int32_t* aWidth)
 {
-  if (mError || !mIsFullyLoaded) {
+  if (mError || !mHasSize || mSize.width < 0) {
     // XXXdholbert Technically we should leave outparam untouched when we
     // fail. But since many callers don't check for failure, we set it to 0 on
     // failure, for sane/predictable results.
@@ -509,15 +509,7 @@ VectorImage::GetWidth(int32_t* aWidth)
     return NS_ERROR_FAILURE;
   }
 
-  SVGSVGElement* rootElem = mSVGDocumentWrapper->GetRootSVGElem();
-  MOZ_ASSERT(rootElem, "Should have a root SVG elem, since we finished "
-             "loading without errors");
-  int32_t rootElemWidth = rootElem->GetIntrinsicWidth();
-  if (rootElemWidth < 0) {
-    *aWidth = 0;
-    return NS_ERROR_FAILURE;
-  }
-  *aWidth = rootElemWidth;
+  *aWidth = mSize.width;
   return NS_OK;
 }
 
@@ -570,6 +562,14 @@ VectorImage::SendInvalidationNotifications()
   // we would miss the subsequent invalidations if we didn't send out the
   // notifications directly in |InvalidateObservers...|.
 
+  if (mHasSize) {
+    SVGSVGElement* svgElem = mSVGDocumentWrapper->GetRootSVGElem();
+    MOZ_ASSERT(svgElem, "Should have a root SVG elem, since we finished "
+                        "loading without errors");
+    mSize.width = svgElem->GetIntrinsicWidth();
+    mSize.height = svgElem->GetIntrinsicHeight();
+  }
+
   if (mProgressTracker) {
     SurfaceCache::RemoveImage(ImageKey(this));
     mProgressTracker->SyncNotifyProgress(FLAG_FRAME_COMPLETE,
@@ -587,7 +587,7 @@ VectorImage::GetImageSpaceInvalidationRect(const IntRect& aRect)
 NS_IMETHODIMP
 VectorImage::GetHeight(int32_t* aHeight)
 {
-  if (mError || !mIsFullyLoaded) {
+  if (mError || !mHasSize || mSize.height < 0) {
     // XXXdholbert Technically we should leave outparam untouched when we
     // fail. But since many callers don't check for failure, we set it to 0 on
     // failure, for sane/predictable results.
@@ -595,15 +595,7 @@ VectorImage::GetHeight(int32_t* aHeight)
     return NS_ERROR_FAILURE;
   }
 
-  SVGSVGElement* rootElem = mSVGDocumentWrapper->GetRootSVGElem();
-  MOZ_ASSERT(rootElem, "Should have a root SVG elem, since we finished "
-             "loading without errors");
-  int32_t rootElemHeight = rootElem->GetIntrinsicHeight();
-  if (rootElemHeight < 0) {
-    *aHeight = 0;
-    return NS_ERROR_FAILURE;
-  }
-  *aHeight = rootElemHeight;
+  *aHeight = mSize.height;
   return NS_OK;
 }
 
@@ -704,25 +696,17 @@ VectorImage::WillDrawOpaqueNow()
 NS_IMETHODIMP_(already_AddRefed<SourceSurface>)
 VectorImage::GetFrame(uint32_t aWhichFrame, uint32_t aFlags)
 {
-  if (mError) {
+  if (mError || !mHasSize) {
     return nullptr;
   }
 
-  // Look up height & width
-  // ----------------------
-  SVGSVGElement* svgElem = mSVGDocumentWrapper->GetRootSVGElem();
-  MOZ_ASSERT(svgElem, "Should have a root SVG elem, since we finished "
-                      "loading without errors");
-  nsIntSize imageIntSize(svgElem->GetIntrinsicWidth(),
-                         svgElem->GetIntrinsicHeight());
-
-  if (imageIntSize.IsEmpty()) {
+  if (mSize.IsEmpty()) {
     // We'll get here if our SVG doc has a percent-valued or negative width or
     // height.
     return nullptr;
   }
 
-  return GetFrameAtSize(imageIntSize, aWhichFrame, aFlags);
+  return GetFrameAtSize(mSize, aWhichFrame, aFlags);
 }
 
 NS_IMETHODIMP_(already_AddRefed<SourceSurface>)
@@ -1271,16 +1255,24 @@ VectorImage::CancelAllListeners()
 void
 VectorImage::OnSVGDocumentLoaded()
 {
-  MOZ_ASSERT(mSVGDocumentWrapper->GetRootSVGElem(),
-             "Should have parsed successfully");
   MOZ_ASSERT(!mIsFullyLoaded && !mHaveAnimations,
              "These flags shouldn't get set until OnSVGDocumentLoaded. "
              "Duplicate calls to OnSVGDocumentLoaded?");
+
+  SVGSVGElement* svgElem = mSVGDocumentWrapper->GetRootSVGElem();
+  MOZ_ASSERT(svgElem, "Should have a root SVG elem, since we finished "
+                      "loading without errors");
 
   CancelAllListeners();
 
   // XXX Flushing is wasteful if embedding frame hasn't had initial reflow.
   mSVGDocumentWrapper->FlushLayout();
+
+  // Look up height and width; note that they may be zero if relative, or
+  // potentially negative.
+  mSize.width = svgElem->GetIntrinsicWidth();
+  mSize.height = svgElem->GetIntrinsicHeight();
+  mHasSize = true;
 
   mIsFullyLoaded = true;
   mHaveAnimations = mSVGDocumentWrapper->IsAnimated();
