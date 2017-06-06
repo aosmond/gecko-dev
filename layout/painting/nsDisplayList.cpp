@@ -3973,6 +3973,7 @@ nsDisplayImageContainer::ConfigureLayer(ImageLayer* aLayer,
   // aParameters.Offset(), because FrameLayerBuilder already applies
   // aParameters.Scale() via the layer's post-transform, and
   // aParameters.Offset() is always zero.
+  printf_stderr("[AO] [%p] ConfigureLayer -- %d,%d\n", this, aParameters.Offset().x, aParameters.Offset().y);
   MOZ_ASSERT(aParameters.Offset() == LayerIntPoint(0,0));
 
   // It's possible (for example, due to downscale-during-decode) that the
