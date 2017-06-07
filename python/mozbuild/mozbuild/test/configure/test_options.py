@@ -778,6 +778,15 @@ class TestCommandLineHelper(unittest.TestCase):
         self.assertEquals('other-origin', value.origin)
         self.assertEquals('FOO=a,b,c', option)
 
+        # Unless it is marked to allow overriding.
+        helper = CommandLineHelper({}, ['cmd'])
+        helper.add('FOO=a,b,c', 'implied', may_override=True)
+        helper.add('FOO=a', 'other-origin')
+        value, option = helper.handle(foo)
+        self.assertEquals(PositiveOptionValue(('a')), value)
+        self.assertEquals('other-origin', value.origin)
+        self.assertEquals('FOO=a', option)
+
         # The same rule as above applies when using the option form vs. the
         # variable form. But we can't detect it when .add is called.
         helper = CommandLineHelper({}, ['cmd'])
@@ -806,6 +815,15 @@ class TestCommandLineHelper(unittest.TestCase):
         self.assertEquals('other-origin', value.origin)
         self.assertEquals('--with-foo=a,b,c', option)
 
+        # Unless it is marked to allow overriding.
+        helper = CommandLineHelper({}, ['cmd'])
+        helper.add('FOO=a,b,c', 'implied', may_override=True)
+        helper.add('--with-foo=a', 'other-origin')
+        value, option = helper.handle(foo)
+        self.assertEquals(PositiveOptionValue(('a')), value)
+        self.assertEquals('other-origin', value.origin)
+        self.assertEquals('--with-foo=a', option)
+
         # Conflicts are also not allowed against what is in the
         # environment/on the command line.
         helper = CommandLineHelper({}, ['cmd', '--with-foo=a,b'])
@@ -825,6 +843,14 @@ class TestCommandLineHelper(unittest.TestCase):
         self.assertEqual('other-origin', cm.exception.origin)
         self.assertEqual('--with-foo=a,b', cm.exception.old_arg)
         self.assertEqual('command-line', cm.exception.old_origin)
+
+        # Unless it is marked to allow overriding.
+        helper = CommandLineHelper({}, ['cmd', '--with-foo=a'])
+        helper.add('FOO=a,b,c', 'implied', may_override=True)
+        value, option = helper.handle(foo)
+        self.assertEquals(PositiveOptionValue(('a')), value)
+        self.assertEquals('command-line', value.origin)
+        self.assertEquals('--with-foo=a', option)
 
     def test_possible_origins(self):
         with self.assertRaises(InvalidOptionError):

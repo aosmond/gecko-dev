@@ -511,7 +511,8 @@ class ConfigureSandbox(dict):
                                     % type(value).__name__)
 
                 opt = value.format(implied_option.option)
-                self._helper.add(opt, 'implied')
+                may_override = implied_option.may_override
+                self._helper.add(opt, 'implied', may_override=may_override)
                 implied[opt] = implied_option
 
         try:
@@ -863,7 +864,7 @@ class ConfigureSandbox(dict):
         self._execution_queue.append((
             self._resolve_and_set, (defines, name, value, when)))
 
-    def imply_option_impl(self, option, value, reason=None, when=None):
+    def imply_option_impl(self, option, value, reason=None, when=None, may_override=False):
         '''Implementation of imply_option().
         Injects additional options as if they had been passed on the command
         line. The `option` argument is a string as in option()'s `name` or
@@ -906,6 +907,10 @@ class ConfigureSandbox(dict):
 
         The `reason` argument indicates what caused the option to be implied.
         It is necessary when it cannot be inferred from the `value`.
+
+        The `may_override` argument allows the implied option to be overridden
+        explicitly. It is useful when we want to imply a default, but permit
+        turning it off.
         '''
         # Don't do anything when --help was on the command line
         if self._help:
@@ -943,6 +948,7 @@ class ConfigureSandbox(dict):
             caller=inspect.stack()[1],
             reason=reason,
             when=when,
+            may_override=may_override
         ))
 
     def _prepare_function(self, func):

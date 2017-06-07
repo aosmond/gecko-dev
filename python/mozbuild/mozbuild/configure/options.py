@@ -395,13 +395,14 @@ class CommandLineHelper(object):
         self._args = OrderedDict()
         self._extra_args = OrderedDict()
         self._origins = {}
+        self._overrides = {}
         self._last = 0
 
         assert(argv and not argv[0].startswith('--'))
         for arg in argv[1:]:
             self.add(arg, 'command-line', self._args)
 
-    def add(self, arg, origin='command-line', args=None):
+    def add(self, arg, origin='command-line', args=None, may_override=False):
         assert origin != 'default'
         prefix, name, values = Option.split_option(arg)
         if args is None:
@@ -409,7 +410,8 @@ class CommandLineHelper(object):
         if args is self._extra_args and name in self._extra_args:
             old_arg = self._extra_args[name][0]
             old_prefix, _, old_values = Option.split_option(old_arg)
-            if prefix != old_prefix or values != old_values:
+            old_override = self._overrides[old_arg]
+            if (prefix != old_prefix or values != old_values) and not old_override:
                 raise ConflictingOptionError(
                     "Cannot add '{arg}' to the {origin} set because it "
                     "conflicts with '{old_arg}' that was added earlier",
@@ -418,6 +420,7 @@ class CommandLineHelper(object):
         self._last += 1
         args[name] = arg, self._last
         self._origins[arg] = origin
+        self._overrides[arg] = may_override
 
     def _prepare(self, option, args):
         arg = None
@@ -430,13 +433,14 @@ class CommandLineHelper(object):
             arg, pos = (arg1, pos1) if abs(pos1) > abs(pos2) else (arg2, pos2)
             if args is self._extra_args and (option.get_value(arg1) !=
                                              option.get_value(arg2)):
-                origin = self._origins[arg]
                 old_arg = arg2 if abs(pos1) > abs(pos2) else arg1
-                raise ConflictingOptionError(
-                    "Cannot add '{arg}' to the {origin} set because it "
-                    "conflicts with '{old_arg}' that was added earlier",
-                    arg=arg, origin=origin, old_arg=old_arg,
-                    old_origin=self._origins[old_arg])
+                if not self._overrides.get(old_arg, False):
+                  origin = self._origins[arg]
+                  raise ConflictingOptionError(
+                      "Cannot add '{arg}' to the {origin} set because it "
+                      "conflicts with '{old_arg}' that was added earlier",
+                      arg=arg, origin=origin, old_arg=old_arg,
+                      old_origin=self._origins[old_arg])
         elif from_name or from_env:
             arg, pos = from_name if from_name else from_env
         elif option.env and args is self._args:
@@ -446,6 +450,7 @@ class CommandLineHelper(object):
                 origin = 'environment'
 
         origin = self._origins.get(arg, origin)
+        may_override = self._overrides.get(arg, False)
 
         for k in (option.name, option.env):
             try:
@@ -453,7 +458,7 @@ class CommandLineHelper(object):
             except KeyError:
                 pass
 
-        return arg, origin
+        return arg, origin, may_override
 
     def handle(self, option):
         '''Return the OptionValue corresponding to the given Option instance,
@@ -463,13 +468,16 @@ class CommandLineHelper(object):
         '''
         assert isinstance(option, Option)
 
-        arg, origin = self._prepare(option, self._args)
+        arg, origin, may_override = self._prepare(option, self._args)
         ret = option.get_value(arg, origin)
 
-        extra_arg, extra_origin = self._prepare(option, self._extra_args)
+        extra_arg, extra_origin, extra_may_override = self._prepare(option, self._extra_args)
         extra_ret = option.get_value(extra_arg, extra_origin)
 
         if extra_ret.origin == 'default':
+            return ret, arg
+
+        if ret.origin != 'default' and extra_may_override:
             return ret, arg
 
         if ret.origin != 'default' and extra_ret != ret:
