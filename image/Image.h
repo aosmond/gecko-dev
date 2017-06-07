@@ -342,7 +342,7 @@ protected:
                           const gfx::IntSize& aSize,
                           uint32_t aFlags);
 
-  void UpdateImageContainer(const gfx::IntSize& aSize);
+  void UpdateImageContainer();
 
   void ReleaseImageContainer();
 
