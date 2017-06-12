@@ -4522,6 +4522,9 @@ pref("image.cache.size", 5242880);
 // Size is given a weight of 1000 - timeweight.
 pref("image.cache.timeweight", 500);
 
+// Maximum number of surfaces for an image before entering "factor of 2" mode.
+pref("image.cache.factor2.threshold-surfaces", 8);
+
 // Decode all images automatically on load, ignoring our normal heuristics.
 pref("image.decode-immediately.enabled", false);
 

@@ -231,12 +231,27 @@ AreaOfIntSize(const IntSize& aSize) {
  *
  * ImageSurfaceCache also keeps track of whether its associated image is locked
  * or unlocked.
+ *
+ * The cache may also enter "factor of 2" mode which occurs when the number of
+ * surfaces in the cache exceeds the "image.cache.factor2.threshold-surfaces"
+ * pref and the aggregate size of the surfaces exceeds the
+ * "image.cache.factor2.threshold-kb" pref. When in "factor of 2" mode, the
+ * cache will strongly favour sizes which are a factor of 2 of the native size.
+ * It accomplishes this by suggesting a factor of 2 size when lookups fail and
+ * substituting the nearest factor of 2 surface to the ideal size as the "best"
+ * available (as opposed to subsitution but not found). This allows us to
+ * minimize memory consumption and CPU time spent decoding when a website
+ * requires many variants of the same surface.
  */
 class ImageSurfaceCache
 {
   ~ImageSurfaceCache() { }
 public:
-  ImageSurfaceCache() : mLocked(false) { }
+  ImageSurfaceCache()
+    : mLocked(false)
+    , mFactor2Mode(false)
+    , mFactor2Pruned(false)
+  { }
 
   MOZ_DECLARE_REFCOUNTED_TYPENAME(ImageSurfaceCache)
   NS_INLINE_DECL_THREADSAFE_REFCOUNTING(ImageSurfaceCache)
@@ -253,6 +268,78 @@ public:
     mSurfaces.Put(aSurface->GetSurfaceKey(), aSurface);
   }
 
+  void MaybeAddNonFactor2Size(const IntSize& aSize)
+  {
+    // When we do a lookup which does not accept substitutions and we are in
+    // factor of 2 mode, we have a problem -- we may prune out non-factor of 2
+    // sizes when reclaiming memory. Our best bet is to add it to the whitelist
+    // of acceptable sizes. A side effect of this is that we may favour these
+    // additional sizes over the original set, but that in of itself is not a
+    // problem (unless we get too many again!).
+    if (MOZ_UNLIKELY(mFactor2Mode && !mFactor2Pruned &&
+                     !mFactorSizes.Contains(aSize))) {
+      printf_stderr("[AO] [%p] ImageSurfaceCache::MaybeAddNonFactor2Size -- %dx%d\n",
+          this, aSize.width, aSize.height);
+      mFactorSizes.AppendElement(aSize);
+    }
+  }
+
+  void MaybeSetFactor2Mode()
+  {
+    MOZ_ASSERT(!mFactor2Mode);
+    MOZ_ASSERT(!mFactor2Pruned);
+
+    // Typically an image cache will not have too many size-varying surfaces, so
+    // if we exceed the given threshold, we should consider using a subset.
+    int32_t thresholdSurfaces = gfxPrefs::ImageCacheFactor2ThresholdSurfaces();
+    if (thresholdSurfaces < 0 ||
+        mSurfaces.Count() < static_cast<uint32_t>(thresholdSurfaces)) {
+      return;
+    }
+
+    // Calculate the current overhead for all of the surfaces we have. If they
+    // are tiny (i.e. icons), we don't want to force compacting.
+    int64_t estimatedKB = 0;
+    Image* image = nullptr;
+    for (auto iter = ConstIter(); !iter.Done(); iter.Next()) {
+      NotNull<CachedSurface*> current = WrapNotNull(iter.UserData());
+      image = static_cast<Image*>(current->GetImageKey());
+      estimatedKB += AreaOfIntSize(current->GetSurfaceKey().Size());
+    }
+
+    // Convert from pixels (4 bytes/pixel) to KB.
+    estimatedKB >>= 8;
+    if (estimatedKB < gfxPrefs::ImageCacheFactor2ThresholdKB()) {
+      return;
+    }
+
+    MOZ_ASSERT(image);
+
+    // Get our native size. While we know the image should be fully decoded,
+    // if it is an SVG, it is valid to have a zero size. We can't do compacting
+    // in that case because we need to know the width/height ratio to define a
+    // candidate set.
+    IntSize nativeSize;
+    if (NS_FAILED(image->GetWidth(&nativeSize.width))) {
+      return;
+    }
+    if (NS_FAILED(image->GetHeight(&nativeSize.height))) {
+      return;
+    }
+    if (nativeSize.IsEmpty()) {
+      return;
+    }
+
+    // Now we can generate table of acceptable sizes.
+    do {
+      mFactorSizes.AppendElement(nativeSize);
+      nativeSize.width /= 2;
+      nativeSize.height /= 2;
+    } while (!nativeSize.IsEmpty());
+
+    mFactor2Mode = true;
+  }
+
   void Remove(NotNull<CachedSurface*> aSurface)
   {
     MOZ_ASSERT(mSurfaces.GetWeak(aSurface->GetSurfaceKey()),
@@ -261,10 +348,115 @@ public:
     mSurfaces.Remove(aSurface->GetSurfaceKey());
   }
 
-  already_AddRefed<CachedSurface> Lookup(const SurfaceKey& aSurfaceKey)
+  IntSize DecodeSize(const IntSize& aSize)
+  {
+    // When not in factor of 2 mode, we can always decode at the given size.
+    if (!mFactor2Mode) {
+      return aSize;
+    }
+
+    MOZ_ASSERT(!mFactorSizes.IsEmpty());
+    auto i = mFactorSizes.Length() - 1;
+    IntSize bestSize = mFactorSizes[i];
+    while (i > 0) {
+      --i;
+      if (CompareArea(aSize, bestSize, mFactorSizes[i])) {
+        bestSize = mFactorSizes[i];
+      }
+    };
+
+    return bestSize;
+  }
+
+  void Prune()
+  {
+    if (!mFactor2Mode || mFactor2Pruned) {
+      return;
+    }
+
+    // Attempt to discard any surfaces which are not factor of 2 and the best
+    // factor of 2 match exists.
+    bool hasNotFactorSize = false;
+    for (auto iter = mSurfaces.Iter(); !iter.Done(); iter.Next()) {
+      NotNull<CachedSurface*> current = WrapNotNull(iter.UserData());
+      const SurfaceKey& currentKey = current->GetSurfaceKey();
+      const IntSize& currentSize = currentKey.Size();
+
+      // First we find the best factor of 2 size for this surface.
+      IntSize bestSize = DecodeSize(currentSize);
+
+      // If this surface is a factor of 2 size, then we want to keep it.
+      if (bestSize == currentSize) {
+        continue;
+      }
+
+      // Check the cache for a surface with the same parameters except for the
+      // size which uses the closest factor of 2 size.
+      SurfaceKey compactKey = currentKey.CloneWithSize(bestSize);
+      RefPtr<CachedSurface> compactMatch;
+      mSurfaces.Get(compactKey, getter_AddRefs(compactMatch));
+      if (compactMatch && compactMatch->IsDecoded()) {
+        printf_stderr("[AO] [%p] ImageSurfaceCache::Prune -- removing %dx%d in favour of %dx%d\n",
+            this, currentSize.width, currentSize.height, bestSize.width, bestSize.height);
+        iter.Remove();
+      } else {
+        hasNotFactorSize = true;
+      }
+    }
+
+    // We have no surfaces that are not factor of 2 sized, so we can stop
+    // pruning henceforth, because we avoid the insertion of new surfaces that
+    // don't match our sizing set (unless the caller won't accept a
+    // substitution.)
+    if (!hasNotFactorSize) {
+      printf_stderr("[AO] [%p] ImageSurfaceCache::Prune -- pruning complete\n", this);
+      mFactor2Pruned = true;
+    }
+  }
+
+  bool CompareArea(const IntSize& aIdealSize,
+                   const IntSize& aBestSize,
+                   const IntSize& aSize) const
+  {
+    // Compare sizes. We use an area-based heuristic here instead of computing a
+    // truly optimal answer, since it seems very unlikely to make a difference
+    // for realistic sizes.
+    int64_t idealArea = AreaOfIntSize(aIdealSize);
+    int64_t currentArea = AreaOfIntSize(aSize);
+    int64_t bestMatchArea = AreaOfIntSize(aBestSize);
+
+    // If the best match is smaller than the ideal size, prefer bigger sizes.
+    if (bestMatchArea < idealArea) {
+      if (currentArea > bestMatchArea) {
+        return true;
+      }
+      return false;
+    }
+    // Other, prefer sizes closer to the ideal size, but still not smaller.
+    if (idealArea <= currentArea && currentArea < bestMatchArea) {
+      return true;
+    }
+
+    // This surface isn't an improvement over the current best match.
+    return false;
+  }
+
+  already_AddRefed<CachedSurface> Lookup(const SurfaceKey& aSurfaceKey,
+                                         bool aForAccess)
   {
     RefPtr<CachedSurface> surface;
     mSurfaces.Get(aSurfaceKey, getter_AddRefs(surface));
+
+    // If no exact match is found, and this is for use rather than internal
+    // accounting (i.e. insert and removal), we know this will trigger a
+    // decode. Make sure we switch now to factor of 2 mode if necessary.
+    if (!surface && aForAccess) {
+      if (!mFactor2Mode) {
+        MaybeSetFactor2Mode();
+      }
+      MaybeAddNonFactor2Size(aSurfaceKey.Size());
+    }
+
     return surface.forget();
   }
 
@@ -274,8 +466,28 @@ public:
     // Try for an exact match first.
     RefPtr<CachedSurface> exactMatch;
     mSurfaces.Get(aIdealKey, getter_AddRefs(exactMatch));
-    if (exactMatch && exactMatch->IsDecoded()) {
-      return MakePair(exactMatch.forget(), MatchType::EXACT);
+    if (exactMatch) {
+      if (exactMatch->IsDecoded()) {
+        return MakePair(exactMatch.forget(), MatchType::EXACT);
+      }
+    } else if (!mFactor2Mode) {
+      // If no exact match is found, and we are not in factor of 2 mode, then
+      // we know that we will trigger a decode because at best we will provide
+      // a substitute. Make sure we switch now to factor of 2 mode if necessary.
+      MaybeSetFactor2Mode();
+    }
+
+    // Try for a best match second, if using compact.
+    IntSize compactSize;
+    if (mFactor2Mode) {
+      compactSize = DecodeSize(aIdealKey.Size());
+      if (!exactMatch) {
+        SurfaceKey compactKey = aIdealKey.CloneWithSize(compactSize);
+        mSurfaces.Get(compactKey, getter_AddRefs(exactMatch));
+        if (exactMatch && exactMatch->IsDecoded()) {
+          return MakePair(exactMatch.forget(), MatchType::SUBSTITUTE_BECAUSE_BEST);
+        }
+      }
     }
 
     // There's no perfect match, so find the best match we can.
@@ -321,36 +533,34 @@ public:
       // Compare sizes. We use an area-based heuristic here instead of computing a
       // truly optimal answer, since it seems very unlikely to make a difference
       // for realistic sizes.
-      int64_t idealArea = AreaOfIntSize(aIdealKey.Size());
-      int64_t currentArea = AreaOfIntSize(currentKey.Size());
-      int64_t bestMatchArea = AreaOfIntSize(bestMatchKey.Size());
-
-      // If the best match is smaller than the ideal size, prefer bigger sizes.
-      if (bestMatchArea < idealArea) {
-        if (currentArea > bestMatchArea) {
-          bestMatch = current;
-        }
-        continue;
-      }
-      // Other, prefer sizes closer to the ideal size, but still not smaller.
-      if (idealArea <= currentArea && currentArea < bestMatchArea) {
+      if (CompareArea(aIdealKey.Size(), bestMatchKey.Size(), currentKey.Size())) {
         bestMatch = current;
-        continue;
       }
-      // This surface isn't an improvement over the current best match.
     }
 
     MatchType matchType;
     if (bestMatch) {
       if (!exactMatch) {
-        // No exact match, but we found a substitute.
-        matchType = MatchType::SUBSTITUTE_BECAUSE_NOT_FOUND;
+        const IntSize& bestMatchSize = bestMatch->GetSurfaceKey().Size();
+        if (mFactor2Mode && compactSize == bestMatchSize) {
+          // No exact match, but this is the best we are willing to decode.
+          matchType = MatchType::SUBSTITUTE_BECAUSE_BEST;
+        } else {
+          // No exact match, but we found a substitute.
+          matchType = MatchType::SUBSTITUTE_BECAUSE_NOT_FOUND;
+        }
       } else if (exactMatch != bestMatch) {
         // The exact match is still decoding, but we found a substitute.
         matchType = MatchType::SUBSTITUTE_BECAUSE_PENDING;
       } else {
-        // The exact match is still decoding, but it's the best we've got.
-        matchType = MatchType::EXACT;
+        const IntSize& bestMatchSize = bestMatch->GetSurfaceKey().Size();
+        if (mFactor2Mode && aIdealKey.Size() != bestMatchSize) {
+          // The best factor of 2 match is still decoding.
+          matchType = MatchType::SUBSTITUTE_BECAUSE_BEST;
+        } else {
+          // The exact match is still decoding, but it's the best we've got.
+          matchType = MatchType::EXACT;
+        }
       }
     } else {
       if (exactMatch) {
@@ -375,8 +585,19 @@ public:
   bool IsLocked() const { return mLocked; }
 
 private:
-  SurfaceTable mSurfaces;
-  bool         mLocked;
+  SurfaceTable      mSurfaces;
+
+  // Set of sizes which are a factor of 2 of the native size.
+  nsTArray<IntSize> mFactorSizes;
+
+  bool              mLocked;
+
+  // True in "factor of 2" mode.
+  bool              mFactor2Mode;
+
+  // True if all non-factor of 2 surfaces have been removed from the cache. Note
+  // that this excludes unsubstitutable sizes.
+  bool              mFactor2Pruned;
 };
 
 /**
@@ -579,7 +800,7 @@ public:
       return LookupResult(MatchType::NOT_FOUND);
     }
 
-    RefPtr<CachedSurface> surface = cache->Lookup(aSurfaceKey);
+    RefPtr<CachedSurface> surface = cache->Lookup(aSurfaceKey, aMarkUsed);
     if (!surface) {
       // Lookup in the per-image cache missed.
       return LookupResult(MatchType::NOT_FOUND);
@@ -650,8 +871,18 @@ public:
       surface->GetSurfaceKey().Playback() == aSurfaceKey.Playback() &&
       surface->GetSurfaceKey().Flags() == aSurfaceKey.Flags());
 
-    if (matchType == MatchType::EXACT) {
+    if (matchType == MatchType::EXACT ||
+        matchType == MatchType::SUBSTITUTE_BECAUSE_BEST) {
       MarkUsed(WrapNotNull(surface), WrapNotNull(cache), aAutoLock);
+    }
+
+    // When the caller may choose to decode at an uncached size because there is
+    // no pending decode at the requested size, we should give it the alternative
+    // size it should decode at.
+    if (matchType == MatchType::SUBSTITUTE_BECAUSE_NOT_FOUND ||
+        matchType == MatchType::NOT_FOUND) {
+      return LookupResult(Move(drawableSurface), matchType,
+                          cache->DecodeSize(aSurfaceKey.Size()));
     }
 
     return LookupResult(Move(drawableSurface), matchType);
@@ -741,6 +972,16 @@ public:
     // The per-image cache isn't needed anymore, so remove it as well.
     // This implicitly unlocks the image if it was locked.
     mImageCaches.Remove(aImageKey);
+  }
+
+  void PruneImage(const ImageKey aImageKey, const StaticMutexAutoLock& aAutoLock)
+  {
+    RefPtr<ImageSurfaceCache> cache = GetImageCache(aImageKey);
+    if (!cache) {
+      return;  // No cached surfaces for this image, so nothing to do.
+    }
+
+    cache->Prune();
   }
 
   void DiscardAll(const StaticMutexAutoLock& aAutoLock)
@@ -894,7 +1135,8 @@ private:
       return;  // No cached surfaces for this image.
     }
 
-    RefPtr<CachedSurface> surface = cache->Lookup(aSurfaceKey);
+    RefPtr<CachedSurface> surface =
+      cache->Lookup(aSurfaceKey, /* aForAccess = */ false);
     if (!surface) {
       return;  // Lookup in the per-image cache missed.
     }
@@ -1130,6 +1372,15 @@ SurfaceCache::RemoveImage(const ImageKey aImageKey)
   StaticMutexAutoLock lock(sInstanceMutex);
   if (sInstance) {
     sInstance->RemoveImage(aImageKey, lock);
+  }
+}
+
+/* static */ void
+SurfaceCache::PruneImage(const ImageKey aImageKey)
+{
+  StaticMutexAutoLock lock(sInstanceMutex);
+  if (sInstance) {
+    sInstance->PruneImage(aImageKey, lock);
   }
 }
 

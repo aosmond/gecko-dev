@@ -73,6 +73,11 @@ public:
   PlaybackType Playback() const { return mPlayback; }
   SurfaceFlags Flags() const { return mFlags; }
 
+  SurfaceKey CloneWithSize(const IntSize& aSize) const
+  {
+    return SurfaceKey(aSize, mSVGContext, mPlayback, mFlags);
+  }
+
 private:
   SurfaceKey(const IntSize& aSize,
              const Maybe<SVGImageContext>& aSVGContext,
@@ -387,6 +392,8 @@ struct SurfaceCache
    * @param aImageKey  The image which should be removed from the cache.
    */
   static void RemoveImage(const ImageKey aImageKey);
+
+  static void PruneImage(const ImageKey aImageKey);
 
   /**
    * Evicts all evictable entries from the cache.
