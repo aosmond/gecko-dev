@@ -288,8 +288,28 @@ public:
     // Try for an exact match first.
     RefPtr<CachedSurface> exactMatch;
     mSurfaces.Get(aIdealKey, getter_AddRefs(exactMatch));
-    if (exactMatch && exactMatch->IsDecoded()) {
-      return MakePair(exactMatch.forget(), MatchType::EXACT);
+    if (exactMatch) {
+      if (exactMatch->IsDecoded()) {
+        return MakePair(exactMatch.forget(), MatchType::EXACT);
+      }
+    } else if (!mFactor2Mode) {
+      // If no exact match is found, and we are not in factor of 2 mode, then
+      // we know that we will trigger a decode because at best we will provide
+      // a substitute. Make sure we switch now to factor of 2 mode if necessary.
+      MaybeSetFactor2Mode();
+    }
+
+    // Try for a best match second, if using compact.
+    IntSize compactSize;
+    if (mFactor2Mode) {
+      compactSize = DecodeSize(aIdealKey.Size());
+      if (!exactMatch) {
+        SurfaceKey compactKey = aIdealKey.CloneWithSize(compactSize);
+        mSurfaces.Get(compactKey, getter_AddRefs(exactMatch));
+        if (exactMatch && exactMatch->IsDecoded()) {
+          return MakePair(exactMatch.forget(), MatchType::SUBSTITUTE_BECAUSE_BEST);
+        }
+      }
     }
 
     // There's no perfect match, so find the best match we can.
@@ -340,14 +360,26 @@ public:
     MatchType matchType;
     if (bestMatch) {
       if (!exactMatch) {
-        // No exact match, but we found a substitute.
-        matchType = MatchType::SUBSTITUTE_BECAUSE_NOT_FOUND;
+        const IntSize& bestMatchSize = bestMatch->GetSurfaceKey().Size();
+        if (mFactor2Mode && compactSize == bestMatchSize) {
+          // No exact match, but this is the best we are willing to decode.
+          matchType = MatchType::SUBSTITUTE_BECAUSE_BEST;
+        } else {
+          // No exact match, but we found a substitute.
+          matchType = MatchType::SUBSTITUTE_BECAUSE_NOT_FOUND;
+        }
       } else if (exactMatch != bestMatch) {
         // The exact match is still decoding, but we found a substitute.
         matchType = MatchType::SUBSTITUTE_BECAUSE_PENDING;
       } else {
-        // The exact match is still decoding, but it's the best we've got.
-        matchType = MatchType::EXACT;
+        const IntSize& bestMatchSize = bestMatch->GetSurfaceKey().Size();
+        if (mFactor2Mode && aIdealKey.Size() != bestMatchSize) {
+          // The best factor of 2 match is still decoding.
+          matchType = MatchType::SUBSTITUTE_BECAUSE_BEST;
+        } else {
+          // The exact match is still decoding, but it's the best we've got.
+          matchType = MatchType::EXACT;
+        }
       }
     } else {
       if (exactMatch) {
@@ -759,8 +791,18 @@ public:
       surface->GetSurfaceKey().Playback() == aSurfaceKey.Playback() &&
       surface->GetSurfaceKey().Flags() == aSurfaceKey.Flags());
 
-    if (matchType == MatchType::EXACT) {
+    if (matchType == MatchType::EXACT ||
+        matchType == MatchType::SUBSTITUTE_BECAUSE_BEST) {
       MarkUsed(WrapNotNull(surface), WrapNotNull(cache), aAutoLock);
+    }
+
+    // When the caller may choose to decode at an uncached size because there is
+    // no pending decode at the requested size, we should give it the alternative
+    // size it should decode at.
+    if (matchType == MatchType::SUBSTITUTE_BECAUSE_NOT_FOUND ||
+        matchType == MatchType::NOT_FOUND) {
+      return LookupResult(Move(drawableSurface), matchType,
+                          cache->DecodeSize(aSurfaceKey.Size()));
     }
 
     return LookupResult(Move(drawableSurface), matchType);
