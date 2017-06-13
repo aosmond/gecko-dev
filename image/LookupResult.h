@@ -12,6 +12,7 @@
 #define mozilla_image_LookupResult_h
 
 #include "mozilla/Attributes.h"
+#include "mozilla/gfx/Point.h"  // for IntSize
 #include "mozilla/Move.h"
 #include "ISurfaceProvider.h"
 
@@ -24,8 +25,10 @@ enum class MatchType : uint8_t
   PENDING,    // Found a matching placeholder, but no surface.
   EXACT,      // Found a surface that matches exactly.
   SUBSTITUTE_BECAUSE_NOT_FOUND,  // No exact match, but found a similar one.
-  SUBSTITUTE_BECAUSE_PENDING     // Found a similar surface and a placeholder
+  SUBSTITUTE_BECAUSE_PENDING,    // Found a similar surface and a placeholder
                                  // for an exact match.
+  SUBSTITUTE_BECAUSE_BEST        // No exact match, but this is the best we
+                                 // are able to decode.
 };
 
 /**
@@ -60,16 +63,31 @@ public:
                "NOT_FOUND or PENDING do not make sense with a surface");
   }
 
+  LookupResult(DrawableSurface&& aSurface, MatchType aMatchType,
+               const gfx::IntSize& aDecodeSize)
+    : mSurface(Move(aSurface))
+    , mMatchType(aMatchType)
+    , mDecodeSize(aDecodeSize)
+  {
+    MOZ_ASSERT(!mDecodeSize.IsEmpty());
+    MOZ_ASSERT(!mSurface || aMatchType == MatchType::SUBSTITUTE_BECAUSE_NOT_FOUND,
+               "Only SUBSTITUTE_BECAUSE_NOT_FOUND make sense with no surface");
+    MOZ_ASSERT(mSurface || aMatchType == MatchType::NOT_FOUND,
+               "NOT_FOUND does not make sense with a surface");
+  }
+
   LookupResult& operator=(LookupResult&& aOther)
   {
     MOZ_ASSERT(&aOther != this, "Self-move-assignment is not supported");
     mSurface = Move(aOther.mSurface);
     mMatchType = aOther.mMatchType;
+    mDecodeSize = aOther.mDecodeSize;
     return *this;
   }
 
   DrawableSurface& Surface() { return mSurface; }
   const DrawableSurface& Surface() const { return mSurface; }
+  const gfx::IntSize& DecodeSize() const { return mDecodeSize; }
 
   /// @return true if this LookupResult contains a surface.
   explicit operator bool() const { return bool(mSurface); }
@@ -82,6 +100,7 @@ private:
 
   DrawableSurface mSurface;
   MatchType mMatchType;
+  gfx::IntSize mDecodeSize;
 };
 
 } // namespace image
