@@ -395,7 +395,49 @@ public:
       return;
     }
 
+    // Get our native size. While we know the image should be fully decoded,
+    // if it is an SVG, it is valid to have a zero size. We can't do compacting
+    // in that case because we need to know the width/height ratio to define a
+    // candidate set.
+    IntSize nativeSize;
+    if (NS_FAILED(image->GetWidth(&nativeSize.width))) {
+      return;
+    }
+    if (NS_FAILED(image->GetHeight(&nativeSize.height))) {
+      return;
+    }
+    if (nativeSize.IsEmpty()) {
+      return;
+    }
+
+    // Now we can generate table of acceptable sizes.
+    do {
+      mFactor2Sizes.AppendElement(nativeSize);
+      nativeSize.width /= 2;
+      nativeSize.height /= 2;
+    } while (!nativeSize.IsEmpty());
+
     mFactor2Mode = true;
+  }
+
+  IntSize DecodeSize(const IntSize& aSize) const
+  {
+    // When not in factor of 2 mode, we can always decode at the given size.
+    if (!mFactor2Mode) {
+      return aSize;
+    }
+
+    MOZ_ASSERT(!mFactor2Sizes.IsEmpty());
+    auto i = mFactor2Sizes.Length() - 1;
+    IntSize bestSize = mFactor2Sizes[i];
+    while (i > 0) {
+      --i;
+      if (CompareArea(aSize, bestSize, mFactor2Sizes[i])) {
+        bestSize = mFactor2Sizes[i];
+      }
+    };
+
+    return bestSize;
   }
 
   bool CompareArea(const IntSize& aIdealSize,
@@ -436,6 +478,9 @@ public:
 
 private:
   SurfaceTable      mSurfaces;
+
+  // Set of sizes which are a factor of 2 of the native size.
+  nsTArray<IntSize> mFactor2Sizes;
 
   bool              mLocked;
 
