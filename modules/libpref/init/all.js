@@ -4540,6 +4540,10 @@ pref("toolkit.zoomManager.zoomValues", ".3,.5,.67,.8,.9,1,1.1,1.2,1.33,1.5,1.7,2
 // Image-related prefs
 //
 
+// Maximum number of surfaces for an image before entering "factor of 2" mode.
+// This in addition to the number of native sizes for an image.
+pref("image.cache.factor2.threshold-surfaces", 4);
+
 // The maximum size, in bytes, of the decoded images we cache
 pref("image.cache.size", 5242880);
 
