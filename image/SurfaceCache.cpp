@@ -161,6 +161,9 @@ public:
     return !IsPlaceholder() && mIsLocked && mProvider->IsLocked();
   }
 
+  void SetExplicit() { mProvider->Availability().SetExplicit(); }
+  bool IsExplicit() const { return mProvider->Availability().IsExplicit(); }
+
   bool IsPlaceholder() const { return mProvider->Availability().IsPlaceholder(); }
   bool IsDecoded() const { return !IsPlaceholder() && mProvider->IsFinished(); }
 
@@ -250,6 +253,7 @@ public:
   ImageSurfaceCache()
     : mLocked(false)
     , mFactor2Mode(false)
+    , mFactor2Pruned(false)
   { }
 
   MOZ_DECLARE_REFCOUNTED_TYPENAME(ImageSurfaceCache)
@@ -281,11 +285,17 @@ public:
     RefPtr<CachedSurface> surface;
     mSurfaces.Get(aSurfaceKey, getter_AddRefs(surface));
 
-    // If no exact match is found, and this is for use rather than internal
-    // accounting (i.e. insert and removal), we know this will trigger a
-    // decode. Make sure we switch now to factor of 2 mode if necessary.
-    if (!surface && aForAccess && !mFactor2Mode) {
-      MaybeSetFactor2Mode();
+    if (aForAccess) {
+      if (surface) {
+        // We don't want to allow factor of 2 mode pruning to release surfaces
+        // for which the callers will accept no substitute.
+        surface->SetExplicit();
+      } else if (!mFactor2Mode) {
+        // If no exact match is found, and this is for use rather than internal
+        // accounting (i.e. insert and removal), we know this will trigger a
+        // decode. Make sure we switch now to factor of 2 mode if necessary.
+        MaybeSetFactor2Mode();
+      }
     }
 
     return surface.forget();
@@ -461,6 +471,56 @@ public:
     mFactor2Mode = true;
   }
 
+  template<typename Function>
+  void Prune(Function&& aRemoveCallback)
+  {
+    if (!mFactor2Mode || mFactor2Pruned) {
+      return;
+    }
+
+    // Attempt to discard any surfaces which are not factor of 2 and the best
+    // factor of 2 match exists.
+    bool hasNotFactorSize = false;
+    for (auto iter = mSurfaces.Iter(); !iter.Done(); iter.Next()) {
+      NotNull<CachedSurface*> current = WrapNotNull(iter.UserData());
+      const SurfaceKey& currentKey = current->GetSurfaceKey();
+      const IntSize& currentSize = currentKey.Size();
+
+      // First we check if someone requested this size and would not accept
+      // an alternatively sized surface.
+      if (current->IsExplicit()) {
+        continue;
+      }
+
+      // Next we find the best factor of 2 size for this surface. If this
+      // surface is a factor of 2 size, then we want to keep it.
+      IntSize bestSize = DecodeSize(currentSize);
+      if (bestSize == currentSize) {
+        continue;
+      }
+
+      // Check the cache for a surface with the same parameters except for the
+      // size which uses the closest factor of 2 size.
+      SurfaceKey compactKey = currentKey.CloneWithSize(bestSize);
+      RefPtr<CachedSurface> compactMatch;
+      mSurfaces.Get(compactKey, getter_AddRefs(compactMatch));
+      if (compactMatch && compactMatch->IsDecoded()) {
+        aRemoveCallback(current);
+        iter.Remove();
+      } else {
+        hasNotFactorSize = true;
+      }
+    }
+
+    // We have no surfaces that are not factor of 2 sized, so we can stop
+    // pruning henceforth, because we avoid the insertion of new surfaces that
+    // don't match our sizing set (unless the caller won't accept a
+    // substitution.)
+    if (!hasNotFactorSize) {
+      mFactor2Pruned = true;
+    }
+  }
+
   IntSize DecodeSize(const IntSize& aSize) const
   {
     // When not in factor of 2 mode, we can always decode at the given size.
@@ -527,6 +587,10 @@ private:
 
   // True in "factor of 2" mode.
   bool              mFactor2Mode;
+
+  // True if all non-factor of 2 surfaces have been removed from the cache. Note
+  // that this excludes unsubstitutable sizes.
+  bool              mFactor2Pruned;
 };
 
 /**
@@ -901,6 +965,18 @@ public:
     // The per-image cache isn't needed anymore, so remove it as well.
     // This implicitly unlocks the image if it was locked.
     mImageCaches.Remove(aImageKey);
+  }
+
+  void PruneImage(const ImageKey aImageKey, const StaticMutexAutoLock& aAutoLock)
+  {
+    RefPtr<ImageSurfaceCache> cache = GetImageCache(aImageKey);
+    if (!cache) {
+      return;  // No cached surfaces for this image, so nothing to do.
+    }
+
+    cache->Prune([this, &aAutoLock](NotNull<CachedSurface*> aSurface) -> void {
+      StopTracking(aSurface, aAutoLock);
+    });
   }
 
   void DiscardAll(const StaticMutexAutoLock& aAutoLock)
@@ -1291,6 +1367,15 @@ SurfaceCache::RemoveImage(const ImageKey aImageKey)
   StaticMutexAutoLock lock(sInstanceMutex);
   if (sInstance) {
     sInstance->RemoveImage(aImageKey, lock);
+  }
+}
+
+/* static */ void
+SurfaceCache::PruneImage(const ImageKey aImageKey)
+{
+  StaticMutexAutoLock lock(sInstanceMutex);
+  if (sInstance) {
+    sInstance->PruneImage(aImageKey, lock);
   }
 }
 
