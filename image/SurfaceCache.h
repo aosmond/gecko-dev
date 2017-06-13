@@ -405,6 +405,15 @@ struct SurfaceCache
   static void RemoveImage(const ImageKey aImageKey);
 
   /**
+   * Attempts to remove cache entries (including placeholders) associated with
+   * the given image from the cache, assuming there is an equivalent entry that
+   * it is able substitute that entry with.
+   *
+   * @param aImageKey  The image whose cache which should be pruned.
+   */
+  static void PruneImage(const ImageKey aImageKey);
+
+  /**
    * Evicts all evictable entries from the cache.
    *
    * All entries are evictable except for entries associated with locked images.
