@@ -528,7 +528,9 @@ DoCollectSizeOfCompositingSurfaces(const RawAccessFrameRef& aSurface,
                                     PlaybackType::eStatic);
 
   // Create a counter for this surface.
-  SurfaceMemoryCounter counter(key, /* aIsLocked = */ true, aType);
+  SurfaceMemoryCounter counter(key, /* aIsLocked = */ true,
+                               /* aIsExplicit */ false,
+                               /* aIsFactor2 */ false, aType);
 
   // Extract the surface's memory usage information.
   size_t heap = 0, nonHeap = 0, handles = 0;

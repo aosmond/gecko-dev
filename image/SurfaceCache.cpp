@@ -185,10 +185,12 @@ public:
       , mMallocSizeOf(aMallocSizeOf)
     { }
 
-    void Add(NotNull<CachedSurface*> aCachedSurface)
+    void Add(NotNull<CachedSurface*> aCachedSurface, bool aIsFactor2)
     {
       SurfaceMemoryCounter counter(aCachedSurface->GetSurfaceKey(),
-                                   aCachedSurface->IsLocked());
+                                   aCachedSurface->IsLocked(),
+                                   aCachedSurface->IsExplicit(),
+                                   aIsFactor2);
 
       if (aCachedSurface->IsPlaceholder()) {
         return;
@@ -567,6 +569,17 @@ public:
 
     // This surface isn't an improvement over the current best match.
     return false;
+  }
+
+  void CollectSizeOfSurfaces(nsTArray<SurfaceMemoryCounter>& aCounters,
+                             MallocSizeOf                    aMallocSizeOf)
+  {
+    CachedSurface::SurfaceMemoryReport report(aCounters, aMallocSizeOf);
+    for (auto iter = ConstIter(); !iter.Done(); iter.Next()) {
+      NotNull<CachedSurface*> current = WrapNotNull(iter.UserData());
+      const IntSize& currentSize = current->GetSurfaceKey().Size();
+      report.Add(current, mFactor2Sizes.Contains(currentSize));
+    }
   }
 
   SurfaceTable::Iterator ConstIter() const
@@ -1068,10 +1081,7 @@ public:
     }
 
     // Report all surfaces in the per-image cache.
-    CachedSurface::SurfaceMemoryReport report(aCounters, aMallocSizeOf);
-    for (auto iter = cache->ConstIter(); !iter.Done(); iter.Next()) {
-      report.Add(WrapNotNull(iter.UserData()));
-    }
+    cache->CollectSizeOfSurfaces(aCounters, aMallocSizeOf);
   }
 
 private:
