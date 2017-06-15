@@ -34,6 +34,10 @@ public:
                                           bool aUseExternalSurfaceSize,
                                           const gfx::IntSize& aSurfaceSize);
 
+  mozilla::ipc::IPCResult RecvAddSharedSurface(const wr::ExternalImageId& aId,
+                                               const SurfaceDescriptorShared& aDesc) override;
+  mozilla::ipc::IPCResult RecvRemoveSharedSurface(const wr::ExternalImageId& aId) override;
+
   void ActorDestroy(ActorDestroyReason aReason) override;
 
   bool DeallocPCompositorBridgeParent(PCompositorBridgeParent* aActor) override;
