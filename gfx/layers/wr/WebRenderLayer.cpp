@@ -116,6 +116,26 @@ WebRenderLayer::UpdateImageKey(ImageClientSingle* aImageClient,
   return Some(key);
 }
 
+Maybe<wr::ImageKey>
+WebRenderLayer::UpdateImageKey(Maybe<wr::ImageKey>& aOldKey,
+                               bool aFinalized,
+                               wr::ExternalImageId& aExternalImageId)
+{
+  // Reuse old key if image is unchanged.
+  if (aFinalized && aOldKey.isSome()) {
+    return aOldKey;
+  }
+
+  // Delete old key, we are generating a new key.
+  if (aOldKey.isSome()) {
+    WrManager()->AddImageKeyForDiscard(aOldKey.value());
+  }
+
+  WrImageKey key = GetImageKey();
+  WrBridge()->AddWebRenderParentCommand(OpAddSharedSurface(aExternalImageId, key));
+  return Some(key);
+}
+
 void
 WebRenderLayer::DumpLayerInfo(const char* aLayerType, const LayerRect& aRect)
 {
