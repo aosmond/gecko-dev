@@ -23,6 +23,7 @@
 #include "mozilla/layers/CompositorVsyncScheduler.h"
 #include "mozilla/layers/ImageBridgeParent.h"
 #include "mozilla/layers/ImageDataSerializer.h"
+#include "mozilla/layers/SharedSurfacesParent.h"
 #include "mozilla/layers/TextureHost.h"
 #include "mozilla/layers/AsyncImagePipelineManager.h"
 #include "mozilla/layers/WebRenderImageHost.h"
@@ -615,6 +616,26 @@ WebRenderBridgeParent::ProcessWebRenderParentCommands(InfallibleTArray<WebRender
         mApi->AddImage(keys[0], descriptor, slice);
 
         dSurf->Unmap();
+        break;
+      }
+      case WebRenderParentCommand::TOpAddSharedSurface: {
+        const OpAddSharedSurface& op = cmd.get_OpAddSharedSurface();
+        wr::ImageKey key = op.key();
+        RefPtr<DataSourceSurface> dSurf =
+          SharedSurfacesParent::Get(op.externalImageId());
+        MOZ_ASSERT(dSurf);
+        MOZ_ASSERT(mActiveImageKeys.find(wr::AsUint64(key)) == mActiveImageKeys.end());
+        mActiveImageKeys.insert(wr::AsUint64(key));
+
+        if (!dSurf) {
+          break;
+        }
+
+        wr::ImageDescriptor descriptor(dSurf->GetSize(), dSurf->Stride(),
+                                       dSurf->GetFormat());
+        mApi->AddExternalImageBuffer(key,
+                                     descriptor,
+                                     op.externalImageId());
         break;
       }
       case WebRenderParentCommand::TOpUpdateAsyncImagePipeline: {
