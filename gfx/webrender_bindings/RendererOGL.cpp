@@ -9,6 +9,7 @@
 #include "mozilla/gfx/Logging.h"
 #include "mozilla/layers/CompositorBridgeParent.h"
 #include "mozilla/layers/CompositorThread.h"
+#include "mozilla/layers/SharedSurfacesParent.h"
 #include "mozilla/webrender/RenderBufferTextureHost.h"
 #include "mozilla/webrender/RenderTextureHostOGL.h"
 #include "mozilla/widget/CompositorWidget.h"
@@ -19,7 +20,26 @@ namespace wr {
 WrExternalImage LockExternalImage(void* aObj, WrExternalImageId aId, uint8_t aChannelIndex)
 {
   RendererOGL* renderer = reinterpret_cast<RendererOGL*>(aObj);
+
+  RefPtr<gfx::DataSourceSurface> surface =
+    layers::SharedSurfacesParent::Get(aId);
+  if (surface) {
+    gfx::DataSourceSurface::MappedSurface mapping;
+    DebugOnly<bool> rv = surface->Map(gfx::DataSourceSurface::MapType::READ,
+                                      &mapping);
+    MOZ_ASSERT(rv);
+
+    gfx::IntSize size = surface->GetSize();
+    size_t len = mapping.mStride * size.height;
+
+    // Keep a reference active to the surface, in case it gets removed by the
+    // owner while we are rendering.
+    Unused << surface.forget().take();
+    return RawDataToWrExternalImage(mapping.mData, len);
+  }
+
   RenderTextureHost* texture = renderer->GetRenderTexture(aId);
+  MOZ_ASSERT(texture, "Image missing from renderer and shared surface cache!");
 
   if (texture->AsBufferTextureHost()) {
     RenderBufferTextureHost* bufferTexture = texture->AsBufferTextureHost();
@@ -47,8 +67,19 @@ WrExternalImage LockExternalImage(void* aObj, WrExternalImageId aId, uint8_t aCh
 void UnlockExternalImage(void* aObj, WrExternalImageId aId, uint8_t aChannelIndex)
 {
   RendererOGL* renderer = reinterpret_cast<RendererOGL*>(aObj);
+  RefPtr<gfx::DataSourceSurface> surface =
+    layers::SharedSurfacesParent::Get(aId);
+  if (surface) {
+    // Unmap and release the secondary reference to the surface that we use to
+    // ensure it was kept alive while rendering (Map only promises the data
+    // is available, not that the surface will remain).
+    surface->Unmap();
+    surface.get()->Release();
+    return;
+  }
+
   RenderTextureHost* texture = renderer->GetRenderTexture(aId);
-  MOZ_ASSERT(texture);
+  MOZ_ASSERT(texture, "Image missing from renderer and shared surface cache!");
   texture->Unlock();
 }
 
