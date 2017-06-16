@@ -38,8 +38,6 @@ public:
 
 protected:
   CompositableType GetImageClientType();
-  void DiscardKeyIfShared();
-  bool TrySharedSurface(Image* aImage);
 
   void AddWRVideoImage(size_t aChannelNumber);
 

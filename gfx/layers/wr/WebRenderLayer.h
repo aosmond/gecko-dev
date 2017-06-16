@@ -40,6 +40,15 @@ public:
     return static_cast<WebRenderLayer*>(aLayer->ImplData());
   }
 
+  Maybe<wr::ImageKey> TrySharedSurface(Image* aImage,
+                                       Maybe<wr::ImageKey>& aOldKey,
+                                       wr::MaybeExternalImageId& aExternalImageId,
+                                       bool& aIsShared);
+
+  Maybe<wr::ImageKey> DiscardKeyIfShared(Maybe<wr::ImageKey>& aOldKey,
+                                         wr::MaybeExternalImageId& aExternalImageId,
+                                         bool& aIsShared);
+
   Maybe<wr::ImageKey> UpdateImageKey(ImageClientSingle* aImageClient,
                                      ImageContainer* aContainer,
                                      Maybe<wr::ImageKey>& aOldKey,

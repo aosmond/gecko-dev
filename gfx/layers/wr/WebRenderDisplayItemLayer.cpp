@@ -25,7 +25,7 @@ WebRenderDisplayItemLayer::~WebRenderDisplayItemLayer()
   if (mKey.isSome()) {
     WrManager()->AddImageKeyForDiscard(mKey.value());
   }
-  if (mExternalImageId.isSome()) {
+  if (!mIsShared && mExternalImageId.isSome()) {
     WrBridge()->DeallocExternalImageId(mExternalImageId.ref());
   }
 }
@@ -78,27 +78,30 @@ WebRenderDisplayItemLayer::SendImageContainer(ImageContainer* aContainer,
       return Nothing();
     }
 
-    if (!mImageClient) {
-      mImageClient = ImageClient::CreateImageClient(CompositableType::IMAGE,
-                                                    WrBridge(),
-                                                    TextureFlags::DEFAULT);
+    mKey = TrySharedSurface(image, mKey, mExternalImageId, mIsShared);
+    if (!mIsShared) {
       if (!mImageClient) {
-        return Nothing();
+        mImageClient = ImageClient::CreateImageClient(CompositableType::IMAGE,
+                                                      WrBridge(),
+                                                      TextureFlags::DEFAULT);
+        if (!mImageClient) {
+          return Nothing();
+        }
+        mImageClient->Connect();
       }
-      mImageClient->Connect();
-    }
 
-    if (mExternalImageId.isNothing()) {
-      MOZ_ASSERT(mImageClient);
-      mExternalImageId = Some(WrBridge()->AllocExternalImageIdForCompositable(mImageClient));
-    }
-    MOZ_ASSERT(mExternalImageId.isSome());
-    MOZ_ASSERT(mImageClient->AsImageClientSingle());
+      if (mExternalImageId.isNothing()) {
+        MOZ_ASSERT(mImageClient);
+        mExternalImageId = Some(WrBridge()->AllocExternalImageIdForCompositable(mImageClient));
+      }
+      MOZ_ASSERT(mExternalImageId.isSome());
+      MOZ_ASSERT(mImageClient->AsImageClientSingle());
 
-    mKey = UpdateImageKey(mImageClient->AsImageClientSingle(),
-                          aContainer,
-                          mKey,
-                          mExternalImageId.ref());
+      mKey = UpdateImageKey(mImageClient->AsImageClientSingle(),
+                            aContainer,
+                            mKey,
+                            mExternalImageId.ref());
+    }
 
     mImageContainer = aContainer;
   }

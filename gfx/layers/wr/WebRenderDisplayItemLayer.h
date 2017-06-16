@@ -22,6 +22,7 @@ class WebRenderDisplayItemLayer : public WebRenderLayer,
 public:
   explicit WebRenderDisplayItemLayer(WebRenderLayerManager* aLayerManager)
     : DisplayItemLayer(aLayerManager, static_cast<WebRenderLayer*>(this))
+    , mIsShared(false)
   {
     MOZ_COUNT_CTOR(WebRenderDisplayItemLayer);
   }
@@ -46,6 +47,7 @@ private:
   RefPtr<ImageContainer> mImageContainer;
   wr::MaybeExternalImageId mExternalImageId;
   Maybe<wr::ImageKey> mKey;
+  bool mIsShared;
 };
 
 } // namespace layers
