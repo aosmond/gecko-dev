@@ -38,6 +38,8 @@ public:
 
 protected:
   CompositableType GetImageClientType();
+  void DiscardKeyIfShared();
+  bool TrySharedSurface(Image* aImage);
 
   void AddWRVideoImage(size_t aChannelNumber);
 
@@ -46,6 +48,7 @@ protected:
   RefPtr<ImageClient> mImageClient;
   CompositableType mImageClientContainerType;
   Maybe<wr::PipelineId> mPipelineId;
+  bool mIsShared;
 };
 
 } // namespace layers
