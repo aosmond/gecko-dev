@@ -11,9 +11,7 @@
 #include "mozilla/layers/CompositorBridgeChild.h"
 #include "mozilla/layers/ImageClient.h"
 #include "mozilla/layers/ScrollingLayersHelper.h"
-#include "mozilla/layers/SourceSurfaceSharedData.h"
 #include "mozilla/layers/StackingContextHelper.h"
-#include "mozilla/layers/SharedSurfacesChild.h"
 #include "mozilla/layers/TextureClientRecycleAllocator.h"
 #include "mozilla/layers/TextureWrapperImage.h"
 #include "mozilla/layers/WebRenderBridgeChild.h"
@@ -104,76 +102,6 @@ WebRenderImageLayer::SupportsAsyncUpdate()
 }
 
 void
-WebRenderImageLayer::DiscardKeyIfShared()
-{
-  if (mIsShared) {
-    // No need to free the external image ID if it is a shared image. The
-    // surface itself owns it.
-    MOZ_ASSERT(mExternalImageId.isSome());
-    mExternalImageId = Nothing();
-
-    // We are responsible for freeing the ImageKey however.
-    if (mKey.isSome()) {
-      WrManager()->AddImageKeyForDiscard(mKey.value());
-      mKey = Nothing();
-    }
-
-    mIsShared = false;
-  }
-}
-
-bool
-WebRenderImageLayer::TrySharedSurface(Image* aImage)
-{
-  RefPtr<gfx::SourceSurface> surface = aImage->GetAsSourceSurface();
-  if (!surface || surface->GetType() != SurfaceType::DATA_SHARED) {
-    DiscardKeyIfShared();
-    return false;
-  }
-
-  wr::ExternalImageId id;
-  auto sharedSurf = static_cast<gfx::SourceSurfaceSharedData*>(surface.get());
-  nsresult rv = SharedSurfacesChild::Share(sharedSurf, id);
-  if (NS_FAILED(rv)) {
-    DiscardKeyIfShared();
-    return false;
-  }
-
-  if (mExternalImageId.isSome()) {
-    if (mIsShared) {
-      // If we have a new shared surface, we need to discard the old ImageKey
-      // bound to the old surface, and replace the external image ID to generate
-      // a new key.
-      if (!(mExternalImageId.ref() == id)) {
-        DiscardKeyIfShared();
-      }
-    } else {
-      // Last image used was an external image, but we are now switching to a
-      // shared surface -- since we are the owner of the external image ID, we
-      // need to discard it before using the new ID, along with the ImageKey
-      // paired with it.
-      if (mKey.isSome()) {
-        WrManager()->AddImageKeyForDiscard(mKey.value());
-        mKey = Nothing();
-      }
-      WrBridge()->DeallocExternalImageId(mExternalImageId.ref());
-      mExternalImageId = Nothing();
-    }
-  }
-
-  if (mExternalImageId.isNothing()) {
-    mExternalImageId.emplace(id);
-  } else {
-    MOZ_ASSERT(mExternalImageId.ref() == id);
-  }
-
-  mKey = UpdateImageKey(mKey, sharedSurf->IsFinalized(), id);
-  MOZ_ASSERT(mKey.isSome());
-  mIsShared = true;
-  return true;
-}
-
-void
 WebRenderImageLayer::RenderLayer(wr::DisplayListBuilder& aBuilder,
                                  const StackingContextHelper& aSc)
 {
@@ -254,8 +182,8 @@ WebRenderImageLayer::RenderLayer(wr::DisplayListBuilder& aBuilder,
     return;
   }
 
-  if (!TrySharedSurface(image)) {
-    MOZ_ASSERT(!mIsShared);
+  mKey = TrySharedSurface(image, mKey, mExternalImageId, mIsShared);
+  if (!mIsShared) {
     if (!mImageClient) {
       mImageClient = ImageClient::CreateImageClient(CompositableType::IMAGE,
                                                     WrBridge(),
@@ -327,8 +255,8 @@ WebRenderImageLayer::RenderMaskLayer(const StackingContextHelper& aSc,
     return Nothing();
   }
 
-  if (!TrySharedSurface(image)) {
-    MOZ_ASSERT(!mIsShared);
+  mKey = TrySharedSurface(image, mKey, mExternalImageId, mIsShared);
+  if (!mIsShared) {
     if (!mImageClient) {
       mImageClient = ImageClient::CreateImageClient(CompositableType::IMAGE,
                                                     WrBridge(),
