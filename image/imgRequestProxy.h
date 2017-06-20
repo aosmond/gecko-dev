@@ -127,6 +127,8 @@ public:
 
   virtual nsresult Clone(imgINotificationObserver* aObserver,
                          imgRequestProxy** aClone);
+  virtual nsresult SyncClone(imgINotificationObserver* aObserver,
+                             imgRequestProxy** aClone);
   nsresult GetStaticRequest(imgRequestProxy** aReturn);
 
   nsresult GetURI(ImageURL** aURI);
@@ -185,7 +187,8 @@ protected:
 
   nsresult PerformClone(imgINotificationObserver* aObserver,
                         imgRequestProxy* (aAllocFn)(imgRequestProxy*),
-                        imgRequestProxy** aClone);
+                        imgRequestProxy** aClone,
+                        bool aSyncNotify);
 
 public:
   NS_FORWARD_SAFE_NSITIMEDCHANNEL(TimedChannel())
@@ -236,6 +239,8 @@ public:
 
   virtual nsresult Clone(imgINotificationObserver* aObserver,
                          imgRequestProxy** aClone) override;
+  nsresult SyncClone(imgINotificationObserver* aObserver,
+                     imgRequestProxy** aClone) override;
 
 protected:
   friend imgRequestProxy* NewStaticProxy(imgRequestProxy*);

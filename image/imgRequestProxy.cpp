@@ -635,13 +635,20 @@ imgRequestProxy::Clone(imgINotificationObserver* aObserver,
 nsresult imgRequestProxy::Clone(imgINotificationObserver* aObserver,
                                 imgRequestProxy** aClone)
 {
-  return PerformClone(aObserver, NewProxy, aClone);
+  return PerformClone(aObserver, NewProxy, aClone, /* aSyncNotify */ false);
+}
+
+nsresult imgRequestProxy::SyncClone(imgINotificationObserver* aObserver,
+                                    imgRequestProxy** aClone)
+{
+  return PerformClone(aObserver, NewProxy, aClone, /* aSyncNotify */ true);
 }
 
 nsresult
 imgRequestProxy::PerformClone(imgINotificationObserver* aObserver,
                               imgRequestProxy* (aAllocFn)(imgRequestProxy*),
-                              imgRequestProxy** aClone)
+                              imgRequestProxy** aClone,
+                              bool aSyncNotify)
 {
   NS_PRECONDITION(aClone, "Null out param");
 
@@ -663,19 +670,19 @@ imgRequestProxy::PerformClone(imgINotificationObserver* aObserver,
     return rv;
   }
 
-  if (GetOwner() && GetOwner()->GetValidator()) {
-    clone->SetNotificationsDeferred(true);
-    GetOwner()->GetValidator()->AddProxy(clone);
-  }
-
   // Assign to *aClone before calling Notify so that if the caller expects to
   // only be notified for requests it's already holding pointers to it won't be
   // surprised.
   NS_ADDREF(*aClone = clone);
 
-  // This is wrong!!! We need to notify asynchronously, but there's code that
-  // assumes that we don't. This will be fixed in bug 580466.
-  clone->SyncNotifyListener();
+  if (GetOwner() && GetOwner()->GetValidator()) {
+    clone->SetNotificationsDeferred(true);
+    GetOwner()->GetValidator()->AddProxy(clone);
+  } else if (aSyncNotify) {
+    clone->SyncNotifyListener();
+  } else {
+    clone->NotifyListener();
+  }
 
   return NS_OK;
 }
@@ -1107,5 +1114,12 @@ nsresult
 imgRequestProxyStatic::Clone(imgINotificationObserver* aObserver,
                              imgRequestProxy** aClone)
 {
-  return PerformClone(aObserver, NewStaticProxy, aClone);
+  return PerformClone(aObserver, NewStaticProxy, aClone, /* aSyncNotify */ false);
+}
+
+nsresult
+imgRequestProxyStatic::SyncClone(imgINotificationObserver* aObserver,
+                                 imgRequestProxy** aClone)
+{
+  return PerformClone(aObserver, NewStaticProxy, aClone, /* aSyncNotify */ true);
 }
