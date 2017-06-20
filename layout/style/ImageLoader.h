@@ -35,8 +35,7 @@ public:
   typedef mozilla::css::ImageValue Image;
 
   explicit ImageLoader(nsIDocument* aDocument)
-  : mDocument(aDocument),
-    mInClone(false)
+  : mDocument(aDocument)
   {
     MOZ_ASSERT(mDocument);
   }
@@ -117,9 +116,6 @@ private:
   // not).  We'll need this when we go away to remove any requests associated
   // with our document from those Images.
   ImageHashSet mImages;
-
-  // Are we cloning?  If so, ignore any notifications we get.
-  bool mInClone;
 };
 
 } // namespace css
