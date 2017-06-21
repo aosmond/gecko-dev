@@ -145,6 +145,9 @@ DecoderFactory::CreateDecoder(DecoderType aType,
     WrapNotNull(new DecodedSurfaceProvider(aImage,
                                            surfaceKey,
                                            WrapNotNull(decoder)));
+  if (aDecoderFlags & DecoderFlags::IS_EXPLICIT) {
+    provider->Availability().SetExplicit();
+  }
 
   // Attempt to insert the surface provider into the surface cache right away so
   // we won't trigger any more decoders with the same parameters.
