@@ -35,6 +35,7 @@ public:
 
   // Methods inherited from Image
   nsresult GetNativeSizes(nsTArray<gfx::IntSize>& aNativeSizes) const override;
+  size_t GetNativeSizesLength() const override;
   virtual size_t SizeOfSourceWithComputedFallback(MallocSizeOf aMallocSizeOf)
     const override;
   virtual void CollectSizeOfSurfaces(nsTArray<SurfaceMemoryCounter>& aCounters,
