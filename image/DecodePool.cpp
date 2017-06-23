@@ -6,6 +6,7 @@
 #include "DecodePool.h"
 
 #include <algorithm>
+#include <queue>
 
 #include "mozilla/ClearOnShutdown.h"
 #include "mozilla/DebugOnly.h"
@@ -39,6 +40,37 @@ namespace image {
 /* static */ StaticRefPtr<DecodePool> DecodePool::sSingleton;
 /* static */ uint32_t DecodePool::sNumCores = 0;
 
+/**
+ * An IDecodingTask implementation for network IO events.
+ */
+class NetworkDecodingTask final : public IDecodingTask
+{
+public:
+  NS_INLINE_DECL_THREADSAFE_REFCOUNTING(NetworkDecodingTask, override)
+
+  explicit NetworkDecodingTask(already_AddRefed<nsIRunnable>&& aEvent)
+    : mEvent(aEvent)
+  {
+  }
+
+  void Run() override
+  {
+    MOZ_ASSERT(mEvent);
+    mEvent->Run();
+  }
+
+  bool ShouldPreferSyncRun() const override { return false; }
+
+  // Metadata decodes run at the highest priority because they block layout and
+  // page load.
+  TaskPriority Priority() const override { return TaskPriority::eHigh; }
+
+private:
+  virtual ~NetworkDecodingTask() { }
+
+  nsCOMPtr<nsIRunnable> mEvent;
+};
+
 NS_IMPL_ISUPPORTS(DecodePool, nsIObserver)
 
 struct Work
@@ -51,7 +83,7 @@ struct Work
   RefPtr<IDecodingTask> mTask;
 };
 
-class DecodePoolImpl
+class DecodePoolImpl final
 {
 public:
   MOZ_DECLARE_REFCOUNTED_TYPENAME(DecodePoolImpl)
@@ -71,6 +103,21 @@ public:
     MonitorAutoLock lock(mMonitor);
     bool success = CreateThread();
     MOZ_RELEASE_ASSERT(success, "Must create first image decoder thread!");
+  }
+
+  bool IsOnCurrentThread() const
+  {
+    MonitorAutoLock lock(mMonitor);
+    auto i = mThreads.Length();
+    while (i > 0) {
+      --i;
+      bool current = false;
+      nsresult rv = mThreads[i]->IsOnCurrentThread(&current);
+      if (NS_SUCCEEDED(rv) && current) {
+        return true;
+      }
+    }
+    return false;
   }
 
   /// Shut down the provided decode pool thread.
@@ -129,24 +176,23 @@ public:
   {
     MOZ_ASSERT(aTask);
     RefPtr<IDecodingTask> task(aTask);
-
     MonitorAutoLock lock(mMonitor);
 
-    if (mShuttingDown) {
+    if (MOZ_UNLIKELY(mShuttingDown)) {
       // Drop any new work on the floor if we're shutting down.
       return;
     }
 
     if (task->Priority() == TaskPriority::eHigh) {
-      mHighPriorityQueue.AppendElement(Move(task));
+      mHighPriorityQueue.push(Move(task));
     } else {
-      mLowPriorityQueue.AppendElement(Move(task));
+      mLowPriorityQueue.push(Move(task));
     }
 
     // If there are pending tasks, create more workers if and only if we have
     // not exceeded the capacity, and any previously created workers are ready.
     if (mAvailableThreads) {
-      size_t pending = mHighPriorityQueue.Length() + mLowPriorityQueue.Length();
+      size_t pending = mHighPriorityQueue.size() + mLowPriorityQueue.size();
       if (pending > mIdleThreads) {
         CreateThread();
       }
@@ -181,11 +227,11 @@ private:
 
     TimeDuration timeout = mIdleTimeout;
     do {
-      if (!mHighPriorityQueue.IsEmpty()) {
+      if (!mHighPriorityQueue.empty()) {
         return PopWorkFromQueue(mHighPriorityQueue);
       }
 
-      if (!mLowPriorityQueue.IsEmpty()) {
+      if (!mLowPriorityQueue.empty()) {
         return PopWorkFromQueue(mLowPriorityQueue);
       }
 
@@ -230,11 +276,12 @@ private:
 
   bool CreateThread();
 
-  Work PopWorkFromQueue(nsTArray<RefPtr<IDecodingTask>>& aQueue)
+  Work PopWorkFromQueue(std::queue<RefPtr<IDecodingTask>>& aQueue)
   {
     Work work;
     work.mType = Work::Type::TASK;
-    work.mTask = aQueue.PopLastElement();
+    work.mTask = aQueue.front().forget();
+    aQueue.pop();
 
     return work;
   }
@@ -250,8 +297,8 @@ private:
 
   // mMonitor guards everything below.
   mutable Monitor mMonitor;
-  nsTArray<RefPtr<IDecodingTask>> mHighPriorityQueue;
-  nsTArray<RefPtr<IDecodingTask>> mLowPriorityQueue;
+  std::queue<RefPtr<IDecodingTask>> mHighPriorityQueue;
+  std::queue<RefPtr<IDecodingTask>> mLowPriorityQueue;
   nsTArray<nsCOMPtr<nsIThread>> mThreads;
   TimeDuration mIdleTimeout;
   uint8_t mMaxIdleThreads;   // Maximum number of workers when idle.
@@ -356,7 +403,6 @@ DecodePool::NumberOfCores()
 }
 
 DecodePool::DecodePool()
-  : mMutex("image::DecodePool")
 {
   // Determine the number of threads we want.
   int32_t prefLimit = gfxPrefs::ImageMTDecodingLimit();
@@ -402,11 +448,6 @@ DecodePool::DecodePool()
   // Initialize the thread pool.
   mImpl = new DecodePoolImpl(limit, idleLimit, idleTimeout);
 
-  // Initialize the I/O thread.
-  nsresult rv = NS_NewNamedThread("ImageIO", getter_AddRefs(mIOThread));
-  MOZ_RELEASE_ASSERT(NS_SUCCEEDED(rv) && mIOThread,
-                     "Should successfully create image I/O thread");
-
   nsCOMPtr<nsIObserverService> obsSvc = services::GetObserverService();
   if (obsSvc) {
     obsSvc->AddObserver(this, "xpcom-shutdown-threads", false);
@@ -423,19 +464,7 @@ DecodePool::Observe(nsISupports*, const char* aTopic, const char16_t*)
 {
   MOZ_ASSERT(strcmp(aTopic, "xpcom-shutdown-threads") == 0, "Unexpected topic");
 
-  nsCOMPtr<nsIThread> ioThread;
-
-  {
-    MutexAutoLock lock(mMutex);
-    ioThread.swap(mIOThread);
-  }
-
   mImpl->Shutdown();
-
-  if (ioThread) {
-    ioThread->Shutdown();
-  }
-
   return NS_OK;
 }
 
@@ -482,11 +511,48 @@ DecodePool::SyncRunIfPossible(IDecodingTask* aTask, const nsCString& aURI)
   aTask->Run();
 }
 
+bool
+DecodePool::IsOnCurrentThreadInfallible()
+{
+  return mImpl->IsOnCurrentThread();
+}
+
+NS_IMETHODIMP
+DecodePool::IsOnCurrentThread(bool* aRv)
+{
+  *aRv = mImpl->IsOnCurrentThread();
+  return NS_OK;
+}
+
+NS_IMETHODIMP
+DecodePool::Dispatch(already_AddRefed<nsIRunnable> aEvent, uint32_t aFlags)
+{
+  if (NS_WARN_IF(aFlags != NS_DISPATCH_NORMAL)) {
+    MOZ_ASSERT_UNREACHABLE("Cannot handle non-default flags!");
+    return NS_ERROR_FAILURE;
+  }
+
+  mImpl->PushWork(new NetworkDecodingTask(Move(aEvent)));
+  return NS_OK;
+}
+
+NS_IMETHODIMP
+DecodePool::DispatchFromScript(nsIRunnable* aEvent, uint32_t aFlags)
+{
+  nsCOMPtr<nsIRunnable> event(aEvent);
+  return Dispatch(event.forget(), aFlags);
+}
+
+NS_IMETHODIMP
+DecodePool::DelayedDispatch(already_AddRefed<nsIRunnable> aEvent, uint32_t aDelay)
+{
+  return NS_ERROR_NOT_IMPLEMENTED;
+}
+
 already_AddRefed<nsIEventTarget>
 DecodePool::GetIOEventTarget()
 {
-  MutexAutoLock threadPoolLock(mMutex);
-  nsCOMPtr<nsIEventTarget> target = do_QueryInterface(mIOThread);
+  nsCOMPtr<nsIEventTarget> target = this;
   return target.forget();
 }
 

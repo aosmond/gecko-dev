@@ -302,19 +302,11 @@ SourceBuffer::AddWaitingConsumer(IResumable* aConsumer)
 }
 
 void
-SourceBuffer::ResumeWaitingConsumers()
+SourceBuffer::ResumeWaitingConsumers(const nsTArray<RefPtr<IResumable>>& aConsumers)
 {
-  mMutex.AssertCurrentThreadOwns();
-
-  if (mWaitingConsumers.Length() == 0) {
-    return;
+  for (uint32_t i = 0 ; i < aConsumers.Length() ; ++i) {
+    aConsumers[i]->Resume();
   }
-
-  for (uint32_t i = 0 ; i < mWaitingConsumers.Length() ; ++i) {
-    mWaitingConsumers[i]->Resume();
-  }
-
-  mWaitingConsumers.Clear();
 }
 
 nsresult
@@ -407,6 +399,7 @@ SourceBuffer::Append(const char* aData, size_t aLength)
   }
 
   // Update shared data structures.
+  nsTArray<RefPtr<IResumable>> waitingConsumers;
   {
     MutexAutoLock lock(mMutex);
 
@@ -429,10 +422,11 @@ SourceBuffer::Append(const char* aData, size_t aLength)
       }
     }
 
-    // Resume any waiting readers now that there's new data.
-    ResumeWaitingConsumers();
+    waitingConsumers = Move(mWaitingConsumers);
   }
 
+  // Resume any waiting readers now that there's new data.
+  ResumeWaitingConsumers(waitingConsumers);
   return NS_OK;
 }
 
@@ -486,30 +480,39 @@ SourceBuffer::AppendFromInputStream(nsIInputStream* aInputStream,
 void
 SourceBuffer::Complete(nsresult aStatus)
 {
-  MutexAutoLock lock(mMutex);
+  nsTArray<RefPtr<IResumable>> waitingConsumers;
 
-  if (MOZ_UNLIKELY(mStatus)) {
-    MOZ_ASSERT_UNREACHABLE("Called Complete more than once");
-    return;
+  {
+    MutexAutoLock lock(mMutex);
+
+    if (MOZ_UNLIKELY(mStatus)) {
+      MOZ_ASSERT_UNREACHABLE("Called Complete more than once");
+      return;
+    }
+
+    if (MOZ_UNLIKELY(NS_SUCCEEDED(aStatus) && IsEmpty())) {
+      // It's illegal to succeed without writing anything.
+      aStatus = NS_ERROR_FAILURE;
+    }
+
+    mStatus = Some(aStatus);
+    waitingConsumers = Move(mWaitingConsumers);
   }
-
-  if (MOZ_UNLIKELY(NS_SUCCEEDED(aStatus) && IsEmpty())) {
-    // It's illegal to succeed without writing anything.
-    aStatus = NS_ERROR_FAILURE;
-  }
-
-  mStatus = Some(aStatus);
 
   // Resume any waiting consumers now that we're complete.
-  ResumeWaitingConsumers();
+  ResumeWaitingConsumers(waitingConsumers);
 
-  // If we still have active consumers, just return.
-  if (mConsumerCount > 0) {
-    return;
+  {
+    MutexAutoLock lock(mMutex);
+
+    // If we still have active consumers, just return.
+    if (mConsumerCount > 0) {
+      return;
+    }
+
+    // Attempt to compact our buffer down to a single chunk.
+    Compact();
   }
-
-  // Attempt to compact our buffer down to a single chunk.
-  Compact();
 }
 
 bool

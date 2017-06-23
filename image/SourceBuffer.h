@@ -465,7 +465,7 @@ private:
   //////////////////////////////////////////////////////////////////////////////
 
   void AddWaitingConsumer(IResumable* aConsumer);
-  void ResumeWaitingConsumers();
+  void ResumeWaitingConsumers(const nsTArray<RefPtr<IResumable>>& aConsumers);
 
   typedef SourceBufferIterator::State State;
 
