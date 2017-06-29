@@ -148,8 +148,10 @@ public:
   bool IsAvailable() const { return mIsAvailable; }
   bool IsPlaceholder() const { return !mIsAvailable; }
   bool IsExplicit() const { return mIsExplicit; }
+  bool IsPruned() const { return mIsPruned; }
 
   void SetExplicit() { mIsExplicit = true; }
+  void SetPruned() { mIsPruned = true; }
 
 private:
   friend class SurfaceCacheImpl;
@@ -157,12 +159,14 @@ private:
   explicit AvailabilityState(bool aIsAvailable)
     : mIsAvailable(aIsAvailable)
     , mIsExplicit(false)
+    , mIsPruned(false)
   { }
 
   void SetAvailable() { mIsAvailable = true; }
 
   bool mIsAvailable : 1;
   bool mIsExplicit : 1;
+  bool mIsPruned : 1;
 };
 
 enum class InsertOutcome : uint8_t {
@@ -403,15 +407,6 @@ struct SurfaceCache
    * @param aImageKey  The image which should be removed from the cache.
    */
   static void RemoveImage(const ImageKey aImageKey);
-
-  /**
-   * Attempts to remove cache entries (including placeholders) associated with
-   * the given image from the cache, assuming there is an equivalent entry that
-   * it is able substitute that entry with.
-   *
-   * @param aImageKey  The image whose cache which should be pruned.
-   */
-  static void PruneImage(const ImageKey aImageKey);
 
   /**
    * Evicts all evictable entries from the cache.
