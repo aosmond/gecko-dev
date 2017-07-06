@@ -399,6 +399,17 @@ nsImageFrame::IsPendingLoad(imgIRequest* aRequest) const
   return requestType != nsIImageLoadingContent::CURRENT_REQUEST;
 }
 
+bool
+nsImageFrame::HasCachedError()
+{
+  // If we were showing the broken icon, we don't want to swap it out until we
+  // actually have new image data to display. This avoids flickering when the
+  // website decides to change the source, but that too is broken.
+  nsCOMPtr<nsIImageLoadingContent> imageLoader(do_QueryInterface(mContent));
+  NS_ASSERTION(imageLoader, "No image loading content?");
+  return imageLoader->HasCachedError();
+}
+
 nsRect
 nsImageFrame::SourceRectToDest(const nsIntRect& aRect)
 {
@@ -533,7 +544,7 @@ nsImageFrame::Notify(imgIRequest* aRequest,
 }
 
 static bool
-SizeIsAvailable(imgIRequest* aRequest)
+SizeIsAvailable(imgIRequest* aRequest, bool aWasBroken = false)
 {
   if (!aRequest)
     return false;
@@ -585,11 +596,13 @@ nsImageFrame::OnSizeAvailable(imgIRequest* aRequest, imgIContainer* aImage)
     // Now we need to reflow if we have an unconstrained size and have
     // already gotten the initial reflow
     if (!(mState & IMAGE_SIZECONSTRAINED)) {
-      nsIPresShell *presShell = presContext->GetPresShell();
-      NS_ASSERTION(presShell, "No PresShell.");
-      if (presShell) {
-        presShell->FrameNeedsReflow(this, nsIPresShell::eStyleChange,
-                                    NS_FRAME_IS_DIRTY);
+      if (!HasCachedError()) { // Wait for frame update if image was broken.
+        nsIPresShell *presShell = presContext->GetPresShell();
+        NS_ASSERTION(presShell, "No PresShell.");
+        if (presShell) {
+          presShell->FrameNeedsReflow(this, nsIPresShell::eStyleChange,
+                                      NS_FRAME_IS_DIRTY);
+        }
       }
     } else {
       // We've already gotten the initial reflow, and our size hasn't changed,
@@ -611,6 +624,21 @@ nsImageFrame::OnFrameUpdate(imgIRequest* aRequest, const nsIntRect* aRect)
   if (!(mState & IMAGE_GOTINITIALREFLOW)) {
     // Don't bother to do anything; we have a reflow coming up!
     return NS_OK;
+  }
+
+  if (!aRect->IsEmpty() && HasCachedError()) {
+    // We now have frame data to display, so the cached error is about to be
+    // cleared. We need to issue a reflow in case we suppressed it due to the
+    // cached error.
+    if (!(mState & IMAGE_SIZECONSTRAINED)) {
+      nsIPresShell *presShell = PresContext()->GetPresShell();
+      if (presShell) {
+        presShell->FrameNeedsReflow(this, nsIPresShell::eStyleChange,
+                                    NS_FRAME_IS_DIRTY);
+      }
+    }
+    // Update border+content to account for image change
+    InvalidateFrame();
   }
 
   if (mFirstFrameComplete && !StyleVisibility()->IsVisible()) {
@@ -698,10 +726,12 @@ nsImageFrame::NotifyNewCurrentRequest(imgIRequest *aRequest,
   if (mState & IMAGE_GOTINITIALREFLOW) { // do nothing if we haven't gotten the initial reflow yet
     if (intrinsicSizeChanged) {
       if (!(mState & IMAGE_SIZECONSTRAINED)) {
-        nsIPresShell *presShell = PresContext()->GetPresShell();
-        if (presShell) {
-          presShell->FrameNeedsReflow(this, nsIPresShell::eStyleChange,
-                                      NS_FRAME_IS_DIRTY);
+        if (!HasCachedError()) { // Wait for frame update if image was broken.
+          nsIPresShell *presShell = PresContext()->GetPresShell();
+          if (presShell) {
+            presShell->FrameNeedsReflow(this, nsIPresShell::eStyleChange,
+                                        NS_FRAME_IS_DIRTY);
+          }
         }
       } else {
         // We've already gotten the initial reflow, and our size hasn't changed,
@@ -806,6 +836,7 @@ nsImageFrame::EnsureIntrinsicSizeAndRatio()
         // check for broken images. valid null images (eg. img src="") are
         // not considered broken because they have no image requests
         nsCOMPtr<nsIImageLoadingContent> imageLoader = do_QueryInterface(mContent);
+        bool hasCachedError = false;
         if (imageLoader) {
           nsCOMPtr<imgIRequest> currentRequest;
           imageLoader->GetRequest(nsIImageLoadingContent::CURRENT_REQUEST,
@@ -822,9 +853,11 @@ nsImageFrame::EnsureIntrinsicSizeAndRatio()
             imageLoader->GetImageBlockingStatus(&imageBlockingStatus);
             imageInvalid = imageBlockingStatus != nsIContentPolicy::ACCEPT;
           }
+
+          hasCachedError = imageLoader->HasCachedError();
         }
         // invalid image specified. make the image big enough for the "broken" icon
-        if (imageInvalid) {
+        if (imageInvalid || hasCachedError) {
           nscoord edgeLengthToUse =
             nsPresContext::CSSPixelsToAppUnits(
               ICON_SIZE + (2 * (ICON_PADDING + ALT_BORDER_WIDTH)));
@@ -1034,7 +1067,7 @@ nsImageFrame::Reflow(nsPresContext*          aPresContext,
 
   aMetrics.SetOverflowAreasToDesiredBounds();
   EventStates contentState = mContent->AsElement()->State();
-  bool imageOK = IMAGE_OK(contentState, true);
+  bool imageOK = IMAGE_OK(contentState, !imageLoader->HasCachedError());
 
   // Determine if the size is available
   bool haveSize = false;
@@ -1352,7 +1385,7 @@ nsImageFrame::DisplayAltFeedback(gfxContext& aRenderingContext,
   MOZ_ASSERT(gIconLoad, "How did we succeed in Init then?");
 
   // Whether we draw the broken or loading icon.
-  bool isLoading = IMAGE_OK(GetContent()->AsElement()->State(), true);
+  bool isLoading = IMAGE_OK(GetContent()->AsElement()->State(), !HasCachedError());
 
   // Calculate the inner area
   nsRect  inner = GetInnerArea() + aPt;
@@ -1812,7 +1845,7 @@ nsImageFrame::BuildDisplayList(nsDisplayListBuilder*   aBuilder,
     }
 
     EventStates contentState = mContent->AsElement()->State();
-    bool imageOK = IMAGE_OK(contentState, true);
+    bool imageOK = IMAGE_OK(contentState, !imageLoader->HasCachedError());
 
     // XXX(seth): The SizeIsAvailable check here should not be necessary - the
     // intention is that a non-null mImage means we have a size, but there is

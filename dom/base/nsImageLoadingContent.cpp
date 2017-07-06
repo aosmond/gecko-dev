@@ -92,6 +92,7 @@ nsImageLoadingContent::nsImageLoadingContent()
     mLoading(false),
     // mBroken starts out true, since an image without a URI is broken....
     mBroken(true),
+    mHasCachedError(false),
     mUserDisabled(false),
     mSuppressed(false),
     mNewRequestsWillNeedAnimationReset(false),
@@ -167,6 +168,14 @@ nsImageLoadingContent::Notify(imgIRequest* aRequest,
     for (auto& observer : observers) {
         observer->Notify(aRequest, aType, aData);
     }
+  }
+
+  if (aType == imgINotificationObserver::FRAME_UPDATE &&
+      aData && !aData->IsEmpty()) {
+    // If we previously encountered an error, and we now have a partial frame,
+    // we can safefully swap the broken icon with actual data and avoid
+    // flickering.
+    mHasCachedError = false;
   }
 
   if (aType == imgINotificationObserver::SIZE_AVAILABLE) {
@@ -1051,7 +1060,7 @@ nsImageLoadingContent::UpdateImageState(bool aNotify)
     uint32_t currentLoadStatus;
     nsresult rv = mCurrentRequest->GetImageStatus(&currentLoadStatus);
     if (NS_FAILED(rv) || (currentLoadStatus & imgIRequest::STATUS_ERROR)) {
-      mBroken = true;
+      mBroken = mHasCachedError = true;
     } else if (!(currentLoadStatus & imgIRequest::STATUS_SIZE_AVAILABLE)) {
       mLoading = true;
     }
@@ -1477,6 +1486,12 @@ nsImageLoadingContent::OnVisibilityChange(Visibility aNewVisibility,
   }
 }
 
+bool
+nsImageLoadingContent::HasCachedError()
+{
+  return mHasCachedError;
+}
+
 void
 nsImageLoadingContent::TrackImage(imgIRequest* aImage,
                                   nsIFrame* aFrame /*= nullptr */)
@@ -1577,6 +1592,7 @@ nsImageLoadingContent::CreateStaticImageClone(nsImageLoadingContent* aDest) cons
   aDest->mIsImageStateForced = mIsImageStateForced;
   aDest->mLoading = mLoading;
   aDest->mBroken = mBroken;
+  aDest->mHasCachedError = mHasCachedError;
   aDest->mUserDisabled = mUserDisabled;
   aDest->mSuppressed = mSuppressed;
 }

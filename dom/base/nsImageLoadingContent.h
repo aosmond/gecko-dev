@@ -434,6 +434,7 @@ private:
    */
   bool mLoading : 1;
   bool mBroken : 1;
+  bool mHasCachedError : 1;
   bool mUserDisabled : 1;
   bool mSuppressed : 1;
 

@@ -199,4 +199,11 @@ interface nsIImageLoadingContent : imgINotificationObserver
    */
   [noscript, notxpcom] void onVisibilityChange(in Visibility aNewVisibility,
                                                in MaybeOnNonvisible aNonvisibleAction);
+
+  /**
+   * Returns whether or not there is a cached error. If an image request fails,
+   * then the error will be remember until a new image request yields a frame
+   * update with data to display.
+   */
+  [noscript, notxpcom] bool hasCachedError();
 };

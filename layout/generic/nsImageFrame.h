@@ -308,6 +308,11 @@ private:
   bool IsPendingLoad(imgIRequest* aRequest) const;
 
   /**
+   * Helper function to check whether or not the image loader has previously
+   * encountered an error, and has yet to successfully decode a new image. */
+  bool HasCachedError();
+
+  /**
    * Function to convert a dirty rect in the source image to a dirty
    * rect for the image frame.
    */
