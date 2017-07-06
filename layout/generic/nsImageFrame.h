@@ -244,6 +244,7 @@ protected:
 
   nsresult OnSizeAvailable(imgIRequest* aRequest, imgIContainer* aImage);
   nsresult OnFrameUpdate(imgIRequest* aRequest, const nsIntRect* aRect);
+  nsresult OnFrameComplete(imgIRequest* aRequest);
   nsresult OnLoadComplete(imgIRequest* aRequest, nsresult aStatus);
 
   /**
@@ -339,6 +340,7 @@ private:
   bool mFirstFrameComplete;
   bool mReflowCallbackPosted;
   bool mForceSyncDecoding;
+  bool mWasBroken;
 
   static nsIIOService* sIOService;
   

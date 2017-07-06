@@ -144,6 +144,7 @@ nsImageFrame::nsImageFrame(nsStyleContext* aContext, ClassID aID)
   , mFirstFrameComplete(false)
   , mReflowCallbackPosted(false)
   , mForceSyncDecoding(false)
+  , mWasBroken(false)
 {
   EnableVisibilityTracking();
 
@@ -517,7 +518,7 @@ nsImageFrame::Notify(imgIRequest* aRequest,
   }
 
   if (aType == imgINotificationObserver::FRAME_COMPLETE) {
-    mFirstFrameComplete = true;
+    return OnFrameComplete(aRequest);
   }
 
   if (aType == imgINotificationObserver::LOAD_COMPLETE) {
@@ -532,7 +533,7 @@ nsImageFrame::Notify(imgIRequest* aRequest,
 }
 
 static bool
-SizeIsAvailable(imgIRequest* aRequest)
+SizeIsAvailable(imgIRequest* aRequest, bool aWasBroken = false)
 {
   if (!aRequest)
     return false;
@@ -587,6 +588,7 @@ nsImageFrame::OnSizeAvailable(imgIRequest* aRequest, imgIContainer* aImage)
       nsIPresShell *presShell = presContext->GetPresShell();
       NS_ASSERTION(presShell, "No PresShell.");
       if (presShell) { 
+        printf_stderr("[AO] [%p] nsImageFrame::OnSizeAvailable -- reflow, has image %d\n", this, !!mImage);
         presShell->FrameNeedsReflow(this, nsIPresShell::eStyleChange,
                                     NS_FRAME_IS_DIRTY);
       }
@@ -633,6 +635,48 @@ nsImageFrame::OnFrameUpdate(imgIRequest* aRequest, const nsIntRect* aRect)
 
   nsRect frameInvalidRect = SourceRectToDest(layerInvalidRect);
   InvalidateSelf(&layerInvalidRect, &frameInvalidRect);
+  return NS_OK;
+}
+
+nsresult
+nsImageFrame::OnFrameComplete(imgIRequest* aRequest)
+{
+  mFirstFrameComplete = true;
+
+  if (!mWasBroken) {
+    return NS_OK;
+  }
+
+  printf_stderr("[AO] [%p] nsImageFrame::OnFrameComplete -- was broken\n", this);
+
+  nsCOMPtr<nsIImageLoadingContent> imageLoader(do_QueryInterface(mContent));
+  NS_ASSERTION(imageLoader, "No image loading content?");
+
+  int32_t requestType = nsIImageLoadingContent::UNKNOWN_REQUEST;
+  imageLoader->GetRequestType(aRequest, &requestType);
+
+  if (requestType != nsIImageLoadingContent::CURRENT_REQUEST &&
+      requestType != nsIImageLoadingContent::PENDING_REQUEST)
+  {
+    printf_stderr("[AO] [%p] nsImageFrame::OnFrameComplete -- bad request\n", this);
+    return NS_OK;
+  }
+
+  mWasBroken = false;
+
+  if (mState & IMAGE_GOTINITIALREFLOW) { // do nothing if we haven't gotten the initial reflow yet
+    if (!(mState & IMAGE_SIZECONSTRAINED)) {
+      nsIPresShell *presShell = PresContext()->GetPresShell();
+      if (presShell) {
+        printf_stderr("[AO] [%p] nsImageFrame::OnFrameComplete -- reflow, has image %d\n", this, !!mImage);
+        presShell->FrameNeedsReflow(this, nsIPresShell::eStyleChange,
+                                    NS_FRAME_IS_DIRTY);
+      }
+    }
+    // Update border+content to account for image change
+    InvalidateFrame();
+  }
+
   return NS_OK;
 }
 
@@ -697,10 +741,13 @@ nsImageFrame::NotifyNewCurrentRequest(imgIRequest *aRequest,
   if (mState & IMAGE_GOTINITIALREFLOW) { // do nothing if we haven't gotten the initial reflow yet
     if (intrinsicSizeChanged) {
       if (!(mState & IMAGE_SIZECONSTRAINED)) {
-        nsIPresShell *presShell = PresContext()->GetPresShell();
-        if (presShell) {
-          presShell->FrameNeedsReflow(this, nsIPresShell::eStyleChange,
-                                      NS_FRAME_IS_DIRTY);
+        if (!mWasBroken) { // do nothing if we were broken, wait until we get a frame
+          nsIPresShell *presShell = PresContext()->GetPresShell();
+          if (presShell) {
+            printf_stderr("[AO] [%p] nsImageFrame::NotifyNewCurrentRequest -- reflow, has image %d\n", this, !!mImage);
+            presShell->FrameNeedsReflow(this, nsIPresShell::eStyleChange,
+                                        NS_FRAME_IS_DIRTY);
+          }
         }
       } else {
         // We've already gotten the initial reflow, and our size hasn't changed,
@@ -1041,7 +1088,7 @@ nsImageFrame::Reflow(nsPresContext*          aPresContext,
     haveSize = true;
   }
 
-  if (!imageOK || !haveSize) {
+  if (!imageOK || !haveSize || mWasBroken) {
     nsRect altFeedbackSize(0, 0,
                            nsPresContext::CSSPixelsToAppUnits(ICON_SIZE+2*(ICON_PADDING+ALT_BORDER_WIDTH)),
                            nsPresContext::CSSPixelsToAppUnits(ICON_SIZE+2*(ICON_PADDING+ALT_BORDER_WIDTH)));
@@ -1410,9 +1457,17 @@ nsImageFrame::DisplayAltFeedback(gfxContext& aRenderingContext,
   } else {
     nscoord size = nsPresContext::CSSPixelsToAppUnits(ICON_SIZE);
 
-    imgIRequest* request = isLoading
+    imgIRequest* request = isLoading && !mWasBroken
                               ? nsImageFrame::gIconLoad->mLoadingImage
                               : nsImageFrame::gIconLoad->mBrokenImage;
+
+    // If we are now displaying the broken image, we don't want to switch
+    // back to the loading image. This prevents us from flickering between
+    // loading and broken.
+    if (!isLoading && !mWasBroken) {
+      printf_stderr("[AO] [%p] nsImageFrame::DisplayAltFeedback -- was broken\n", this);
+      mWasBroken = true;
+    }
 
     // If we weren't previously displaying an icon, register ourselves
     // as an observer for load and animation updates and flag that we're
@@ -1786,7 +1841,7 @@ nsImageFrame::BuildDisplayList(nsDisplayListBuilder*   aBuilder,
     // XXX(seth): The SizeIsAvailable check here should not be necessary - the
     // intention is that a non-null mImage means we have a size, but there is
     // currently some code that violates this invariant.
-    if (!imageOK || !mImage || !SizeIsAvailable(currentRequest)) {
+    if (!imageOK || !mImage || mWasBroken || !SizeIsAvailable(currentRequest)) {
       // No image yet, or image load failed. Draw the alt-text and an icon
       // indicating the status
       aLists.Content()->AppendNewToTop(new (aBuilder)
@@ -2109,6 +2164,7 @@ nsImageFrame::AttributeChanged(int32_t aNameSpaceID,
   }
   if (nsGkAtoms::alt == aAttribute)
   {
+    printf_stderr("[AO] [%p] nsImageFrame::AttributeChanged -- reflow\n", this);
     PresContext()->PresShell()->FrameNeedsReflow(this,
                                                  nsIPresShell::eStyleChange,
                                                  NS_FRAME_IS_DIRTY);
