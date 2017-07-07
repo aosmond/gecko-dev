@@ -92,6 +92,7 @@ nsImageLoadingContent::nsImageLoadingContent()
     mLoading(false),
     // mBroken starts out true, since an image without a URI is broken....
     mBroken(true),
+    mHadError(false),
     mUserDisabled(false),
     mSuppressed(false),
     mNewRequestsWillNeedAnimationReset(false),
@@ -148,6 +149,11 @@ nsImageLoadingContent::Notify(imgIRequest* aRequest,
 
     NS_PRECONDITION(aRequest == mCurrentRequest || aRequest == mPendingRequest,
                     "Unknown request");
+  }
+
+  if (aType == imgINotificationObserver::FRAME_COMPLETE && mHadError) {
+    printf_stderr("[AO] [%p] nsImageLoadingContent::Notify -- clear had error\n", this);
+    mHadError = false;
   }
 
   {
@@ -1052,6 +1058,8 @@ nsImageLoadingContent::UpdateImageState(bool aNotify)
     nsresult rv = mCurrentRequest->GetImageStatus(&currentLoadStatus);
     if (NS_FAILED(rv) || (currentLoadStatus & imgIRequest::STATUS_ERROR)) {
       mBroken = true;
+      mHadError = true;
+      printf_stderr("[AO] [%p] nsImageLoadingContent::UpdateImageState -- set had error\n", this);
     } else if (!(currentLoadStatus & imgIRequest::STATUS_SIZE_AVAILABLE)) {
       mLoading = true;
     }
@@ -1477,6 +1485,12 @@ nsImageLoadingContent::OnVisibilityChange(Visibility aNewVisibility,
   }
 }
 
+bool
+nsImageLoadingContent::HadError()
+{
+  return mHadError;
+}
+
 void
 nsImageLoadingContent::TrackImage(imgIRequest* aImage,
                                   nsIFrame* aFrame /*= nullptr */)
@@ -1577,6 +1591,7 @@ nsImageLoadingContent::CreateStaticImageClone(nsImageLoadingContent* aDest) cons
   aDest->mIsImageStateForced = mIsImageStateForced;
   aDest->mLoading = mLoading;
   aDest->mBroken = mBroken;
+  aDest->mHadError = mHadError;
   aDest->mUserDisabled = mUserDisabled;
   aDest->mSuppressed = mSuppressed;
 }

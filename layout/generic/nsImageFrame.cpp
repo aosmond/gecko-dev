@@ -269,6 +269,11 @@ nsImageFrame::Init(nsIContent*       aContent,
     MOZ_CRASH("Why do we have an nsImageFrame here at all?");
   }
 
+  mWasBroken = imageLoader->HadError();
+  if (mWasBroken) {
+    printf_stderr("[AO] [%p] nsImageFrame::Init -- was broken inherited\n", this);
+  }
+
   imageLoader->AddObserver(mListener);
 
   nsPresContext *aPresContext = PresContext();
@@ -585,12 +590,14 @@ nsImageFrame::OnSizeAvailable(imgIRequest* aRequest, imgIContainer* aImage)
     // Now we need to reflow if we have an unconstrained size and have
     // already gotten the initial reflow
     if (!(mState & IMAGE_SIZECONSTRAINED)) { 
-      nsIPresShell *presShell = presContext->GetPresShell();
-      NS_ASSERTION(presShell, "No PresShell.");
-      if (presShell) { 
-        printf_stderr("[AO] [%p] nsImageFrame::OnSizeAvailable -- reflow, has image %d\n", this, !!mImage);
-        presShell->FrameNeedsReflow(this, nsIPresShell::eStyleChange,
-                                    NS_FRAME_IS_DIRTY);
+      if (!mWasBroken) {
+        nsIPresShell *presShell = presContext->GetPresShell();
+        NS_ASSERTION(presShell, "No PresShell.");
+        if (presShell) { 
+          printf_stderr("[AO] [%p] nsImageFrame::OnSizeAvailable -- reflow, has image %d\n", this, !!mImage);
+          presShell->FrameNeedsReflow(this, nsIPresShell::eStyleChange,
+                                      NS_FRAME_IS_DIRTY);
+        }
       }
     } else {
       // We've already gotten the initial reflow, and our size hasn't changed,
@@ -870,7 +877,7 @@ nsImageFrame::EnsureIntrinsicSizeAndRatio()
           }
         }
         // invalid image specified. make the image big enough for the "broken" icon
-        if (imageInvalid) {
+        if (imageInvalid || mWasBroken) {
           nscoord edgeLengthToUse =
             nsPresContext::CSSPixelsToAppUnits(
               ICON_SIZE + (2 * (ICON_PADDING + ALT_BORDER_WIDTH)));
@@ -1398,7 +1405,7 @@ nsImageFrame::DisplayAltFeedback(gfxContext& aRenderingContext,
   MOZ_ASSERT(gIconLoad, "How did we succeed in Init then?");
 
   // Whether we draw the broken or loading icon.
-  bool isLoading = IMAGE_OK(GetContent()->AsElement()->State(), true);
+  bool isLoading = IMAGE_OK(GetContent()->AsElement()->State(), !mWasBroken);
 
   // Calculate the inner area
   nsRect  inner = GetInnerArea() + aPt;
@@ -1415,6 +1422,7 @@ nsImageFrame::DisplayAltFeedback(gfxContext& aRenderingContext,
   // Make sure we have enough room to actually render the border within
   // our frame bounds
   if ((inner.width < 2 * borderEdgeWidth) || (inner.height < 2 * borderEdgeWidth)) {
+    printf_stderr("[AO] [%p] nsImageFrame::DisplayAltFeedback -- too small for border\n", this);
     return DrawResult::SUCCESS;
   }
 
@@ -1438,6 +1446,7 @@ nsImageFrame::DisplayAltFeedback(gfxContext& aRenderingContext,
   inner.Deflate(nsPresContext::CSSPixelsToAppUnits(ICON_PADDING+ALT_BORDER_WIDTH), 
                 nsPresContext::CSSPixelsToAppUnits(ICON_PADDING+ALT_BORDER_WIDTH));
   if (inner.IsEmpty()) {
+    printf_stderr("[AO] [%p] nsImageFrame::DisplayAltFeedback -- empty after deflate\n", this);
     return DrawResult::SUCCESS;
   }
 
@@ -1453,6 +1462,7 @@ nsImageFrame::DisplayAltFeedback(gfxContext& aRenderingContext,
   // Check if we should display image placeholders
   if (!gIconLoad->mPrefShowPlaceholders ||
       (isLoading && !gIconLoad->mPrefShowLoadingPlaceholder)) {
+    printf_stderr("[AO] [%p] nsImageFrame::DisplayAltFeedback -- disabled by pref\n", this);
     result = DrawResult::SUCCESS;
   } else {
     nscoord size = nsPresContext::CSSPixelsToAppUnits(ICON_SIZE);
