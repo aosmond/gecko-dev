@@ -333,6 +333,13 @@ protected:
     return MakePair(DrawResult::BAD_IMAGE, RefPtr<gfx::SourceSurface>());
   }
 
+  virtual gfx::IntSize GetImageContainerSize(layers::LayerManager* aManager,
+                                             const gfx::IntSize& aSize,
+                                             uint32_t aFlags)
+  {
+    return gfx::IntSize(0, 0);
+  }
+
   already_AddRefed<layers::ImageContainer>
     GetImageContainerImpl(layers::LayerManager* aManager,
                           const gfx::IntSize& aSize,
