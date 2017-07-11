@@ -344,6 +344,18 @@ protected:
     return MakePair(DrawResult::BAD_IMAGE, RefPtr<gfx::SourceSurface>());
   }
 
+  /**
+   * Calculate the size of the image to be used in an image container, given the
+   * requested size. Different types of images will have different constraints
+   * (e.g. a raster image cannot upscale, but an SVG can).
+   */
+  virtual gfx::IntSize GetImageContainerSize(layers::LayerManager* aManager,
+                                             const gfx::IntSize& aSize,
+                                             uint32_t aFlags)
+  {
+    return gfx::IntSize(0, 0);
+  }
+
   already_AddRefed<layers::ImageContainer>
     GetImageContainerImpl(layers::LayerManager* aManager,
                           const gfx::IntSize& aSize,
