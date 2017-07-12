@@ -79,6 +79,7 @@ public:
 
 private:
   LookupResult(const LookupResult&) = delete;
+  LookupResult& operator=(const LookupResult& aOther) = delete;
 
   DrawableSurface mSurface;
   MatchType mMatchType;

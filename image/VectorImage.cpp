@@ -718,15 +718,16 @@ VectorImage::GetFrameAtSize(const IntSize& aSize,
                             uint32_t aWhichFrame,
                             uint32_t aFlags)
 {
-  RefPtr<SourceSurface> surf =
-    GetFrameInternal(aSize, aWhichFrame, aFlags).second().forget();
+  auto result = GetFrameInternal(aSize, aWhichFrame, aFlags);
+  RefPtr<SourceSurface> surf = Get<2>(result).forget();
+
   // If we are here, it suggests the image is embedded in a canvas or some
   // other path besides layers, and we won't need the file handle.
   MarkSurfaceShared(surf);
   return surf.forget();
 }
 
-Pair<DrawResult, RefPtr<SourceSurface>>
+Tuple<DrawResult, MatchType, RefPtr<SourceSurface>>
 VectorImage::GetFrameInternal(const IntSize& aSize,
                               uint32_t aWhichFrame,
                               uint32_t aFlags)
@@ -734,26 +735,36 @@ VectorImage::GetFrameInternal(const IntSize& aSize,
   MOZ_ASSERT(aWhichFrame <= FRAME_MAX_VALUE);
 
   if (aSize.IsEmpty() || aWhichFrame > FRAME_MAX_VALUE) {
-    return MakePair(DrawResult::BAD_ARGS, RefPtr<SourceSurface>());
+    return MakeTuple(DrawResult::BAD_ARGS, MatchType::NOT_FOUND,
+                     RefPtr<SourceSurface>());
   }
 
   if (mError) {
-    return MakePair(DrawResult::BAD_IMAGE, RefPtr<SourceSurface>());
+    return MakeTuple(DrawResult::BAD_IMAGE, MatchType::NOT_FOUND,
+                     RefPtr<SourceSurface>());
   }
 
   if (!mIsFullyLoaded) {
-    return MakePair(DrawResult::NOT_READY, RefPtr<SourceSurface>());
+    return MakeTuple(DrawResult::NOT_READY, MatchType::NOT_FOUND,
+                     RefPtr<SourceSurface>());
   }
 
-  RefPtr<SourceSurface> sourceSurface =
-    LookupCachedSurface(aSize, Nothing(), aFlags);
-  if (sourceSurface) {
-    return MakePair(DrawResult::SUCCESS, Move(sourceSurface));
+  LookupResult result = LookupCachedSurface(aSize, Nothing(), aFlags);
+  if (result) {
+    RefPtr<SourceSurface> sourceSurface = result.Surface()->GetSourceSurface();
+    if (sourceSurface) {
+      return MakeTuple(DrawResult::SUCCESS, result.Type(), Move(sourceSurface));
+    } else {
+      // Something went wrong. (Probably a GPU driver crash or device reset.)
+      // Attempt to recover.
+      RecoverFromLossOfSurfaces();
+    }
   }
 
   if (mIsDrawing) {
     NS_WARNING("Refusing to make re-entrant call to VectorImage::Draw");
-    return MakePair(DrawResult::TEMPORARY_ERROR, RefPtr<SourceSurface>());
+    return MakeTuple(DrawResult::TEMPORARY_ERROR, MatchType::NOT_FOUND,
+                     RefPtr<SourceSurface>());
   }
 
   // Make our surface the size of what will ultimately be drawn to it.
@@ -762,7 +773,8 @@ VectorImage::GetFrameInternal(const IntSize& aSize,
     CreateOffscreenContentDrawTarget(aSize, SurfaceFormat::B8G8R8A8);
   if (!dt || !dt->IsValid()) {
     NS_ERROR("Could not create a DrawTarget");
-    return MakePair(DrawResult::TEMPORARY_ERROR, RefPtr<SourceSurface>());
+    return MakeTuple(DrawResult::TEMPORARY_ERROR, MatchType::NOT_FOUND,
+                     RefPtr<SourceSurface>());
   }
 
   RefPtr<gfxContext> context = gfxContext::CreateOrNull(dt);
@@ -774,8 +786,8 @@ VectorImage::GetFrameInternal(const IntSize& aSize,
                               aFlags, 1.0);
 
   DrawInternal(params, false);
-  sourceSurface = dt->Snapshot();
-  return MakePair(DrawResult::SUCCESS, Move(sourceSurface));
+  RefPtr<SourceSurface> sourceSurface = dt->Snapshot();
+  return MakeTuple(DrawResult::SUCCESS, MatchType::EXACT, Move(sourceSurface));
 }
 
 //******************************************************************************
@@ -909,14 +921,19 @@ VectorImage::Draw(gfxContext* aContext,
 
   // If we have an prerasterized version of this image that matches the
   // drawing parameters, use that.
-  RefPtr<SourceSurface> sourceSurface =
-    LookupCachedSurface(aSize, params.svgContext, aFlags);
-
-  if (sourceSurface) {
-    RefPtr<gfxDrawable> svgDrawable =
-      new gfxSurfaceDrawable(sourceSurface, sourceSurface->GetSize());
-    Show(svgDrawable, params);
-    return DrawResult::SUCCESS;
+  LookupResult result = LookupCachedSurface(aSize, params.svgContext, aFlags);
+  if (result) {
+    RefPtr<SourceSurface> sourceSurface = result.Surface()->GetSourceSurface();
+    if (sourceSurface) {
+      RefPtr<gfxDrawable> svgDrawable =
+        new gfxSurfaceDrawable(sourceSurface, sourceSurface->GetSize());
+      Show(svgDrawable, params);
+      return DrawResult::SUCCESS;
+    } else {
+      // Something went wrong. (Probably a GPU driver crash or device reset.)
+      // Attempt to recover.
+      RecoverFromLossOfSurfaces();
+    }
   }
 
   // else, we need to paint the image:
@@ -960,38 +977,24 @@ VectorImage::DrawInternal(const SVGDrawingParameters& aParams,
   CreateSurfaceAndShow(aParams, backend);
 }
 
-already_AddRefed<SourceSurface>
+LookupResult
 VectorImage::LookupCachedSurface(const IntSize& aSize,
                                  const Maybe<SVGImageContext>& aSVGContext,
                                  uint32_t aFlags)
 {
   // If we're not allowed to use a cached surface, don't attempt a lookup.
   if (aFlags & FLAG_BYPASS_SURFACE_CACHE) {
-    return nullptr;
+    return LookupResult(MatchType::NOT_FOUND);
   }
 
   // We don't do any caching if we have animation, so don't bother with a lookup
   // in this case either.
   if (mHaveAnimations) {
-    return nullptr;
+    return LookupResult(MatchType::NOT_FOUND);
   }
 
-  LookupResult result =
-    SurfaceCache::Lookup(ImageKey(this),
-                         VectorSurfaceKey(aSize, aSVGContext));
-  if (!result) {
-    return nullptr;  // No matching surface, or the OS freed the volatile buffer.
-  }
-
-  RefPtr<SourceSurface> sourceSurface = result.Surface()->GetSourceSurface();
-  if (!sourceSurface) {
-    // Something went wrong. (Probably a GPU driver crash or device reset.)
-    // Attempt to recover.
-    RecoverFromLossOfSurfaces();
-    return nullptr;
-  }
-
-  return sourceSurface.forget();
+  return SurfaceCache::Lookup(ImageKey(this),
+                              VectorSurfaceKey(aSize, aSVGContext));
 }
 
 void

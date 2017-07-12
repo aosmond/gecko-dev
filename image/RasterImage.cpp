@@ -307,7 +307,7 @@ RasterImage::LookupFrameInternal(const IntSize& aSize,
                                                         PlaybackType::eStatic));
 }
 
-DrawableSurface
+LookupResult
 RasterImage::LookupFrame(const IntSize& aSize,
                          uint32_t aFlags,
                          PlaybackType aPlaybackType)
@@ -323,7 +323,8 @@ RasterImage::LookupFrame(const IntSize& aSize,
   IntSize requestedSize = CanDownscaleDuringDecode(aSize, aFlags)
                         ? aSize : mSize;
   if (requestedSize.IsEmpty()) {
-    return DrawableSurface();  // Can't decode to a surface of zero size.
+    // Can't decode to a surface of zero size.
+    return LookupResult(MatchType::NOT_FOUND);
   }
 
   LookupResult result =
@@ -331,7 +332,7 @@ RasterImage::LookupFrame(const IntSize& aSize,
 
   if (!result && !mHasSize) {
     // We can't request a decode without knowing our intrinsic size. Give up.
-    return DrawableSurface();
+    return LookupResult(MatchType::NOT_FOUND);
   }
 
   if (result.Type() == MatchType::NOT_FOUND ||
@@ -355,11 +356,12 @@ RasterImage::LookupFrame(const IntSize& aSize,
 
   if (!result) {
     // We still weren't able to get a frame. Give up.
-    return DrawableSurface();
+    return result;
   }
 
   if (result.Surface()->GetCompositingFailed()) {
-    return DrawableSurface();
+    DrawableSurface tmp = Move(result.Surface());
+    return result;
   }
 
   MOZ_ASSERT(!result.Surface()->GetIsPaletted(),
@@ -378,10 +380,11 @@ RasterImage::LookupFrame(const IntSize& aSize,
   // IsAborted acquires the monitor for the imgFrame.
   if (aFlags & (FLAG_SYNC_DECODE | FLAG_SYNC_DECODE_IF_FAST) &&
     result.Surface()->IsAborted()) {
-    return DrawableSurface();
+    DrawableSurface tmp = Move(result.Surface());
+    return result;
   }
 
-  return Move(result.Surface());
+  return result;
 }
 
 bool
@@ -536,15 +539,16 @@ RasterImage::GetFrameAtSize(const IntSize& aSize,
                             uint32_t aWhichFrame,
                             uint32_t aFlags)
 {
-  RefPtr<SourceSurface> surf =
-    GetFrameInternal(aSize, aWhichFrame, aFlags).second().forget();
+  auto result = GetFrameInternal(aSize, aWhichFrame, aFlags);
+  RefPtr<SourceSurface> surf = mozilla::Get<2>(result).forget();
+
   // If we are here, it suggests the image is embedded in a canvas or some
   // other path besides layers, and we won't need the file handle.
   MarkSurfaceShared(surf);
   return surf.forget();
 }
 
-Pair<DrawResult, RefPtr<SourceSurface>>
+Tuple<DrawResult, MatchType, RefPtr<SourceSurface>>
 RasterImage::GetFrameInternal(const IntSize& aSize,
                               uint32_t aWhichFrame,
                               uint32_t aFlags)
@@ -552,34 +556,37 @@ RasterImage::GetFrameInternal(const IntSize& aSize,
   MOZ_ASSERT(aWhichFrame <= FRAME_MAX_VALUE);
 
   if (aSize.IsEmpty()) {
-    return MakePair(DrawResult::BAD_ARGS, RefPtr<SourceSurface>());
+    return MakeTuple(DrawResult::BAD_ARGS, MatchType::NOT_FOUND,
+                     RefPtr<SourceSurface>());
   }
 
   if (aWhichFrame > FRAME_MAX_VALUE) {
-    return MakePair(DrawResult::BAD_ARGS, RefPtr<SourceSurface>());
+    return MakeTuple(DrawResult::BAD_ARGS, MatchType::NOT_FOUND,
+                     RefPtr<SourceSurface>());
   }
 
   if (mError) {
-    return MakePair(DrawResult::BAD_IMAGE, RefPtr<SourceSurface>());
+    return MakeTuple(DrawResult::BAD_IMAGE, MatchType::NOT_FOUND,
+                     RefPtr<SourceSurface>());
   }
 
   // Get the frame. If it's not there, it's probably the caller's fault for
   // not waiting for the data to be loaded from the network or not passing
   // FLAG_SYNC_DECODE.
-  DrawableSurface surface =
+  LookupResult result =
     LookupFrame(aSize, aFlags, ToPlaybackType(aWhichFrame));
-  if (!surface) {
+  if (!result) {
     // The OS threw this frame away and we couldn't redecode it.
-    return MakePair(DrawResult::TEMPORARY_ERROR, RefPtr<SourceSurface>());
+    return MakeTuple(DrawResult::TEMPORARY_ERROR, MatchType::NOT_FOUND,
+                     RefPtr<SourceSurface>());
   }
 
-  RefPtr<SourceSurface> sourceSurface = surface->GetSourceSurface();
-
-  if (!surface->IsFinished()) {
-    return MakePair(DrawResult::INCOMPLETE, Move(sourceSurface));
+  RefPtr<SourceSurface> surface = result.Surface()->GetSourceSurface();
+  if (!result.Surface()->IsFinished()) {
+    return MakeTuple(DrawResult::INCOMPLETE, result.Type(), Move(surface));
   }
 
-  return MakePair(DrawResult::SUCCESS, Move(sourceSurface));
+  return MakeTuple(DrawResult::SUCCESS, result.Type(), Move(surface));
 }
 
 IntSize
@@ -1111,8 +1118,10 @@ RasterImage::RequestDecodeForSizeInternal(const IntSize& aSize, uint32_t aFlags)
                  : aFlags & ~FLAG_SYNC_DECODE_IF_FAST;
 
   // Perform a frame lookup, which will implicitly start decoding if needed.
-  return LookupFrame(aSize, flags, mAnimationState ? PlaybackType::eAnimated
-                                                   : PlaybackType::eStatic);
+  PlaybackType playbackType = mAnimationState ? PlaybackType::eAnimated
+                                              : PlaybackType::eStatic;
+  LookupResult result = LookupFrame(aSize, flags, playbackType);
+  return Move(result.Surface());
 }
 
 static bool
@@ -1409,9 +1418,9 @@ RasterImage::Draw(gfxContext* aContext,
                  ? aFlags
                  : aFlags & ~FLAG_HIGH_QUALITY_SCALING;
 
-  DrawableSurface surface =
+  LookupResult result =
     LookupFrame(aSize, flags, ToPlaybackType(aWhichFrame));
-  if (!surface) {
+  if (!result) {
     // Getting the frame (above) touches the image and kicks off decoding.
     if (mDrawStartTime.IsNull()) {
       mDrawStartTime = TimeStamp::Now();
@@ -1420,10 +1429,10 @@ RasterImage::Draw(gfxContext* aContext,
   }
 
   bool shouldRecordTelemetry = !mDrawStartTime.IsNull() &&
-                               surface->IsFinished();
+                               result.Surface()->IsFinished();
 
-  auto result = DrawInternal(Move(surface), aContext, aSize,
-                             aRegion, aSamplingFilter, flags, aOpacity);
+  auto drawResult = DrawInternal(Move(result.Surface()), aContext, aSize,
+                                 aRegion, aSamplingFilter, flags, aOpacity);
 
   if (shouldRecordTelemetry) {
       TimeDuration drawLatency = TimeStamp::Now() - mDrawStartTime;
@@ -1437,7 +1446,7 @@ RasterImage::Draw(gfxContext* aContext,
       mDrawStartTime = TimeStamp();
   }
 
-  return result;
+  return drawResult;
 }
 
 //******************************************************************************
