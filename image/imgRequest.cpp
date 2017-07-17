@@ -1138,22 +1138,29 @@ imgRequest::OnDataAvailable(nsIRequest* aRequest, nsISupports* aContext,
 
     if (result.mImage) {
       image = result.mImage;
+      nsCOMPtr<nsIEventTarget> eventTarget;
 
       // Update our state to reflect this new part.
       {
         MutexAutoLock lock(mMutex);
         mImage = image;
+
+        if (!NS_IsMainThread()) {
+          eventTarget = mProgressTracker->GetEventTarget();
+          MOZ_ASSERT(eventTarget);
+        }
+
         mProgressTracker = nullptr;
       }
 
       // Some property objects are not threadsafe, and we need to send
       // OnImageAvailable on the main thread, so finish on the main thread.
-      if (NS_IsMainThread()) {
+      if (!eventTarget) {
         FinishPreparingForNewPart(result);
       } else {
         nsCOMPtr<nsIRunnable> runnable =
           new FinishPreparingForNewPartRunnable(this, Move(result));
-        NS_DispatchToMainThread(runnable);
+        eventTarget->Dispatch(runnable.forget(), NS_DISPATCH_NORMAL);
       }
     }
 
