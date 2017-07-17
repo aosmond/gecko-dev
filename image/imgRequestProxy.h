@@ -214,6 +214,7 @@ private:
 
   void AddToOwner(nsIDocument* aLoadingDocument);
 
+  nsresult DispatchExpected(already_AddRefed<nsIRunnable> aEvent);
   void Dispatch(already_AddRefed<nsIRunnable> aEvent);
 
   // The URI of our request.

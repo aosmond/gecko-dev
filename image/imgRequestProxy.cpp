@@ -285,6 +285,23 @@ imgRequestProxy::GetEventTarget() const
   return target.forget();
 }
 
+nsresult
+imgRequestProxy::DispatchExpected(already_AddRefed<nsIRunnable> aEvent)
+{
+  LOG_FUNC(gImgLog, "imgRequestProxy::DispatchExpected");
+
+  // This method should only be used when it is *expected* that we are
+  // dispatching an event (e.g. we want to handle an event asynchronously)
+  // rather we need to (e.g. we are in the wrong scheduler group context).
+  // As such, we do not set mHadDispatch for telemetry purposes.
+  if (mEventTarget) {
+    mEventTarget->Dispatch(Move(aEvent), NS_DISPATCH_NORMAL);
+    return NS_OK;
+  }
+
+  return NS_DispatchToMainThread(Move(aEvent));
+}
+
 void
 imgRequestProxy::Dispatch(already_AddRefed<nsIRunnable> aEvent)
 {
@@ -408,7 +425,7 @@ imgRequestProxy::Cancel(nsresult status)
   mCanceled = true;
 
   nsCOMPtr<nsIRunnable> ev = new imgCancelRunnable(this, status);
-  return NS_DispatchToCurrentThread(ev);
+  return DispatchExpected(ev.forget());
 }
 
 void
@@ -449,8 +466,10 @@ imgRequestProxy::CancelAndForgetObserver(nsresult aStatus)
   mIsInLoadGroup = oldIsInLoadGroup;
 
   if (mIsInLoadGroup) {
-    NS_DispatchToCurrentThread(NewRunnableMethod("imgRequestProxy::DoRemoveFromLoadGroup",
-                                                 this, &imgRequestProxy::DoRemoveFromLoadGroup));
+    nsCOMPtr<nsIRunnable> ev =
+      NewRunnableMethod("imgRequestProxy::DoRemoveFromLoadGroup",
+                        this, &imgRequestProxy::DoRemoveFromLoadGroup);
+    DispatchExpected(ev.forget());
   }
 
   NullOutListener();
