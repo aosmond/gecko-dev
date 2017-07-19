@@ -87,6 +87,8 @@ protected:
   RefPtr<ImageClient> mImageClient;
   Maybe<wr::PipelineId> mPipelineId;
   RefPtr<ImageContainer> mContainer;
+  uint32_t mLastGenerationId;
+  bool mUsingSharedSurface;
 };
 
 class WebRenderFallbackData : public WebRenderImageData

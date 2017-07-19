@@ -50,9 +50,99 @@ WebRenderImageData::~WebRenderImageData()
   }
 }
 
+void
+WebRenderImageData::DiscardKeyIfShared()
+{
+  if (mUsingSharedSurface) {
+    // No need to free the external image ID if it is a shared image. The
+    // surface itself owns it.
+    MOZ_ASSERT(mExternalImageId.isSome());
+    mExternalImageId = Nothing();
+
+    // We are responsible for freeing the ImageKey however.
+    if (mKey.isSome()) {
+      mWRManager->AddImageKeyForDiscard(mKey.value());
+      mKey = Nothing();
+    }
+
+    mUsingSharedSurface = false;
+  }
+}
+
+bool
+WebRenderImageData::UpdateImageKeyIfShared(ImageContainer* aContainer, bool aForceUpdate)
+{
+  AutoTArray<ImageContainer::OwningImage,4> images;
+  uint32_t generation;
+  aContainer->GetCurrentImages(&images, &generation);
+  if (images.IsEmpty()) {
+    DiscardKeyIfShared();
+    return false;
+  }
+
+  Image* image = images[0].mImage.get();
+  MOZ_ASSERT(image);
+
+  RefPtr<gfx::SourceSurface> surface = aImage->GetAsSourceSurface();
+  if (!surface || surface->GetType() != SurfaceType::DATA_SHARED) {
+    DiscardKeyIfShared();
+    return false;
+  }
+
+  wr::ExternalImageId id;
+  auto sharedSurf = static_cast<gfx::SourceSurfaceSharedData*>(surface.get());
+  nsresult rv = SharedSurfacesChild::Share(sharedSurf, id);
+  if (NS_FAILED(rv)) {
+    DiscardKeyIfShared();
+    return false;
+  }
+
+  if (mExternalImageId.isSome()) {
+    if (mUsingSharedSurface) {
+      // If we have a new shared surface, we need to discard the old ImageKey
+      // bound to the old surface, and replace the external image ID to generate
+      // a new key.
+      if (aForceUpdate || generation != mLastGeneration ||
+          !(mExternalImageId.ref() == id)) {
+        DiscardKeyIfShared();
+      }
+    } else {
+      // Last image used was an external image, but we are now switching to a
+      // shared surface -- since we are the owner of the external image ID, we
+      // need to discard it before using the new ID, along with the ImageKey
+      // paired with it.
+      if (mKey.isSome()) {
+        mWRManager->AddImageKeyForDiscard(mKey.value());
+        mKey = Nothing();
+      }
+      WrBridge()->DeallocExternalImageId(mExternalImageId.ref());
+      mExternalImageId = Nothing();
+    }
+  }
+
+  if (mExternalImageId.isNothing()) {
+    mExternalImageId.emplace(id);
+  } else {
+    MOZ_ASSERT(mExternalImageId.ref() == id);
+  }
+
+  if (mKey.isNothing()) {
+    WrImageKey key = WrBridge()->GetNextImageKey();
+    mWRManager->WrBridge()->AddWebRenderParentCommand(OpAddExternalImage(mExternalImageId.value(), key));
+    mKey = Some(key);
+  }
+
+  mUsingSharedSurface = true;
+  return true;
+}
+
 Maybe<wr::ImageKey>
 WebRenderImageData::UpdateImageKey(ImageContainer* aContainer, bool aForceUpdate)
 {
+  if (UpdateImageKeyIfShared(aContainer, aForceUpdate)) {
+    return mKey;
+  }
+
   CreateImageClientIfNeeded();
   CreateExternalImageIfNeeded();
 
