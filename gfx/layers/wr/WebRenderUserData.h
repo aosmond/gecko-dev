@@ -80,6 +80,10 @@ public:
   void CreateImageClientIfNeeded();
 
 protected:
+  void DiscardKeyIfShared();
+
+  bool UpdateImageKeyIfShared(ImageContainer* aContainer, bool aForceUpdate);
+
   void CreateExternalImageIfNeeded();
 
   wr::MaybeExternalImageId mExternalImageId;

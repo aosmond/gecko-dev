@@ -6,6 +6,8 @@
 #include "WebRenderUserData.h"
 
 #include "mozilla/layers/ImageClient.h"
+#include "mozilla/layers/SharedSurfacesChild.h"
+#include "mozilla/layers/SourceSurfaceSharedData.h"
 #include "mozilla/layers/WebRenderBridgeChild.h"
 #include "mozilla/layers/WebRenderLayerManager.h"
 #include "mozilla/layers/WebRenderMessages.h"
@@ -32,6 +34,8 @@ WebRenderUserData::WrBridge() const
 
 WebRenderImageData::WebRenderImageData(WebRenderLayerManager* aWRManager)
   : WebRenderUserData(aWRManager)
+  , mLastGenerationId(0)
+  , mUsingSharedSurface(false)
 {
 }
 
@@ -41,7 +45,7 @@ WebRenderImageData::~WebRenderImageData()
     mWRManager->AddImageKeyForDiscard(mKey.value());
   }
 
-  if (mExternalImageId) {
+  if (!mUsingSharedSurface && mExternalImageId) {
     WrBridge()->DeallocExternalImageId(mExternalImageId.ref());
   }
 
@@ -83,7 +87,7 @@ WebRenderImageData::UpdateImageKeyIfShared(ImageContainer* aContainer, bool aFor
   Image* image = images[0].mImage.get();
   MOZ_ASSERT(image);
 
-  RefPtr<gfx::SourceSurface> surface = aImage->GetAsSourceSurface();
+  RefPtr<gfx::SourceSurface> surface = image->GetAsSourceSurface();
   if (!surface || surface->GetType() != SurfaceType::DATA_SHARED) {
     DiscardKeyIfShared();
     return false;
@@ -102,7 +106,7 @@ WebRenderImageData::UpdateImageKeyIfShared(ImageContainer* aContainer, bool aFor
       // If we have a new shared surface, we need to discard the old ImageKey
       // bound to the old surface, and replace the external image ID to generate
       // a new key.
-      if (aForceUpdate || generation != mLastGeneration ||
+      if (aForceUpdate || generation != mLastGenerationId ||
           !(mExternalImageId.ref() == id)) {
         DiscardKeyIfShared();
       }
@@ -128,10 +132,11 @@ WebRenderImageData::UpdateImageKeyIfShared(ImageContainer* aContainer, bool aFor
 
   if (mKey.isNothing()) {
     WrImageKey key = WrBridge()->GetNextImageKey();
-    mWRManager->WrBridge()->AddWebRenderParentCommand(OpAddExternalImage(mExternalImageId.value(), key));
+    mWRManager->WrBridge()->AddWebRenderParentCommand(OpAddSharedSurface(mExternalImageId.value(), key));
     mKey = Some(key);
   }
 
+  mLastGenerationId = generation;
   mUsingSharedSurface = true;
   return true;
 }
@@ -233,6 +238,8 @@ WebRenderImageData::CreateAsyncImageWebRenderCommands(mozilla::wr::DisplayListBu
 void
 WebRenderImageData::CreateImageClientIfNeeded()
 {
+  MOZ_ASSERT(!mUsingSharedSurface);
+
   if (!mImageClient) {
     mImageClient = ImageClient::CreateImageClient(CompositableType::IMAGE,
                                                   WrBridge(),
@@ -248,6 +255,8 @@ WebRenderImageData::CreateImageClientIfNeeded()
 void
 WebRenderImageData::CreateExternalImageIfNeeded()
 {
+  MOZ_ASSERT(!mUsingSharedSurface);
+
   if (!mExternalImageId)  {
     mExternalImageId = Some(WrBridge()->AllocExternalImageIdForCompositable(mImageClient));
   }

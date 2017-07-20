@@ -31,7 +31,7 @@ public:
       } else {
         wr::ExternalImageId id = mId;
         SystemGroup::Dispatch("DestroySharedUserData", TaskCategory::Other,
-                              NS_NewRunnableFunction([id]() -> void {
+                              NS_NewRunnableFunction("DestroySharedUserData", [id]() -> void {
           SharedSurfacesChild::Unshare(id);
         }));
       }
