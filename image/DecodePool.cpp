@@ -50,6 +50,30 @@ struct Work
   RefPtr<IDecodingTask> mTask;
 };
 
+class RunnableDecodingTask final : public IDecodingTask
+{
+public:
+  NS_INLINE_DECL_THREADSAFE_REFCOUNTING(RunnableDecodingTask, override)
+
+  RunnableDecodingTask(already_AddRefed<nsIRunnable>&& aEvent)
+    : mEvent(aEvent)
+  { }
+
+  RunnableDecodingTask(nsIRunnable* aEvent)
+    : mEvent(aEvent)
+  { }
+
+  void Run() override { mEvent->Run(); }
+  bool ShouldPreferSyncRun() const override { return false; }
+  TaskPriority Priority() const override { return TaskPriority::eHigh; }
+
+private:
+  ~RunnableDecodingTask() override
+  { }
+
+  nsCOMPtr<nsIRunnable> mEvent;
+};
+
 class DecodePoolImpl
 {
 public:
@@ -280,6 +304,53 @@ DecodePool::DecodePool()
 DecodePool::~DecodePool()
 {
   MOZ_ASSERT(NS_IsMainThread(), "Must shut down DecodePool on main thread!");
+}
+
+NS_IMETHODIMP
+DecodePool::IsOnCurrentThread(bool* aRv)
+{
+  MOZ_ASSERT(aRv);
+
+  MutexAutoLock lock(mMutex);
+  for (uint32_t i = 0; i < mThreads.Length(); ++i) {
+    nsresult rv = mThreads[i]->IsOnCurrentThread(aRv);
+    if (NS_FAILED(rv) || *aRv) {
+      return rv;
+    }
+  }
+  return NS_OK;
+}
+
+NS_IMETHODIMP_(bool)
+DecodePool::IsOnCurrentThreadInfallible()
+{
+  MutexAutoLock lock(mMutex);
+  for (uint32_t i = 0; i < mThreads.Length(); ++i) {
+    if (mThreads[i]->IsOnCurrentThread()) {
+      return true;
+    }
+  }
+  return false;
+}
+
+NS_IMETHODIMP
+DecodePool::Dispatch(already_AddRefed<nsIRunnable> aEvent, uint32_t aFlags)
+{
+  mImpl->PushWork(new RunnableDecodingTask(Move(aEvent)));
+  return NS_OK;
+}
+
+NS_IMETHODIMP
+DecodePool::DispatchFromScript(nsIRunnable *aEvent, uint32_t aFlags)
+{
+  mImpl->PushWork(new RunnableDecodingTask(aEvent));
+  return NS_OK;
+}
+
+NS_IMETHODIMP
+DecodePool::DelayedDispatch(already_AddRefed<nsIRunnable> aEvent, uint32_t aDelay)
+{
+  return NS_ERROR_NOT_IMPLEMENTED;
 }
 
 NS_IMETHODIMP

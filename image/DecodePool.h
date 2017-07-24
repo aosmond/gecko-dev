@@ -39,11 +39,13 @@ class IDecodingTask;
  * off-main-thread in the image decoding thread pool, or on some combination of
  * the two.
  */
-class DecodePool : public nsIObserver
+class DecodePool final : public nsIObserver
+                       , public nsIEventTarget
 {
 public:
   NS_DECL_THREADSAFE_ISUPPORTS
   NS_DECL_NSIOBSERVER
+  NS_DECL_NSIEVENTTARGET_FULL
 
   /// Initializes the singleton instance. Should be called from the main thread.
   static void Initialize();
