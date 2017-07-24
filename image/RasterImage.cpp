@@ -1398,7 +1398,7 @@ RasterImage::DrawInternal(DrawableSurface&& aSurface,
 
 #ifdef DEBUG
   // Record the image drawing for startup performance testing.
-  if (NS_IsMainThread()) {
+  if (mURI && mURI->SchemeIsChrome() && NS_IsMainThread()) {
     nsCOMPtr<nsIObserverService> obs = services::GetObserverService();
     NS_WARNING_ASSERTION(obs, "Can't get an observer service handle");
     if (obs) {

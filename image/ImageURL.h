@@ -91,6 +91,11 @@ public:
     return NS_OK;
   }
 
+  bool SchemeIsChrome() const
+  {
+    return mScheme.EqualsLiteral("chrome");
+  }
+
   nsresult GetRef(nsACString& result)
   {
     result = mRef;

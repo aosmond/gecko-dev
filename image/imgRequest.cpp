@@ -817,12 +817,11 @@ imgRequest::OnStartRequest(nsIRequest* aRequest, nsISupports* ctxt)
   }
 
   // Try to retarget OnDataAvailable to a decode thread.
-  nsCOMPtr<nsIHttpChannel> httpChannel = do_QueryInterface(aRequest);
   nsCOMPtr<nsIThreadRetargetableRequest> retargetable =
     do_QueryInterface(aRequest);
-  if (httpChannel && retargetable) {
+  if (channel && retargetable) {
     nsAutoCString mimeType;
-    nsresult rv = httpChannel->GetContentType(mimeType);
+    nsresult rv = channel->GetContentType(mimeType);
     if (NS_SUCCEEDED(rv) && !mimeType.EqualsLiteral(IMAGE_SVG_XML)) {
       // Retarget OnDataAvailable to the DecodePool's IO thread.
       nsCOMPtr<nsIEventTarget> target =
