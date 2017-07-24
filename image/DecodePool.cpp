@@ -6,6 +6,7 @@
 #include "DecodePool.h"
 
 #include <algorithm>
+#include <queue>
 
 #include "mozilla/ClearOnShutdown.h"
 #include "mozilla/Monitor.h"
@@ -95,9 +96,9 @@ public:
     }
 
     if (task->Priority() == TaskPriority::eHigh) {
-      mHighPriorityQueue.AppendElement(Move(task));
+      mHighPriorityQueue.push(Move(task));
     } else {
-      mLowPriorityQueue.AppendElement(Move(task));
+      mLowPriorityQueue.push(Move(task));
     }
 
     mMonitor.Notify();
@@ -109,11 +110,11 @@ public:
     MonitorAutoLock lock(mMonitor);
 
     do {
-      if (!mHighPriorityQueue.IsEmpty()) {
+      if (!mHighPriorityQueue.empty()) {
         return PopWorkFromQueue(mHighPriorityQueue);
       }
 
-      if (!mLowPriorityQueue.IsEmpty()) {
+      if (!mLowPriorityQueue.empty()) {
         return PopWorkFromQueue(mLowPriorityQueue);
       }
 
@@ -137,12 +138,12 @@ public:
 private:
   ~DecodePoolImpl() { }
 
-  Work PopWorkFromQueue(nsTArray<RefPtr<IDecodingTask>>& aQueue)
+  Work PopWorkFromQueue(std::queue<RefPtr<IDecodingTask>>& aQueue)
   {
     Work work;
     work.mType = Work::Type::TASK;
-    work.mTask = aQueue.LastElement().forget();
-    aQueue.RemoveElementAt(aQueue.Length() - 1);
+    work.mTask = aQueue.front().forget();
+    aQueue.pop();
 
     return work;
   }
@@ -151,8 +152,8 @@ private:
 
   // mMonitor guards the queues and mShuttingDown.
   Monitor mMonitor;
-  nsTArray<RefPtr<IDecodingTask>> mHighPriorityQueue;
-  nsTArray<RefPtr<IDecodingTask>> mLowPriorityQueue;
+  std::queue<RefPtr<IDecodingTask>> mHighPriorityQueue;
+  std::queue<RefPtr<IDecodingTask>> mLowPriorityQueue;
   bool mShuttingDown;
 };
 
