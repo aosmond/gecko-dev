@@ -420,8 +420,7 @@ DecodePool::SyncRunIfPossible(IDecodingTask* aTask, const nsCString& aURI)
 already_AddRefed<nsIEventTarget>
 DecodePool::GetIOEventTarget()
 {
-  MutexAutoLock threadPoolLock(mMutex);
-  nsCOMPtr<nsIEventTarget> target = do_QueryInterface(mIOThread);
+  nsCOMPtr<nsIEventTarget> target = this;
   return target.forget();
 }
 

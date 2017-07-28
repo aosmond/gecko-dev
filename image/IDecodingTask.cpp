@@ -141,7 +141,12 @@ IDecodingTask::NotifyDecodeComplete(NotNull<RasterImage*> aImage,
 void
 IDecodingTask::Resume()
 {
-  DecodePool::Singleton()->AsyncRun(this);
+  if (NS_IsMainThread()) {
+    DecodePool::Singleton()->AsyncRun(this);
+    return;
+  }
+
+  Run();
 }
 
 
