@@ -727,14 +727,15 @@ private:
       uint8_t* currRowBytes = aCurrentRow;
 
       // Write out the interpolated pixels. Interpolation is componentwise.
-      aNext.template WritePixelsToRow<uint32_t>([&]{
+      aNext.template WritePixelsToRow<uint32_t>([&] (uint32_t& aPixelOut) {
         uint32_t pixel = 0;
         auto* component = reinterpret_cast<uint8_t*>(&pixel);
         *component++ = InterpolateByte(*prevRowBytes++, *currRowBytes++, weight);
         *component++ = InterpolateByte(*prevRowBytes++, *currRowBytes++, weight);
         *component++ = InterpolateByte(*prevRowBytes++, *currRowBytes++, weight);
         *component++ = InterpolateByte(*prevRowBytes++, *currRowBytes++, weight);
-        return AsVariant(pixel);
+        aPixelOut = pixel;
+        return WriteState::GOT_PIXEL;
       });
     }
   }

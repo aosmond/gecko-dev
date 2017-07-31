@@ -769,34 +769,34 @@ nsPNGDecoder::PostInvalidationIfNeeded()
                    Some(invalidRect->mOutputSpaceRect));
 }
 
-static NextPixel<uint32_t>
+static uint32_t
 PackRGBPixelAndAdvance(uint8_t*& aRawPixelInOut)
 {
   const uint32_t pixel =
     gfxPackedPixel(0xFF, aRawPixelInOut[0], aRawPixelInOut[1],
                    aRawPixelInOut[2]);
   aRawPixelInOut += 3;
-  return AsVariant(pixel);
+  return pixel;
 }
 
-static NextPixel<uint32_t>
+static uint32_t
 PackRGBAPixelAndAdvance(uint8_t*& aRawPixelInOut)
 {
   const uint32_t pixel =
     gfxPackedPixel(aRawPixelInOut[3], aRawPixelInOut[0],
                    aRawPixelInOut[1], aRawPixelInOut[2]);
   aRawPixelInOut += 4;
-  return AsVariant(pixel);
+  return pixel;
 }
 
-static NextPixel<uint32_t>
+static uint32_t
 PackUnpremultipliedRGBAPixelAndAdvance(uint8_t*& aRawPixelInOut)
 {
   const uint32_t pixel =
     gfxPackedPixelNoPreMultiply(aRawPixelInOut[3], aRawPixelInOut[0],
                                 aRawPixelInOut[1], aRawPixelInOut[2]);
   aRawPixelInOut += 4;
-  return AsVariant(pixel);
+  return pixel;
 }
 
 void
@@ -906,17 +906,20 @@ nsPNGDecoder::WriteRow(uint8_t* aRow)
   DebugOnly<WriteState> result;
   if (HasAlphaChannel()) {
     if (mDisablePremultipliedAlpha) {
-      result = mPipe.WritePixelsToRow<uint32_t>([&]{
-        return PackUnpremultipliedRGBAPixelAndAdvance(rowToWrite);
+      result = mPipe.WritePixelsToRow<uint32_t>([&](uint32_t& aPixelOut){
+        aPixelOut = PackUnpremultipliedRGBAPixelAndAdvance(rowToWrite);
+        return WriteState::GOT_PIXEL;
       });
     } else {
-      result = mPipe.WritePixelsToRow<uint32_t>([&]{
-        return PackRGBAPixelAndAdvance(rowToWrite);
+      result = mPipe.WritePixelsToRow<uint32_t>([&](uint32_t& aPixelOut) {
+        aPixelOut = PackRGBAPixelAndAdvance(rowToWrite);
+        return WriteState::GOT_PIXEL;
       });
     }
   } else {
-    result = mPipe.WritePixelsToRow<uint32_t>([&]{
-      return PackRGBPixelAndAdvance(rowToWrite);
+    result = mPipe.WritePixelsToRow<uint32_t>([&](uint32_t& aPixelOut){
+      aPixelOut = PackRGBPixelAndAdvance(rowToWrite);
+      return WriteState::GOT_PIXEL;
     });
   }
 

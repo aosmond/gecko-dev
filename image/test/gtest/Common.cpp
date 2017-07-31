@@ -425,9 +425,10 @@ CheckWritePixels(Decoder* aDecoder,
 
   // Fill the image.
   int32_t count = 0;
-  auto result = aFilter->WritePixels<uint32_t>([&] {
+  auto result = aFilter->WritePixels<uint32_t>([&](uint32_t& aPixelOut) {
     ++count;
-    return AsVariant(BGRAColor::Green().AsPixel());
+    aPixelOut = BGRAColor::Green().AsPixel();
+    return WriteState::GOT_PIXEL;
   });
   EXPECT_EQ(WriteState::FINISHED, result);
   EXPECT_EQ(inputWriteRect.width * inputWriteRect.height, count);
@@ -436,9 +437,10 @@ CheckWritePixels(Decoder* aDecoder,
 
   // Attempt to write more data and make sure nothing changes.
   const int32_t oldCount = count;
-  result = aFilter->WritePixels<uint32_t>([&] {
+  result = aFilter->WritePixels<uint32_t>([&](uint32_t& aPixelOut) {
     ++count;
-    return AsVariant(BGRAColor::Green().AsPixel());
+    aPixelOut = BGRAColor::Green().AsPixel();
+    return WriteState::GOT_PIXEL;
   });
   EXPECT_EQ(oldCount, count);
   EXPECT_EQ(WriteState::FINISHED, result);
@@ -472,9 +474,10 @@ CheckPalettedWritePixels(Decoder* aDecoder,
 
   // Fill the image.
   int32_t count = 0;
-  auto result = aFilter->WritePixels<uint8_t>([&] {
+  auto result = aFilter->WritePixels<uint8_t>([&](uint8_t& aPixelOut) {
     ++count;
-    return AsVariant(uint8_t(255));
+    aPixelOut = uint8_t(255);
+    return WriteState::GOT_PIXEL;
   });
   EXPECT_EQ(WriteState::FINISHED, result);
   EXPECT_EQ(inputWriteRect.width * inputWriteRect.height, count);
@@ -483,9 +486,10 @@ CheckPalettedWritePixels(Decoder* aDecoder,
 
   // Attempt to write more data and make sure nothing changes.
   const int32_t oldCount = count;
-  result = aFilter->WritePixels<uint8_t>([&] {
+  result = aFilter->WritePixels<uint8_t>([&](uint8_t& aPixelOut) {
     ++count;
-    return AsVariant(uint8_t(255));
+    aPixelOut = uint8_t(255);
+    return WriteState::GOT_PIXEL;
   });
   EXPECT_EQ(oldCount, count);
   EXPECT_EQ(WriteState::FINISHED, result);

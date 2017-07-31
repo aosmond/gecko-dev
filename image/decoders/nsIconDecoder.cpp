@@ -89,17 +89,17 @@ nsIconDecoder::ReadRowOfPixels(const char* aData, size_t aLength)
 {
   MOZ_ASSERT(aLength % 4 == 0, "Rows should contain a multiple of four bytes");
 
-  auto result = mPipe.WritePixels<uint32_t>([&]() -> NextPixel<uint32_t> {
+  auto result = mPipe.WritePixels<uint32_t>([&](uint32_t& aPixelOut) -> WriteState {
     if (aLength == 0) {
-      return AsVariant(WriteState::NEED_MORE_DATA);  // Done with this row.
+      return WriteState::NEED_MORE_DATA;  // Done with this row.
     }
 
     uint32_t pixel;
-    memcpy(&pixel, aData, 4);
+    memcpy(&aPixelOut, aData, 4);
     aData += 4;
     aLength -= 4;
 
-    return AsVariant(pixel);
+    return WriteState::GOT_PIXEL;
   });
 
   MOZ_ASSERT(result != WriteState::FAILURE);

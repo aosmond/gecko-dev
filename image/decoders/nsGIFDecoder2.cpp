@@ -292,10 +292,11 @@ nsGIFDecoder2::ColormapIndexToPixel<uint8_t>(uint8_t aIndex)
 }
 
 template <typename PixelSize>
-NextPixel<PixelSize>
+WriteState
 nsGIFDecoder2::YieldPixel(const uint8_t* aData,
                           size_t aLength,
-                          size_t* aBytesReadOut)
+                          size_t* aBytesReadOut,
+                          PixelSize& aPixelOut)
 {
   MOZ_ASSERT(aData);
   MOZ_ASSERT(aBytesReadOut);
@@ -316,7 +317,7 @@ nsGIFDecoder2::YieldPixel(const uint8_t* aData,
     }
 
     if (mGIFStruct.bits < mGIFStruct.codesize) {
-      return AsVariant(WriteState::NEED_MORE_DATA);
+      return WriteState::NEED_MORE_DATA;
     }
 
     // Get the leading variable-length symbol from the data stream.
@@ -332,26 +333,27 @@ nsGIFDecoder2::YieldPixel(const uint8_t* aData,
       mGIFStruct.codemask = (1 << mGIFStruct.codesize) - 1;
       mGIFStruct.avail = clearCode + 2;
       mGIFStruct.oldcode = -1;
-      return AsVariant(WriteState::NEED_MORE_DATA);
+      return WriteState::NEED_MORE_DATA;
     }
 
     // Check for explicit end-of-stream code. It should only appear after all
     // image data, but if that was the case we wouldn't be in this function, so
     // this is always an error condition.
     if (code == (clearCode + 1)) {
-      return AsVariant(WriteState::FAILURE);
+      return WriteState::FAILURE;
     }
 
     if (mGIFStruct.oldcode == -1) {
       if (code >= MAX_BITS) {
-        return AsVariant(WriteState::FAILURE);  // The code's too big; something's wrong.
+        return WriteState::FAILURE;  // The code's too big; something's wrong.
       }
 
       mGIFStruct.firstchar = mGIFStruct.oldcode = code;
 
       // Yield a pixel at the appropriate index in the colormap.
       mGIFStruct.pixels_remaining--;
-      return AsVariant(ColormapIndexToPixel<PixelSize>(mGIFStruct.suffix[code]));
+      aPixelOut = ColormapIndexToPixel<PixelSize>(mGIFStruct.suffix[code]);
+      return WriteState::GOT_PIXEL;
     }
 
     int incode = code;
@@ -360,20 +362,20 @@ nsGIFDecoder2::YieldPixel(const uint8_t* aData,
       code = mGIFStruct.oldcode;
 
       if (mGIFStruct.stackp >= mGIFStruct.stack + MAX_BITS) {
-        return AsVariant(WriteState::FAILURE);  // Stack overflow; something's wrong.
+        return WriteState::FAILURE;  // Stack overflow; something's wrong.
       }
     }
 
     while (code >= clearCode) {
       if ((code >= MAX_BITS) || (code == mGIFStruct.prefix[code])) {
-        return AsVariant(WriteState::FAILURE);
+        return WriteState::FAILURE;
       }
 
       *mGIFStruct.stackp++ = mGIFStruct.suffix[code];
       code = mGIFStruct.prefix[code];
 
       if (mGIFStruct.stackp >= mGIFStruct.stack + MAX_BITS) {
-        return AsVariant(WriteState::FAILURE);  // Stack overflow; something's wrong.
+        return WriteState::FAILURE;  // Stack overflow; something's wrong.
       }
     }
 
@@ -400,12 +402,13 @@ nsGIFDecoder2::YieldPixel(const uint8_t* aData,
 
   if (MOZ_UNLIKELY(mGIFStruct.stackp <= mGIFStruct.stack)) {
     MOZ_ASSERT_UNREACHABLE("No decoded data but we didn't return early?");
-    return AsVariant(WriteState::FAILURE);
+    return WriteState::FAILURE;
   }
 
   // Yield a pixel at the appropriate index in the colormap.
   mGIFStruct.pixels_remaining--;
-  return AsVariant(ColormapIndexToPixel<PixelSize>(*--mGIFStruct.stackp));
+  aPixelOut = ColormapIndexToPixel<PixelSize>(*--mGIFStruct.stackp);
+  return WriteState::GOT_PIXEL;
 }
 
 /// Expand the colormap from RGB to Packed ARGB as needed by Cairo.
@@ -1028,8 +1031,8 @@ nsGIFDecoder2::ReadLZWData(const char* aData, size_t aLength)
     size_t bytesRead = 0;
 
     auto result = mGIFStruct.images_decoded == 0
-      ? mPipe.WritePixels<uint32_t>([&]{ return YieldPixel<uint32_t>(data, length, &bytesRead); })
-      : mPipe.WritePixels<uint8_t>([&]{ return YieldPixel<uint8_t>(data, length, &bytesRead); });
+      ? mPipe.WritePixels<uint32_t>([&] (uint32_t& aPixelOut) { return YieldPixel<uint32_t>(data, length, &bytesRead, aPixelOut); })
+      : mPipe.WritePixels<uint8_t>([&] (uint8_t& aPixelOut) { return YieldPixel<uint8_t>(data, length, &bytesRead, aPixelOut); });
 
     if (MOZ_UNLIKELY(bytesRead > length)) {
       MOZ_ASSERT_UNREACHABLE("Overread?");
