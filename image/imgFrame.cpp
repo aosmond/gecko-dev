@@ -212,6 +212,7 @@ imgFrame::imgFrame()
   , mPalettedImageData(nullptr)
   , mPaletteDepth(0)
   , mNonPremult(false)
+  , mIsFullFrame(false)
   , mCompositingFailed(false)
 {
 }
@@ -234,7 +235,8 @@ imgFrame::InitForDecoder(const nsIntSize& aImageSize,
                          SurfaceFormat aFormat,
                          uint8_t aPaletteDepth /* = 0 */,
                          bool aNonPremult /* = false */,
-                         bool aIsAnimated /* = false */)
+                         bool aIsAnimated /* = false */,
+                         bool aIsFullFrame /* = true */)
 {
   // Assert for properties that should be verified by decoders,
   // warn for properties related to bad content.
@@ -263,6 +265,7 @@ imgFrame::InitForDecoder(const nsIntSize& aImageSize,
   mFormat = aFormat;
   mPaletteDepth = aPaletteDepth;
   mNonPremult = aNonPremult;
+  mIsFullFrame = aIsFullFrame;
 
   if (aPaletteDepth != 0) {
     // We're creating for a paletted image.

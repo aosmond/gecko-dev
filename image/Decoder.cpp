@@ -340,9 +340,10 @@ Decoder::AllocateFrameInternal(uint32_t aFrameNum,
 
   auto frame = MakeNotNull<RefPtr<imgFrame>>();
   bool nonPremult = bool(mSurfaceFlags & SurfaceFlags::NO_PREMULTIPLY_ALPHA);
+  bool fullFrame = aFrameNum == 0 || ShouldBlendAnimation();
   if (NS_FAILED(frame->InitForDecoder(aOutputSize, aFrameRect, aFormat,
                                       aPaletteDepth, nonPremult,
-                                      aFrameNum > 0))) {
+                                      aFrameNum > 0, fullFrame))) {
     NS_WARNING("imgFrame::Init should succeed");
     return RawAccessFrameRef();
   }
