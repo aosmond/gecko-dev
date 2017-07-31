@@ -4607,6 +4607,10 @@ pref("image.animated.frames-on-demand.threshold-kb", 1024);
 
 pref("image.animated.frames-on-demand.min-frames", 4);
 
+// Whether we should generate full frames at decode time or partial frames which
+// are combined at display time (historical behavior and default).
+pref("image.animated.generate-full-frames", false);
+
 // The maximum size, in bytes, of the decoded images we cache
 pref("image.cache.size", 5242880);
 
