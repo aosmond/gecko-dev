@@ -59,7 +59,8 @@ public:
                           SurfaceFormat aFormat,
                           uint8_t aPaletteDepth = 0,
                           bool aNonPremult = false,
-                          const Maybe<AnimationParams>& aAnimParams = Nothing());
+                          const Maybe<AnimationParams>& aAnimParams = Nothing(),
+                          bool aIsFullFrame = false);
 
   nsresult InitForAnimator(const nsIntSize& aSize,
                            SurfaceFormat aFormat)
@@ -68,8 +69,8 @@ public:
     AnimationParams animParams { frameRect, FrameTimeout::Forever(),
                                  /* aFrameNum */ 1, BlendMethod::OVER,
                                  DisposalMethod::NOT_SPECIFIED };
-    return InitForDecoder(aSize, frameRect,
-                          aFormat, 0, false, Some(animParams));
+    return InitForDecoder(aSize, frameRect, aFormat, 0,
+                          false, Some(animParams), true);
   }
 
 
@@ -190,6 +191,8 @@ public:
 
   const IntRect& GetDirtyRect() const { return mDirtyRect; }
   void SetDirtyRect(const IntRect& aDirtyRect) { mDirtyRect = aDirtyRect; }
+
+  bool IsFullFrame() const { return mIsFullFrame; }
 
   bool GetCompositingFailed() const;
   void SetCompositingFailed(bool val);
@@ -315,7 +318,7 @@ private: // data
   uint8_t      mPaletteDepth;
 
   bool mNonPremult;
-
+  bool mIsFullFrame;
 
   //////////////////////////////////////////////////////////////////////////////
   // Main-thread-only mutable data.

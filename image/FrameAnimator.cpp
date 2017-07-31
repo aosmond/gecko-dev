@@ -318,10 +318,10 @@ FrameAnimator::AdvanceFrame(AnimationState& aState,
   }
 
   if (nextFrameIndex == 0) {
+    MOZ_ASSERT(nextFrame->IsFullFrame());
     ret.mDirtyRect = aState.FirstFrameRefreshArea();
-  } else {
+  } else if (!nextFrame->IsFullFrame()) {
     MOZ_ASSERT(nextFrameIndex == currentFrameIndex + 1);
-
     // Change frame
     if (!DoBlend(aCurrentFrame, nextFrame, nextFrameIndex, &ret.mDirtyRect)) {
       // something went wrong, move on to next
