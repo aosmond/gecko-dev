@@ -197,6 +197,18 @@ nsPNGDecoder::CreateFrame(const FrameInfo& aFrameInfo)
           ? SurfaceFormat::B8G8R8X8
           : SurfaceFormat::B8G8R8A8;
 
+#ifdef PNG_APNG_SUPPORTED
+  if (png_get_valid(mPNG, mInfo, PNG_INFO_acTL)) {
+    mAnimInfo = AnimFrameInfo(mPNG, mInfo);
+
+    if (mAnimInfo.mDispose == DisposalMethod::CLEAR) {
+      // We may have to display the background under this image during
+      // animation playback, so we regard it as transparent.
+      PostHasTransparency();
+    }
+  }
+#endif
+
   // Make sure there's no animation or padding if we're downscaling.
   MOZ_ASSERT_IF(Size() != OutputSize(), mNumFrames == 0);
   MOZ_ASSERT_IF(Size() != OutputSize(), !GetImageMetadata().HasAnimation());
@@ -214,10 +226,14 @@ nsPNGDecoder::CreateFrame(const FrameInfo& aFrameInfo)
     pipeFlags |= SurfacePipeFlags::PROGRESSIVE_DISPLAY;
   }
 
+  if (ShouldBlendAnimation()) {
+    pipeFlags |= SurfacePipeFlags::BLEND_ANIMATION;
+  }
+
   Maybe<SurfacePipe> pipe =
     SurfacePipeFactory::CreateSurfacePipe(this, mNumFrames, Size(),
                                           OutputSize(), aFrameInfo.mFrameRect,
-                                          mFormat, pipeFlags);
+                                          mFormat, pipeFlags, mAnimInfo.mBlend);
 
   if (!pipe) {
     mPipe = SurfacePipe();
@@ -233,18 +249,6 @@ nsPNGDecoder::CreateFrame(const FrameInfo& aFrameInfo)
          ("PNGDecoderAccounting: nsPNGDecoder::CreateFrame -- created "
           "image frame with %dx%d pixels for decoder %p",
           mFrameRect.Width(), mFrameRect.Height(), this));
-
-#ifdef PNG_APNG_SUPPORTED
-  if (png_get_valid(mPNG, mInfo, PNG_INFO_acTL)) {
-    mAnimInfo = AnimFrameInfo(mPNG, mInfo);
-
-    if (mAnimInfo.mDispose == DisposalMethod::CLEAR) {
-      // We may have to display the background under this image during
-      // animation playback, so we regard it as transparent.
-      PostHasTransparency();
-    }
-  }
-#endif
 
   return NS_OK;
 }
