@@ -178,6 +178,7 @@ nsGIFDecoder2::BeginImageFrame(const IntRect& aFrameRect,
   MOZ_ASSERT(HasSize());
 
   bool hasTransparency = CheckForTransparency(aFrameRect);
+  bool blendAnimation = ShouldBlendAnimation();
 
   // Make sure there's no animation if we're downscaling.
   MOZ_ASSERT_IF(Size() != OutputSize(), !GetImageMetadata().HasAnimation());
@@ -186,14 +187,23 @@ nsGIFDecoder2::BeginImageFrame(const IntRect& aFrameRect,
                              ? SurfacePipeFlags::DEINTERLACE
                              : SurfacePipeFlags();
 
-  Maybe<SurfacePipe> pipe;
+  gfx::SurfaceFormat format;
   if (mGIFStruct.images_decoded == 0) {
-    gfx::SurfaceFormat format = hasTransparency ? SurfaceFormat::B8G8R8A8
-                                                : SurfaceFormat::B8G8R8X8;
-
     // The first frame may be displayed progressively.
     pipeFlags |= SurfacePipeFlags::PROGRESSIVE_DISPLAY;
 
+    format = hasTransparency ? SurfaceFormat::B8G8R8A8
+                             : SurfaceFormat::B8G8R8X8;
+  } else {
+    format = SurfaceFormat::B8G8R8A8;
+  }
+
+  if (blendAnimation) {
+    pipeFlags |= SurfacePipeFlags::BLEND_ANIMATION;
+  }
+
+  Maybe<SurfacePipe> pipe;
+  if (mGIFStruct.images_decoded == 0 || blendAnimation) {
     // The first frame is always decoded into an RGB surface.
     pipe =
       SurfacePipeFactory::CreateSurfacePipe(this, mGIFStruct.images_decoded,
@@ -211,8 +221,7 @@ nsGIFDecoder2::BeginImageFrame(const IntRect& aFrameRect,
     MOZ_ASSERT(Size() == OutputSize());
     pipe =
       SurfacePipeFactory::CreatePalettedSurfacePipe(this, mGIFStruct.images_decoded,
-                                                    Size(), aFrameRect,
-                                                    SurfaceFormat::B8G8R8A8,
+                                                    Size(), aFrameRect, format,
                                                     aDepth, pipeFlags);
   }
 
@@ -888,17 +897,29 @@ nsGIFDecoder2::FinishImageDescriptor(const char* aData)
     // the current frame.
     mGIFStruct.local_colormap_size = 1 << depth;
 
-    if (mGIFStruct.images_decoded == 0) {
-      // The first frame has a local color table. Allocate space for it as we
-      // use a BGRA or BGRX surface for the first frame; such surfaces don't
-      // have their own palettes internally.
+    if (!mColormap) {
+      // Allocate a buffer to store the local color tables. This could be if the
+      // first frame has a local color table, or for subsequent frames when
+      // blending the animation during decoding.
+      MOZ_ASSERT(mGIFStruct.images_decoded == 0 || ShouldBlendAnimation());
+
+      // Ensure our current colormap buffer is large enough to hold the new one.
       mColormapSize = sizeof(uint32_t) << realDepth;
-      if (!mGIFStruct.local_colormap) {
+      if (mGIFStruct.local_colormap_buffer_size < mColormapSize) {
+        if (mGIFStruct.local_colormap) {
+          free(mGIFStruct.local_colormap);
+        }
+        mGIFStruct.local_colormap_buffer_size = mColormapSize;
         mGIFStruct.local_colormap =
           static_cast<uint32_t*>(moz_xmalloc(mColormapSize));
+      } else {
+        mColormapSize = mGIFStruct.local_colormap_buffer_size;
       }
+
       mColormap = mGIFStruct.local_colormap;
     }
+
+    MOZ_ASSERT(mColormap);
 
     const size_t size = 3 << depth;
     if (mColormapSize > size) {
@@ -921,7 +942,7 @@ nsGIFDecoder2::FinishImageDescriptor(const char* aData)
 
   // There's no local color table; copy the global color table into the palette
   // of the current frame.
-  if (mGIFStruct.images_decoded > 0) {
+  if (mColormap) {
     memcpy(mColormap, mGIFStruct.global_colormap, mColormapSize);
   } else {
     mColormap = mGIFStruct.global_colormap;
@@ -1031,7 +1052,7 @@ nsGIFDecoder2::ReadLZWData(const char* aData, size_t aLength)
          (length > 0 || mGIFStruct.bits >= mGIFStruct.codesize)) {
     size_t bytesRead = 0;
 
-    auto result = mGIFStruct.images_decoded == 0
+    auto result = mGIFStruct.images_decoded == 0 || ShouldBlendAnimation()
       ? mPipe.WritePixels<uint32_t>([&]{ return YieldPixel<uint32_t>(data, length, &bytesRead); })
       : mPipe.WritePixels<uint8_t>([&]{ return YieldPixel<uint8_t>(data, length, &bytesRead); });
 

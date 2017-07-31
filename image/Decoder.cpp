@@ -353,19 +353,34 @@ Decoder::AllocateFrameInternal(uint32_t aFrameNum,
     return RawAccessFrameRef();
   }
 
-  if (aFrameNum == 1) {
-    MOZ_ASSERT(aPreviousFrame, "Must provide a previous frame when animated");
-    aPreviousFrame->SetRawAccessOnly();
-
-    // If we dispose of the first frame by clearing it, then the first frame's
-    // refresh area is all of itself.
-    // RESTORE_PREVIOUS is invalid (assumed to be DISPOSE_CLEAR).
-    AnimationData previousFrameData = aPreviousFrame->GetAnimationData();
-    if (previousFrameData.mDisposalMethod == DisposalMethod::CLEAR ||
-        previousFrameData.mDisposalMethod == DisposalMethod::CLEAR_ALL ||
-        previousFrameData.mDisposalMethod == DisposalMethod::RESTORE_PREVIOUS) {
-      mFirstFrameRefreshArea = previousFrameData.mRect;
+  if (aPreviousFrame) {
+    DisposalMethod disposalMethod = DisposalMethod::NOT_SPECIFIED;
+    IntRect rect;
+    if (aFrameNum == 1 || ShouldBlendAnimation()) {
+      AnimationData previousFrameData = aPreviousFrame->GetAnimationData();
+      disposalMethod = previousFrameData.mDisposalMethod;
+      rect = previousFrameData.mRect;
     }
+
+    if (aFrameNum == 1) {
+      aPreviousFrame->SetRawAccessOnly();
+
+      // If we dispose of the first frame by clearing it, then the first frame's
+      // refresh area is all of itself.
+      // RESTORE_PREVIOUS is invalid (assumed to be DISPOSE_CLEAR).
+      if (disposalMethod == DisposalMethod::CLEAR ||
+          disposalMethod == DisposalMethod::CLEAR_ALL ||
+          disposalMethod == DisposalMethod::RESTORE_PREVIOUS) {
+        mFirstFrameRefreshArea = rect;
+      }
+    }
+
+    if (ShouldBlendAnimation() &&
+        disposalMethod != DisposalMethod::RESTORE_PREVIOUS) {
+      mRestoreFrame = aPreviousFrame->RawAccessRef();
+    }
+  } else {
+    MOZ_ASSERT(aFrameNum == 0, "Must provide a previous frame when animated");
   }
 
   if (aFrameNum > 0) {
