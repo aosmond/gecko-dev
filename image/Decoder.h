@@ -266,6 +266,15 @@ public:
   }
 
   /**
+   * Should blend the current frame with the previous frames to produce a
+   * complete frame instead of a partial frame for animated images.
+   */
+  bool ShouldBlendAnimation() const
+  {
+    return bool(mDecoderFlags & DecoderFlags::BLEND_ANIMATION);
+  }
+
+  /**
    * @return the number of complete animation frames which have been decoded so
    * far, if it has changed since the last call to TakeCompleteFrameCount();
    * otherwise, returns Nothing().
@@ -404,6 +413,12 @@ public:
   RawAccessFrameRef GetCurrentFrameRef()
   {
     return mCurrentFrame ? mCurrentFrame->RawAccessRef()
+                         : RawAccessFrameRef();
+  }
+
+  RawAccessFrameRef GetRestoreFrameRef()
+  {
+    return mRestoreFrame ? mRestoreFrame->RawAccessRef()
                          : RawAccessFrameRef();
   }
 
@@ -562,6 +577,7 @@ private:
   RefPtr<RasterImage> mImage;
   Maybe<SourceBufferIterator> mIterator;
   RawAccessFrameRef mCurrentFrame;
+  RawAccessFrameRef mRestoreFrame;
   ImageMetadata mImageMetadata;
   gfx::IntRect mInvalidRect; // Tracks an invalidation region in the current frame.
   Maybe<gfx::IntSize> mOutputSize;  // The size of our output surface.
