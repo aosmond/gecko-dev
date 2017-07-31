@@ -112,13 +112,14 @@ public:
                           SurfaceFormat aFormat,
                           uint8_t aPaletteDepth = 0,
                           bool aNonPremult = false,
-                          bool aIsAnimated = false);
+                          bool aIsAnimated = false,
+                          bool aIsFullFrame = true);
 
   nsresult InitForAnimator(const nsIntSize& aSize,
                            SurfaceFormat aFormat)
   {
     return InitForDecoder(aSize, nsIntRect(0, 0, aSize.width, aSize.height),
-                          aFormat, 0, false, true);
+                          aFormat, 0, false, true, false);
   }
 
 
@@ -238,6 +239,8 @@ public:
   uint32_t* GetPaletteData() const;
   uint8_t GetPaletteDepth() const { return mPaletteDepth; }
 
+  bool IsFullFrame() const { return mIsFullFrame; }
+
   AnimationData GetAnimationData() const;
 
   bool GetCompositingFailed() const;
@@ -355,7 +358,7 @@ private: // data
   uint8_t      mPaletteDepth;
 
   bool mNonPremult;
-
+  bool mIsFullFrame;
 
   //////////////////////////////////////////////////////////////////////////////
   // Main-thread-only mutable data.
