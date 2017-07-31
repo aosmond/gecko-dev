@@ -313,9 +313,8 @@ FrameAnimator::AdvanceFrame(AnimationState& aState,
 
   if (nextFrameIndex == 0) {
     ret.mDirtyRect = aState.FirstFrameRefreshArea();
-  } else {
+  } else if (!gfxPrefs::ImageAnimatedGenerateFullFrames()) {
     MOZ_ASSERT(nextFrameIndex == currentFrameIndex + 1);
-
     // Change frame
     if (!DoBlend(aFrames, &ret.mDirtyRect, currentFrameIndex, nextFrameIndex)) {
       // something went wrong, move on to next
