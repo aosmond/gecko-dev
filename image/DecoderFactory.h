@@ -95,7 +95,17 @@ public:
                          NotNull<SourceBuffer*> aSourceBuffer,
                          const gfx::IntSize& aIntrinsicSize,
                          DecoderFlags aDecoderFlags,
-                         SurfaceFlags aSurfaceFlags);
+                         SurfaceFlags aSurfaceFlags,
+                         size_t aCurrentFrame);
+
+  /**
+   * Creates and initializes a decoder for animated images, cloned from the
+   * given decoder.
+   *
+   * @param aDecoder Decoder to clone.
+   */
+  static already_AddRefed<Decoder>
+  CloneAnimationDecoder(Decoder* aDecoder);
 
   /**
    * Creates and initializes a metadata decoder of type @aType. This decoder
