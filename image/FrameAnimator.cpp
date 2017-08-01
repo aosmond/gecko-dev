@@ -60,7 +60,6 @@ AnimationState::UpdateStateInternal(LookupResult& aResult,
   } else {
     MOZ_ASSERT(aResult.Type() == MatchType::EXACT);
     mDiscarded = false;
-
     // If mHasBeenDecoded is true then we know the true total frame count and
     // we can use it to determine if we have all the frames now so we know if
     // we are currently fully decoded.
@@ -69,12 +68,7 @@ AnimationState::UpdateStateInternal(LookupResult& aResult,
     if (mHasBeenDecoded) {
       Maybe<uint32_t> frameCount = FrameCount();
       MOZ_ASSERT(frameCount.isSome());
-      if (NS_SUCCEEDED(aResult.Surface().Seek(*frameCount - 1)) &&
-          aResult.Surface()->IsFinished()) {
-        mIsCurrentlyDecoded = true;
-      } else {
-        mIsCurrentlyDecoded = false;
-      }
+      mIsCurrentlyDecoded = aResult.Surface().IsFullyDecoded();
     }
   }
 
@@ -321,6 +315,7 @@ FrameAnimator::AdvanceFrame(AnimationState& aState,
 
     // Change frame
     if (!DoBlend(aFrames, &ret.mDirtyRect, currentFrameIndex, nextFrameIndex)) {
+
       // something went wrong, move on to next
       NS_WARNING("FrameAnimator::AdvanceFrame(): Compositing of frame failed");
       nextFrame->SetCompositingFailed(true);
@@ -328,6 +323,7 @@ FrameAnimator::AdvanceFrame(AnimationState& aState,
       MOZ_ASSERT(currentFrameEndTime.isSome());
       aState.mCurrentAnimationFrameTime = *currentFrameEndTime;
       aState.mCurrentAnimationFrameIndex = nextFrameIndex;
+      aFrames.Advance();
 
       return ret;
     }
@@ -373,11 +369,32 @@ FrameAnimator::AdvanceFrame(AnimationState& aState,
 
   // Set currentAnimationFrameIndex at the last possible moment
   aState.mCurrentAnimationFrameIndex = nextFrameIndex;
+  aFrames.Advance();
 
   // If we're here, we successfully advanced the frame.
   ret.mFrameAdvanced = true;
 
   return ret;
+}
+
+void
+FrameAnimator::ResetAnimation(AnimationState& aState)
+{
+  aState.ResetAnimation();
+
+  // Our surface provider is synchronized to our state, so we need to reset its
+  // state as well, if we still have one.
+  LookupResult result =
+    SurfaceCache::Lookup(ImageKey(mImage),
+                         RasterSurfaceKey(mSize,
+                                          DefaultSurfaceFlags(),
+                                          PlaybackType::eAnimated));
+  if (!result) {
+    return;
+  }
+
+  printf_stderr("[AO] AnimationState::ResetAnimation -- OMG RESTARTING ANIMATION\n");
+  result.Surface().Advance(/* aReset */ true);
 }
 
 RefreshResult
@@ -435,10 +452,10 @@ FrameAnimator::RequestRefresh(AnimationState& aState,
     // AdvanceFrame can't advance to a frame that doesn't exist yet.
     MOZ_ASSERT(currentFrameEndTime.isSome());
 
-    // If we didn't advance a frame, and our frame end time didn't change,
-    // then we need to break out of this loop & wait for the frame(s)
-    // to finish downloading.
     if (!frameRes.mFrameAdvanced && (*currentFrameEndTime == oldFrameEndTime)) {
+      // If we didn't advance a frame, and our frame end time didn't change,
+      // then we need to break out of this loop & wait for the frame(s)
+      // to finish downloading.
       break;
     }
   }

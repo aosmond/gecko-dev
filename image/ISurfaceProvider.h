@@ -53,6 +53,9 @@ public:
   /// @return true if DrawableRef() will return a completely decoded surface.
   virtual bool IsFinished() const = 0;
 
+  /// @return true if the underlying decoder is still active.
+  virtual bool IsFullyDecoded() const { return IsFinished(); }
+
   /// @return the number of bytes of memory this ISurfaceProvider is expected to
   /// require. Optimizations may result in lower real memory usage. Trivial
   /// overhead is ignored. Because this value is used in bookkeeping, it's
@@ -75,6 +78,8 @@ public:
     ref->AddSizeOfExcludingThis(aMallocSizeOf, aHeapSizeOut,
                                 aNonHeapSizeOut, aSharedHandlesOut);
   }
+
+  virtual void Advance(bool aReset) { }
 
   /// @return the availability state of this ISurfaceProvider, which indicates
   /// whether DrawableRef() could successfully return a surface. Should only be
@@ -188,6 +193,26 @@ public:
     mDrawableRef = mProvider->DrawableRef(aFrame);
 
     return mDrawableRef ? NS_OK : NS_ERROR_FAILURE;
+  }
+
+  void Advance(bool aReset = false)
+  {
+    if (!mProvider) {
+      MOZ_ASSERT_UNREACHABLE("Trying to advance a static DrawableSurface?");
+      return;
+    }
+
+    mProvider->Advance(aReset);
+  }
+
+  bool IsFullyDecoded() const
+  {
+    if (!mProvider) {
+      MOZ_ASSERT_UNREACHABLE("Trying to check decoding state of a static DrawableSurface?");
+      return false;
+    }
+
+    return mProvider->IsFullyDecoded();
   }
 
   explicit operator bool() const { return mHaveSurface; }

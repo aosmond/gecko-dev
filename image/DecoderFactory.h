@@ -97,6 +97,9 @@ public:
                          DecoderFlags aDecoderFlags,
                          SurfaceFlags aSurfaceFlags);
 
+  static already_AddRefed<Decoder>
+  CloneAnimationDecoder(Decoder* aDecoder);
+
   /**
    * Creates and initializes a metadata decoder of type @aType. This decoder
    * will only decode the image's header, extracting metadata like the size of

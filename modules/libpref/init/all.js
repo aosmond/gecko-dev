@@ -4603,6 +4603,10 @@ pref("toolkit.zoomManager.zoomValues", ".3,.5,.67,.8,.9,1,1.1,1.2,1.33,1.5,1.7,2
 // Image-related prefs
 //
 
+pref("image.animated.frames-on-demand.threshold-kb", 1024);
+
+pref("image.animated.frames-on-demand.min-frames", 4);
+
 // The maximum size, in bytes, of the decoded images we cache
 pref("image.cache.size", 5242880);
 

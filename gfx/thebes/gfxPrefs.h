@@ -501,6 +501,8 @@ private:
   DECL_GFX_PREF(Live, "gl.require-hardware",                   RequireHardwareGL, bool, false);
   DECL_GFX_PREF(Live, "gl.use-tls-is-current",                 UseTLSIsCurrent, int32_t, 0);
 
+  DECL_GFX_PREF(Live, "image.animated.frames-on-demand.threshold-kb", ImageAnimatedFramesOnDemandThresholdKB, uint32_t, 0);
+  DECL_GFX_PREF(Live, "image.animated.frames-on-demand.min-frames", ImageAnimatedFramesOnDemandMinFrames, uint32_t, 4);
   DECL_GFX_PREF(Once, "image.cache.size",                      ImageCacheSize, int32_t, 5*1024*1024);
   DECL_GFX_PREF(Once, "image.cache.timeweight",                ImageCacheTimeWeight, int32_t, 500);
   DECL_GFX_PREF(Live, "image.decode-immediately.enabled",      ImageDecodeImmediatelyEnabled, bool, false);

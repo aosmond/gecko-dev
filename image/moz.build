@@ -52,6 +52,7 @@ EXPORTS += [
 ]
 
 UNIFIED_SOURCES += [
+    'AnimationFrameBuffer.cpp',
     'AnimationSurfaceProvider.cpp',
     'ClippedImage.cpp',
     'DecodedSurfaceProvider.cpp',

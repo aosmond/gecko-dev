@@ -13,6 +13,7 @@
 #include "FrameAnimator.h"
 #include "IDecodingTask.h"
 #include "ISurfaceProvider.h"
+#include "AnimationFrameBuffer.h"
 
 namespace mozilla {
 namespace image {
@@ -44,11 +45,13 @@ public:
   DrawableSurface Surface() override { return DrawableSurface(WrapNotNull(this)); }
 
   bool IsFinished() const override;
+  bool IsFullyDecoded() const override;
   size_t LogicalSizeInBytes() const override;
   void AddSizeOfExcludingThis(MallocSizeOf aMallocSizeOf,
                               size_t& aHeapSizeOut,
                               size_t& aNonHeapSizeOut,
                               size_t& aSharedHandlesOut) override;
+  void Advance(bool aReset) override;
 
 protected:
   DrawableFrameRef DrawableRef(size_t aFrame) override;
@@ -78,8 +81,8 @@ private:
   virtual ~AnimationSurfaceProvider();
 
   void DropImageReference();
-  void CheckForNewFrameAtYield();
-  void CheckForNewFrameAtTerminalState();
+  bool CheckForNewFrameAtYield();
+  bool CheckForNewFrameAtTerminalState();
   void AnnounceSurfaceAvailable();
   void FinishDecoding();
 
@@ -96,7 +99,7 @@ private:
   mutable Mutex mFramesMutex;
 
   /// The frames of this animation, in order.
-  nsTArray<RawAccessFrameRef> mFrames;
+  AnimationFrameBuffer mFrames;
 };
 
 } // namespace image
