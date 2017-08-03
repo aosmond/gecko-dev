@@ -1,4 +1,5 @@
-/* This Source Code Form is subject to the terms of the Mozilla Public
+/* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*-
+ * This Source Code Form is subject to the terms of the Mozilla Public
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
@@ -28,6 +29,7 @@ VolatileBuffer::VolatileBuffer()
   , mLockCount(0)
   , mHeap(false)
   , mFirstLock(true)
+  , mPurged(false)
 {
 }
 
@@ -82,7 +84,7 @@ VolatileBuffer::~VolatileBuffer()
   }
 }
 
-bool
+void
 VolatileBuffer::Lock(void** aBuf)
 {
   MutexAutoLock lock(mMutex);
@@ -91,14 +93,14 @@ VolatileBuffer::Lock(void** aBuf)
 
   *aBuf = mBuf;
   if (++mLockCount > 1 || OnHeap()) {
-    return true;
+    return;
   }
 
   // MEM_RESET_UNDO's behavior is undefined when called on memory that
   // hasn't been MEM_RESET.
   if (mFirstLock) {
     mFirstLock = false;
-    return true;
+    return;
   }
 
   void* addr = VirtualAllocEx(GetCurrentProcess(),
@@ -106,7 +108,9 @@ VolatileBuffer::Lock(void** aBuf)
                               mSize,
                               MEM_RESET_UNDO,
                               PAGE_READWRITE);
-  return !!addr;
+  if (!mPurged) {
+    mPurged = !addr;
+  }
 }
 
 void
@@ -131,6 +135,19 @@ bool
 VolatileBuffer::OnHeap() const
 {
   return mHeap;
+}
+
+bool
+VolatileBuffer::WasBufferPurged() const
+{
+  return mPurged;
+}
+
+void
+VolatileBuffer::ClearBufferPurged()
+{
+  MOZ_ASSERT(mPurged);
+  mPurged = false;
 }
 
 size_t

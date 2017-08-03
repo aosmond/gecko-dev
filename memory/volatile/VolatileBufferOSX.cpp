@@ -1,4 +1,5 @@
-/* This Source Code Form is subject to the terms of the Mozilla Public
+/* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*-
+ * This Source Code Form is subject to the terms of the Mozilla Public
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
@@ -21,6 +22,7 @@ VolatileBuffer::VolatileBuffer()
   , mSize(0)
   , mLockCount(0)
   , mHeap(false)
+  , mPurged(false)
 {
 }
 
@@ -63,7 +65,7 @@ VolatileBuffer::~VolatileBuffer()
   }
 }
 
-bool
+void
 VolatileBuffer::Lock(void** aBuf)
 {
   MutexAutoLock lock(mMutex);
@@ -72,7 +74,7 @@ VolatileBuffer::Lock(void** aBuf)
 
   *aBuf = mBuf;
   if (++mLockCount > 1 || OnHeap()) {
-    return true;
+    return;
   }
 
   int state = VM_PURGABLE_NONVOLATILE;
@@ -81,7 +83,9 @@ VolatileBuffer::Lock(void** aBuf)
                         (vm_address_t)mBuf,
                         VM_PURGABLE_SET_STATE,
                         &state);
-  return ret == KERN_SUCCESS && !(state & VM_PURGABLE_EMPTY);
+  if (!mPurged) {
+    mPurged = ret != KERN_SUCCESS || (state & VM_PURGABLE_EMPTY);
+  }
 }
 
 void
@@ -101,6 +105,19 @@ VolatileBuffer::Unlock()
                         VM_PURGABLE_SET_STATE,
                         &state);
   MOZ_ASSERT(ret == KERN_SUCCESS, "Failed to set buffer as purgable");
+}
+
+bool
+VolatileBuffer::WasBufferPurged() const
+{
+  return mPurged;
+}
+
+void
+VolatileBuffer::ClearBufferPurged()
+{
+  MOZ_ASSERT(mPurged);
+  mPurged = false;
 }
 
 bool

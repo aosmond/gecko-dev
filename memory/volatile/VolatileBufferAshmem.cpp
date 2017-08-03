@@ -1,4 +1,5 @@
-/* This Source Code Form is subject to the terms of the Mozilla Public
+/* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*-
+ * This Source Code Form is subject to the terms of the Mozilla Public
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
@@ -27,6 +28,7 @@ VolatileBuffer::VolatileBuffer()
   , mSize(0)
   , mLockCount(0)
   , mFd(-1)
+  , mPurged(false)
 {
 }
 
@@ -83,7 +85,7 @@ VolatileBuffer::~VolatileBuffer()
   }
 }
 
-bool
+void
 VolatileBuffer::Lock(void** aBuf)
 {
   MutexAutoLock lock(mMutex);
@@ -92,12 +94,15 @@ VolatileBuffer::Lock(void** aBuf)
 
   *aBuf = mBuf;
   if (++mLockCount > 1 || OnHeap()) {
-    return true;
+    return;
   }
 
   // Zero offset and zero length means we want to pin/unpin the entire thing.
   struct ashmem_pin pin = { 0, 0 };
-  return ioctl(mFd, ASHMEM_PIN, &pin) == ASHMEM_NOT_PURGED;
+  int rv = ioctl(mFd, ASHMEM_PIN, &pin);
+  if (!mPurged) {
+    mPurged = rv != ASHMEM_NOT_PURGED;
+  }
 }
 
 void
@@ -118,6 +123,19 @@ bool
 VolatileBuffer::OnHeap() const
 {
   return mFd < 0;
+}
+
+bool
+VolatileBuffer::WasBufferPurged() const
+{
+  return mPurged;
+}
+
+void
+VolatileBuffer::ClearBufferPurged()
+{
+  MOZ_ASSERT(mPurged);
+  mPurged = false;
 }
 
 size_t

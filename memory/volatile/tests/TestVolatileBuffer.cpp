@@ -1,4 +1,5 @@
-/* This Source Code Form is subject to the terms of the Mozilla Public
+/* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*-
+ * This Source Code Form is subject to the terms of the Mozilla Public
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
@@ -90,6 +91,17 @@ TEST(VolatileBufferTest, RealVolatileBuffersWork)
   {
     VolatileBufferPtr<char> ptr(buf);
 
-    EXPECT_FALSE(ptr.WasBufferPurged()) << "Buffer still purged after lock";
+    EXPECT_TRUE(ptr.WasBufferPurged()) << "Buffer should still be purged after lock";
+
+    // Nominally the owner should repopulate the buffer with the expected data
+    // before clearing the purged state.
+    ptr.ClearBufferPurged();
+    EXPECT_FALSE(ptr.WasBufferPurged()) << "Buffer still purged after clear";
+  }
+
+  {
+    VolatileBufferPtr<char> ptr(buf);
+
+    EXPECT_FALSE(ptr.WasBufferPurged()) << "Buffer still purged after clear and lock";
   }
 }

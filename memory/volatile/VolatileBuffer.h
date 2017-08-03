@@ -1,4 +1,5 @@
-/* This Source Code Form is subject to the terms of the Mozilla Public
+/* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*-
+ * This Source Code Form is subject to the terms of the Mozilla Public
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
@@ -60,8 +61,11 @@ public:
   bool OnHeap() const;
 
 protected:
-  bool Lock(void** aBuf);
+  void Lock(void** aBuf);
   void Unlock();
+
+  bool WasBufferPurged() const;
+  void ClearBufferPurged();
 
 private:
   ~VolatileBuffer();
@@ -78,11 +82,14 @@ private:
   int mLockCount;
 #if defined(ANDROID)
   int mFd;
+  bool mPurged;
 #elif defined(XP_DARWIN)
   bool mHeap;
+  bool mPurged;
 #elif defined(XP_WIN)
   bool mHeap;
   bool mFirstLock;
+  bool mPurged;
 #endif
 };
 
@@ -91,7 +98,6 @@ public:
   explicit VolatileBufferPtr_base(VolatileBuffer* vbuf)
     : mVBuf(vbuf)
     , mMapping(nullptr)
-    , mPurged(false)
   {
     Lock();
   }
@@ -100,8 +106,17 @@ public:
     Unlock();
   }
 
+  void ClearBufferPurged() {
+    if (mVBuf) {
+      mVBuf->ClearBufferPurged();
+    }
+  }
+
   bool WasBufferPurged() const {
-    return mPurged;
+    if (mVBuf) {
+      return mVBuf->WasBufferPurged();
+    }
+    return false;
   }
 
 protected:
@@ -115,14 +130,11 @@ protected:
   }
 
 private:
-  bool mPurged;
-
   void Lock() {
     if (mVBuf) {
-      mPurged = !mVBuf->Lock(&mMapping);
+      mVBuf->Lock(&mMapping);
     } else {
       mMapping = nullptr;
-      mPurged = false;
     }
   }
 

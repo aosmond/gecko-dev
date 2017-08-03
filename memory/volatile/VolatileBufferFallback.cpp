@@ -1,4 +1,5 @@
-/* This Source Code Form is subject to the terms of the Mozilla Public
+/* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*-
+ * This Source Code Form is subject to the terms of the Mozilla Public
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
@@ -48,7 +49,7 @@ VolatileBuffer::~VolatileBuffer()
   free(mBuf);
 }
 
-bool
+void
 VolatileBuffer::Lock(void** aBuf)
 {
   MutexAutoLock lock(mMutex);
@@ -57,8 +58,6 @@ VolatileBuffer::Lock(void** aBuf)
 
   *aBuf = mBuf;
   mLockCount++;
-
-  return true;
 }
 
 void
@@ -74,6 +73,18 @@ bool
 VolatileBuffer::OnHeap() const
 {
   return true;
+}
+
+bool
+VolatileBuffer::WasBufferPurged() const
+{
+  return false;
+}
+
+void
+VolatileBuffer::ClearBufferPurged()
+{
+  MOZ_ASSERT_UNREACHABLE("VolatileBuffer could not have been purged!");
 }
 
 size_t
