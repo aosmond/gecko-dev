@@ -34,12 +34,10 @@ AnimationSurfaceProvider::AnimationSurfaceProvider(NotNull<RasterImage*> aImage,
   // enter frames-on-demand mode. We are willing to buffer as many frames that
   // can fit inside the given size threshold, bounded by at least as many frames
   // as we are expected to buffer.
-  const size_t pixelSize = gfxPrefs::ImageAnimatedGenerateFullFrames()
-                         ? sizeof(uint32_t) : sizeof(uint8_t);
   IntSize frameSize = aSurfaceKey.Size();
   size_t threshold =
     (gfxPrefs::ImageAnimatedFramesOnDemandThresholdKB() * 1024) /
-    (pixelSize * frameSize.width * frameSize.height);
+    (sizeof(uint8_t) * frameSize.width * frameSize.height);
   size_t batch = gfxPrefs::ImageAnimatedFramesOnDemandMinFrames();
 
   mFrames.Init(threshold, batch);
