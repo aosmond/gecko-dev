@@ -13,6 +13,7 @@ AnimationFrameBuffer::AnimationFrameBuffer()
   : mThreshold(0)
   , mBatch(0)
   , mPending(0)
+  , mAdvance(0)
   , mInsertIndex(0)
   , mGetIndex(0)
   , mSizeKnown(false)
@@ -95,10 +96,15 @@ AnimationFrameBuffer::Insert(RawAccessFrameRef&& aFrame)
     }
   }
 
-  // Ensure we only request more decoded frames if we actually need them.
   MOZ_ASSERT(mFrames[mInsertIndex]);
   ++mInsertIndex;
-  return --mPending > 0;
+
+  // Ensure we only request more decoded frames if we actually need them.
+  bool continueDecoding = --mPending > 0;
+  if (mAdvance > 0) {
+    continueDecoding |= AdvanceBy(0);
+  }
+  return continueDecoding;
 }
 
 bool
@@ -208,10 +214,53 @@ AnimationFrameBuffer::Advance()
 }
 
 bool
+AnimationFrameBuffer::Advance(size_t aUpToFrame)
+{
+  if (mFrames.IsEmpty()) {
+    return false;
+  }
+
+  bool restartDecoder = false;
+  while (mGetIndex != aUpToFrame) {
+    size_t previousFrame = mGetIndex;
+    restartDecoder |= Advance();
+    if (previousFrame == mGetIndex) {
+      // We wanted to advance but we could not.
+      break;
+    }
+  }
+
+  return restartDecoder;
+}
+
+bool
+AnimationFrameBuffer::AdvanceBy(size_t aFrames)
+{
+  bool restartDecoder = false;
+  mAdvance += aFrames;
+  if (mFrames.IsEmpty()) {
+    return false;
+  }
+
+  while (mAdvance > 0) {
+    size_t current = mGetIndex;
+    restartDecoder |= Advance();
+    if (current == mGetIndex) {
+      // We wanted to advance but we could not.
+      break;
+    }
+    --mAdvance;
+  }
+
+  return restartDecoder;
+}
+
+bool
 AnimationFrameBuffer::Reset(bool aAdvanceOnly)
 {
   // The animation needs to start back at the beginning.
   mGetIndex = 0;
+  mAdvance = 0;
 
   if (aAdvanceOnly) {
     MOZ_ASSERT(!MayDiscard());
@@ -235,7 +284,6 @@ AnimationFrameBuffer::Reset(bool aAdvanceOnly)
   // frame and go back to the initial state.
   MOZ_ASSERT(MayDiscard());
   bool restartDecoder = mPending == 0;
-  mGetIndex = 0;
   mInsertIndex = 0;
   mPending = 2 * mBatch;
 

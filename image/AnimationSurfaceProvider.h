@@ -51,7 +51,8 @@ public:
                               size_t& aHeapSizeOut,
                               size_t& aNonHeapSizeOut,
                               size_t& aSharedHandlesOut) override;
-  void Advance(bool aReset) override;
+  void Advance(size_t aUpToFrame, bool aReset) override;
+  void AdvanceBy(size_t aFrames);
 
 protected:
   DrawableFrameRef DrawableRef(size_t aFrame) override;

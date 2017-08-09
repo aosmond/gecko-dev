@@ -79,7 +79,7 @@ public:
                                 aNonHeapSizeOut, aSharedHandlesOut);
   }
 
-  virtual void Advance(bool aReset) { }
+  virtual void Advance(size_t aUpToFrame, bool aReset) { }
 
   /// @return the availability state of this ISurfaceProvider, which indicates
   /// whether DrawableRef() could successfully return a surface. Should only be
@@ -195,14 +195,14 @@ public:
     return mDrawableRef ? NS_OK : NS_ERROR_FAILURE;
   }
 
-  void Advance(bool aReset = false)
+  void Advance(size_t aUpToFrame, bool aReset = false)
   {
     if (!mProvider) {
       MOZ_ASSERT_UNREACHABLE("Trying to advance a static DrawableSurface?");
       return;
     }
 
-    mProvider->Advance(aReset);
+    mProvider->Advance(aUpToFrame, aReset);
   }
 
   bool IsFullyDecoded() const

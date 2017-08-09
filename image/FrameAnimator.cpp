@@ -323,7 +323,7 @@ FrameAnimator::AdvanceFrame(AnimationState& aState,
       MOZ_ASSERT(currentFrameEndTime.isSome());
       aState.mCurrentAnimationFrameTime = *currentFrameEndTime;
       aState.mCurrentAnimationFrameIndex = nextFrameIndex;
-      aFrames.Advance();
+      aFrames.Advance(nextFrameIndex);
 
       return ret;
     }
@@ -369,7 +369,7 @@ FrameAnimator::AdvanceFrame(AnimationState& aState,
 
   // Set currentAnimationFrameIndex at the last possible moment
   aState.mCurrentAnimationFrameIndex = nextFrameIndex;
-  aFrames.Advance();
+  aFrames.Advance(nextFrameIndex);
 
   // If we're here, we successfully advanced the frame.
   ret.mFrameAdvanced = true;
@@ -394,7 +394,7 @@ FrameAnimator::ResetAnimation(AnimationState& aState)
   }
 
   printf_stderr("[AO] AnimationState::ResetAnimation -- OMG RESTARTING ANIMATION\n");
-  result.Surface().Advance(/* aReset */ true);
+  result.Surface().Advance(/* aUpToFrame */ 0, /* aReset */ true);
 }
 
 RefreshResult

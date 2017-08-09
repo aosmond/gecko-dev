@@ -163,7 +163,8 @@ DecoderFactory::CreateAnimationDecoder(DecoderType aType,
                                        NotNull<SourceBuffer*> aSourceBuffer,
                                        const IntSize& aIntrinsicSize,
                                        DecoderFlags aDecoderFlags,
-                                       SurfaceFlags aSurfaceFlags)
+                                       SurfaceFlags aSurfaceFlags,
+                                       size_t aAdvanceBy /* = 0 */)
 {
   if (aType == DecoderType::UNKNOWN) {
     return nullptr;
@@ -201,6 +202,8 @@ DecoderFactory::CreateAnimationDecoder(DecoderType aType,
   if (SurfaceCache::Insert(provider) != InsertOutcome::SUCCESS) {
     return nullptr;
   }
+
+  provider->AdvanceBy(aAdvanceBy);
 
   // Return the surface provider in its IDecodingTask guise.
   RefPtr<IDecodingTask> task = provider.get();

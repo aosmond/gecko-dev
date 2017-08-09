@@ -95,7 +95,8 @@ public:
                          NotNull<SourceBuffer*> aSourceBuffer,
                          const gfx::IntSize& aIntrinsicSize,
                          DecoderFlags aDecoderFlags,
-                         SurfaceFlags aSurfaceFlags);
+                         SurfaceFlags aSurfaceFlags,
+                         size_t aAdvanceBy = 0);
 
   static already_AddRefed<Decoder>
   CloneAnimationDecoder(Decoder* aDecoder);

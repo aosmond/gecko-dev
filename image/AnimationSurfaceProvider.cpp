@@ -42,11 +42,12 @@ AnimationSurfaceProvider::AnimationSurfaceProvider(NotNull<RasterImage*> aImage,
 
   mFrames.Init(threshold, batch);
 
-  printf_stderr("[AO] [%p] AnimationSurfaceProvider::AnimationSurfaceProvider -- threshold at %u frames\n", this, mFrames.Threshold());
+  printf_stderr("[AO] [%p] AnimationSurfaceProvider::AnimationSurfaceProvider -- threshold at %zu frames\n", this, mFrames.Threshold());
 }
 
 AnimationSurfaceProvider::~AnimationSurfaceProvider()
 {
+  printf_stderr("[AO] [%p] AnimationSurfaceProvider::~AnimationSurfaceProvider\n", this);
   DropImageReference();
 }
 
@@ -66,14 +67,31 @@ AnimationSurfaceProvider::DropImageReference()
 }
 
 void
-AnimationSurfaceProvider::Advance(bool aReset)
+AnimationSurfaceProvider::AdvanceBy(size_t aFrames)
+{
+  bool restartDecoder;
+
+  {
+    MutexAutoLock lock(mFramesMutex);
+    printf_stderr("[AO] [%p] AnimationSurfaceProvider::AdvanceBy -- %zu frames\n", this, aFrames);
+    restartDecoder = mFrames.AdvanceBy(aFrames);
+  }
+
+  if (restartDecoder) {
+    printf_stderr("[AO] [%p] AnimationSurfaceProvider::AdvanceBy -- queue decode task, %zu pending frames\n", this, mFrames.Pending());
+    DecodePool::Singleton()->AsyncRun(this);
+  }
+}
+
+void
+AnimationSurfaceProvider::Advance(size_t aUpToFrame, bool aReset)
 {
   bool restartDecoder;
 
   if (!aReset) {
     // Typical advancement of a frame.
     MutexAutoLock lock(mFramesMutex);
-    restartDecoder = mFrames.Advance();
+    restartDecoder = mFrames.Advance(aUpToFrame);
   } else {
     // We want to go back to the beginning.
     bool mayDiscard;
@@ -112,7 +130,7 @@ AnimationSurfaceProvider::Advance(bool aReset)
   }
 
   if (restartDecoder) {
-    printf_stderr("[AO] [%p] AnimationSurfaceProvider::DrawableRef -- queue decode task, %d pending frames\n", this, mFrames.Pending());
+    printf_stderr("[AO] [%p] AnimationSurfaceProvider::DrawableRef -- queue decode task, %zu pending frames\n", this, mFrames.Pending());
     DecodePool::Singleton()->AsyncRun(this);
   }
 }
@@ -127,7 +145,11 @@ AnimationSurfaceProvider::DrawableRef(size_t aFrame)
     return DrawableFrameRef();
   }
 
-  return mFrames.Get(aFrame);
+  DrawableFrameRef frameRef = mFrames.Get(aFrame);
+  if (!frameRef) {
+    printf_stderr("[AO] [%p] AnimationSurfaceProvider::DrawableRef -- requested %zu, but missing\n", this, aFrame);
+  }
+  return frameRef;
 }
 
 bool
@@ -275,7 +297,7 @@ AnimationSurfaceProvider::CheckForNewFrameAtYield()
       justGotFirstFrame = true;
     }
 
-    printf_stderr("[AO] [%p] AnimationSurfaceProvider::CheckForNewFrameAtYield -- %d pending requests, got frame %u\n", this, mFrames.Pending(), mFrames.Frames().Length());
+    //printf_stderr("[AO] [%p] AnimationSurfaceProvider::CheckForNewFrameAtYield -- %d pending requests, got frame %u\n", this, mFrames.Pending(), mFrames.Frames().Length());
   }
 
   if (justGotFirstFrame) {
@@ -314,7 +336,7 @@ AnimationSurfaceProvider::CheckForNewFrameAtTerminalState()
       justGotFirstFrame = true;
     }
 
-    printf_stderr("[AO] [%p] AnimationSurfaceProvider::CheckForNewFrameAtTerminalState -- got frame %u\n", this, mFrames.Frames().Length());
+    //printf_stderr("[AO] [%p] AnimationSurfaceProvider::CheckForNewFrameAtTerminalState -- got frame %u\n", this, mFrames.Frames().Length());
   }
 
   if (justGotFirstFrame) {

@@ -89,6 +89,8 @@ public:
    * @returns True if the caller should restart the decoder.
    */
   bool Advance();
+  bool Advance(size_t aUpToFrame);
+  bool AdvanceBy(size_t aFrames);
 
   /**
    * Resets the currently displayed frame of the frame buffer to the beginning.
@@ -117,6 +119,7 @@ private:
   size_t mThreshold;
   size_t mBatch;
   size_t mPending;
+  size_t mAdvance;
   size_t mInsertIndex;
   size_t mGetIndex;
   bool mSizeKnown;
