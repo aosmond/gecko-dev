@@ -30,6 +30,24 @@ AnimationSurfaceProvider::AnimationSurfaceProvider(NotNull<RasterImage*> aImage,
              "Use MetadataDecodingTask for metadata decodes");
   MOZ_ASSERT(!mDecoder->IsFirstFrameDecode(),
              "Use DecodedSurfaceProvider for single-frame image decodes");
+
+  // We still produce paletted surfaces for GIF which means the frames are
+  // smaller than one would expect for APNG. This may be removed if/when
+  // bug 1337111 lands and it is enabled by default.
+  size_t pixelSize = aDecoder->GetType() == DecoderType::GIF
+                     ? sizeof(uint8_t) : sizeof(uint32_t);
+
+  // Calculate how many frames we need to decode in this animation before we
+  // enter frames-on-demand mode. We are willing to buffer as many frames that
+  // can fit inside the given size threshold, bounded by at least as many frames
+  // as we are expected to buffer.
+  IntSize frameSize = aSurfaceKey.Size();
+  size_t threshold =
+    (size_t(gfxPrefs::ImageAnimatedDecodeOnDemandThresholdKB()) * 1024) /
+    (pixelSize * frameSize.width * frameSize.height);
+  size_t batch = gfxPrefs::ImageAnimatedDecodeOnDemandBatchSize();
+
+  mFrames.Initialize(threshold, batch, aCurrentFrame);
 }
 
 AnimationSurfaceProvider::~AnimationSurfaceProvider()
@@ -49,6 +67,64 @@ AnimationSurfaceProvider::DropImageReference()
                                     mImage.forget());
 }
 
+void
+AnimationSurfaceProvider::Reset()
+{
+  // We want to go back to the beginning.
+  bool mayDiscard;
+  bool restartDecoder;
+
+  {
+    MutexAutoLock lock(mFramesMutex);
+
+    // If we have not crossed the threshold, we know we haven't discarded any
+    // frames, and thus we know it is safe move our display index back to the
+    // very beginning. It would be cleaner to let the frame buffer make this
+    // decision inside the AnimationFrameBuffer::Reset method, but if we have
+    // crossed the threshold, we need to hold onto the decoding mutex too. We
+    // should avoid blocking the main thread on the decoder threads.
+    mayDiscard = mFrames.MayDiscard();
+    if (!mayDiscard) {
+      restartDecoder = mFrames.Reset();
+    }
+  }
+
+  if (mayDiscard) {
+    // We are over the threshold and have started discarding old frames. In
+    // that case we need to seize the decoding mutex. Thankfully we know that
+    // we are in the process of decoding at most the batch size frames, so
+    // this should not take too long to acquire.
+    MutexAutoLock lock(mDecodingMutex);
+
+    // Recreate the decoder so we can regenerate the frames again.
+    mDecoder = DecoderFactory::CloneAnimationDecoder(mDecoder);
+    MOZ_ASSERT(mDecoder);
+
+    MutexAutoLock lock2(mFramesMutex);
+    restartDecoder = mFrames.Reset();
+  }
+
+  if (restartDecoder) {
+    DecodePool::Singleton()->AsyncRun(this);
+  }
+}
+
+void
+AnimationSurfaceProvider::Advance(size_t aFrame)
+{
+  bool restartDecoder;
+
+  {
+    // Typical advancement of a frame.
+    MutexAutoLock lock(mFramesMutex);
+    restartDecoder = mFrames.AdvanceTo(aFrame);
+  }
+
+  if (restartDecoder) {
+    DecodePool::Singleton()->AsyncRun(this);
+  }
+}
+
 DrawableFrameRef
 AnimationSurfaceProvider::DrawableRef(size_t aFrame)
 {
@@ -59,19 +135,7 @@ AnimationSurfaceProvider::DrawableRef(size_t aFrame)
     return DrawableFrameRef();
   }
 
-  if (mFrames.IsEmpty()) {
-    MOZ_ASSERT_UNREACHABLE("Calling DrawableRef() when we have no frames");
-    return DrawableFrameRef();
-  }
-
-  // If we don't have that frame, return an empty frame ref.
-  if (aFrame >= mFrames.Length()) {
-    return DrawableFrameRef();
-  }
-
-  // We've got the requested frame. Return it.
-  MOZ_ASSERT(mFrames[aFrame]);
-  return mFrames[aFrame]->DrawableRef();
+  return mFrames.Get(aFrame);
 }
 
 bool
@@ -84,13 +148,20 @@ AnimationSurfaceProvider::IsFinished() const
     return false;
   }
 
-  if (mFrames.IsEmpty()) {
+  if (mFrames.Frames().IsEmpty()) {
     MOZ_ASSERT_UNREACHABLE("Calling IsFinished() when we have no frames");
     return false;
   }
 
   // As long as we have at least one finished frame, we're finished.
-  return mFrames[0]->IsFinished();
+  return mFrames.Frames()[0]->IsFinished();
+}
+
+bool
+AnimationSurfaceProvider::HasFullyDecoded() const
+{
+  MutexAutoLock lock(mFramesMutex);
+  return mFrames.Complete();
 }
 
 size_t
@@ -122,9 +193,11 @@ AnimationSurfaceProvider::AddSizeOfExcludingThis(MallocSizeOf aMallocSizeOf,
   // that we must be careful to always use the same ordering elsewhere.
   MutexAutoLock lock(mFramesMutex);
 
-  for (const RawAccessFrameRef& frame : mFrames) {
-    frame->AddSizeOfExcludingThis(aMallocSizeOf, aHeapSizeOut,
-                                  aNonHeapSizeOut, aSharedHandlesOut);
+  for (const RawAccessFrameRef& frame : mFrames.Frames()) {
+    if (frame) {
+      frame->AddSizeOfExcludingThis(aMallocSizeOf, aHeapSizeOut,
+                                    aNonHeapSizeOut, aSharedHandlesOut);
+    }
   }
 }
 
@@ -133,7 +206,7 @@ AnimationSurfaceProvider::Run()
 {
   MutexAutoLock lock(mDecodingMutex);
 
-  if (!mDecoder || !mImage) {
+  if (!mDecoder) {
     MOZ_ASSERT_UNREACHABLE("Running after decoding finished?");
     return;
   }
@@ -148,15 +221,21 @@ AnimationSurfaceProvider::Run()
       // Since we're not sure, rather than call CheckForNewFrameAtYield() here
       // we call CheckForNewFrameAtTerminalState(), which handles both of these
       // possibilities.
-      CheckForNewFrameAtTerminalState();
-
-      // We're done!
+      bool continueDecoding = CheckForNewFrameAtTerminalState();
       FinishDecoding();
+
+      // Even if it is the last frame, we may not have enough frames buffered
+      // ahead of the current.
+      if (continueDecoding) {
+        MOZ_ASSERT(mDecoder);
+        continue;
+      }
+
       return;
     }
 
     // Notify for the progress we've made so far.
-    if (mDecoder->HasProgress()) {
+    if (mImage && mDecoder->HasProgress()) {
       NotifyProgress(WrapNotNull(mImage), WrapNotNull(mDecoder),
                      GetSurfaceKey());
     }
@@ -167,19 +246,23 @@ AnimationSurfaceProvider::Run()
       return;
     }
 
-    // There's new output available - a new frame! Grab it.
+    // There's new output available - a new frame! Grab it. If we don't need any
+    // more for the moment we can break out of the loop.
     MOZ_ASSERT(result == LexerResult(Yield::OUTPUT_AVAILABLE));
-    CheckForNewFrameAtYield();
+    if (!CheckForNewFrameAtYield()) {
+      return;
+    }
   }
 }
 
-void
+bool
 AnimationSurfaceProvider::CheckForNewFrameAtYield()
 {
   mDecodingMutex.AssertCurrentThreadOwns();
   MOZ_ASSERT(mDecoder);
 
   bool justGotFirstFrame = false;
+  bool continueDecoding;
 
   {
     MutexAutoLock lock(mFramesMutex);
@@ -188,17 +271,18 @@ AnimationSurfaceProvider::CheckForNewFrameAtYield()
     RawAccessFrameRef frame = mDecoder->GetCurrentFrameRef();
     if (!frame) {
       MOZ_ASSERT_UNREACHABLE("Decoder yielded but didn't produce a frame?");
-      return;
+      return true;
     }
 
     // We should've gotten a different frame than last time.
-    MOZ_ASSERT_IF(!mFrames.IsEmpty(),
-                  mFrames.LastElement().get() != frame.get());
+    MOZ_ASSERT_IF(!mFrames.Frames().IsEmpty(),
+                  mFrames.Frames().LastElement().get() != frame.get());
 
     // Append the new frame to the list.
-    mFrames.AppendElement(Move(frame));
+    continueDecoding = mFrames.Insert(Move(frame));
 
-    if (mFrames.Length() == 1) {
+    size_t frameCount = mFrames.Frames().Length();
+    if (frameCount == 1) {
       justGotFirstFrame = true;
     }
   }
@@ -206,32 +290,35 @@ AnimationSurfaceProvider::CheckForNewFrameAtYield()
   if (justGotFirstFrame) {
     AnnounceSurfaceAvailable();
   }
+
+  return continueDecoding;
 }
 
-void
+bool
 AnimationSurfaceProvider::CheckForNewFrameAtTerminalState()
 {
   mDecodingMutex.AssertCurrentThreadOwns();
   MOZ_ASSERT(mDecoder);
 
   bool justGotFirstFrame = false;
+  bool continueDecoding;
 
   {
     MutexAutoLock lock(mFramesMutex);
 
+    // The decoder may or may not have a new frame for us at this point. Avoid
+    // reinserting the same frame again.
     RawAccessFrameRef frame = mDecoder->GetCurrentFrameRef();
-    if (!frame) {
-      return;
-    }
-
-    if (!mFrames.IsEmpty() && mFrames.LastElement().get() == frame.get()) {
-      return;  // We already have this one.
+    if (!frame || (!mFrames.Frames().IsEmpty() &&
+                   mFrames.Frames().LastElement().get() == frame.get())) {
+      return mFrames.MarkComplete();
     }
 
     // Append the new frame to the list.
-    mFrames.AppendElement(Move(frame));
+    mFrames.Insert(Move(frame));
+    continueDecoding = mFrames.MarkComplete();
 
-    if (mFrames.Length() == 1) {
+    if (mFrames.Frames().Length() == 1) {
       justGotFirstFrame = true;
     }
   }
@@ -239,13 +326,18 @@ AnimationSurfaceProvider::CheckForNewFrameAtTerminalState()
   if (justGotFirstFrame) {
     AnnounceSurfaceAvailable();
   }
+
+  return continueDecoding;
 }
 
 void
 AnimationSurfaceProvider::AnnounceSurfaceAvailable()
 {
   mFramesMutex.AssertNotCurrentThreadOwns();
-  MOZ_ASSERT(mImage);
+  if (!mImage) {
+    // Not the first pass for the animation decoder.
+    return;
+  }
 
   // We just got the first frame; let the surface cache know. We deliberately do
   // this outside of mFramesMutex to avoid a potential deadlock with
@@ -259,15 +351,29 @@ void
 AnimationSurfaceProvider::FinishDecoding()
 {
   mDecodingMutex.AssertCurrentThreadOwns();
-  MOZ_ASSERT(mImage);
   MOZ_ASSERT(mDecoder);
 
-  // Send notifications.
-  Maybe<SurfaceKey> surfaceKey = Some(GetSurfaceKey());
-  NotifyDecodeComplete(WrapNotNull(mImage), WrapNotNull(mDecoder), surfaceKey);
+  if (mImage) {
+    // Send notifications.
+    Maybe<SurfaceKey> surfaceKey = Some(GetSurfaceKey());
+    NotifyDecodeComplete(WrapNotNull(mImage), WrapNotNull(mDecoder),
+                         surfaceKey);
+  }
 
   // Destroy our decoder; we don't need it anymore.
-  mDecoder = nullptr;
+  bool mayDiscard;
+  {
+    MutexAutoLock lock(mFramesMutex);
+    mayDiscard = mFrames.MayDiscard();
+  }
+
+  if (mayDiscard) {
+    // Recreate the decoder so we can regenerate the frames again.
+    mDecoder = DecoderFactory::CloneAnimationDecoder(mDecoder);
+    MOZ_ASSERT(mDecoder);
+  } else {
+    mDecoder = nullptr;
+  }
 
   // We don't need a reference to our image anymore, either, and we don't want
   // one. We may be stored in the surface cache for a long time after decoding
