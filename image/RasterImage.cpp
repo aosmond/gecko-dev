@@ -1251,9 +1251,11 @@ RasterImage::Decode(const IntSize& aSize,
   // Create a decoder.
   RefPtr<IDecodingTask> task;
   if (mAnimationState && aPlaybackType == PlaybackType::eAnimated) {
+    size_t currentFrame = mAnimationState->GetCurrentAnimationFrameIndex();
     task = DecoderFactory::CreateAnimationDecoder(mDecoderType, WrapNotNull(this),
                                                   mSourceBuffer, mSize,
-                                                  decoderFlags, surfaceFlags);
+                                                  decoderFlags, surfaceFlags,
+                                                  currentFrame);
     // We pass false for aAllowInvalidation because we may be asked to use
     // async notifications. Any potential invalidation here will be sent when
     // RequestRefresh is called, or NotifyDecodeComplete.

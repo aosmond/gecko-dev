@@ -166,7 +166,8 @@ DecoderFactory::CreateAnimationDecoder(DecoderType aType,
                                        NotNull<SourceBuffer*> aSourceBuffer,
                                        const IntSize& aIntrinsicSize,
                                        DecoderFlags aDecoderFlags,
-                                       SurfaceFlags aSurfaceFlags)
+                                       SurfaceFlags aSurfaceFlags,
+                                       size_t aCurrentFrame)
 {
   if (aType == DecoderType::UNKNOWN) {
     return nullptr;
@@ -195,7 +196,7 @@ DecoderFactory::CreateAnimationDecoder(DecoderType aType,
   SurfaceKey surfaceKey =
     RasterSurfaceKey(aIntrinsicSize, aSurfaceFlags, PlaybackType::eAnimated);
   auto provider = MakeNotNull<RefPtr<AnimationSurfaceProvider>>(
-    aImage, surfaceKey, WrapNotNull(decoder));
+    aImage, surfaceKey, WrapNotNull(decoder), aCurrentFrame);
 
   // Attempt to insert the surface provider into the surface cache right away so
   // we won't trigger any more decoders with the same parameters.
