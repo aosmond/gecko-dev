@@ -71,12 +71,7 @@ AnimationState::UpdateStateInternal(LookupResult& aResult,
     if (mHasBeenDecoded) {
       Maybe<uint32_t> frameCount = FrameCount();
       MOZ_ASSERT(frameCount.isSome());
-      if (NS_SUCCEEDED(aResult.Surface().Seek(*frameCount - 1)) &&
-          aResult.Surface()->IsFinished()) {
-        mIsCurrentlyDecoded = true;
-      } else {
-        mIsCurrentlyDecoded = false;
-      }
+      mIsCurrentlyDecoded = aResult.Surface().HasFullyDecoded();
     }
   }
 
@@ -330,6 +325,7 @@ FrameAnimator::AdvanceFrame(AnimationState& aState,
       MOZ_ASSERT(currentFrameEndTime.isSome());
       aState.mCurrentAnimationFrameTime = *currentFrameEndTime;
       aState.mCurrentAnimationFrameIndex = nextFrameIndex;
+      aFrames.Advance(nextFrameIndex);
 
       return ret;
     }
@@ -375,11 +371,31 @@ FrameAnimator::AdvanceFrame(AnimationState& aState,
 
   // Set currentAnimationFrameIndex at the last possible moment
   aState.mCurrentAnimationFrameIndex = nextFrameIndex;
+  aFrames.Advance(nextFrameIndex);
 
   // If we're here, we successfully advanced the frame.
   ret.mFrameAdvanced = true;
 
   return ret;
+}
+
+void
+FrameAnimator::ResetAnimation(AnimationState& aState)
+{
+  aState.ResetAnimation();
+
+  // Our surface provider is synchronized to our state, so we need to reset its
+  // state as well, if we still have one.
+  LookupResult result =
+    SurfaceCache::Lookup(ImageKey(mImage),
+                         RasterSurfaceKey(mSize,
+                                          DefaultSurfaceFlags(),
+                                          PlaybackType::eAnimated));
+  if (!result) {
+    return;
+  }
+
+  result.Surface().Reset();
 }
 
 RefreshResult
