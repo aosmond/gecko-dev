@@ -342,6 +342,20 @@ protected:
    */
   virtual void NotifyExpiredLocked(T*, const AutoLock&) = 0;
 
+  /**
+   * This may be overridden to perform any post-aging work that needs to be
+   * done while still holding the lock. It will be called once after each timer
+   * event, and each low memory event has been handled.
+   */
+  virtual void NotifyEndTransactionLocked(const AutoLock&) { };
+
+  /**
+   * This may be overridden to perform any post-aging work that needs to be
+   * done outside the lock. It will be called once after each
+   * NotifyEndTransactionLocked call.
+   */
+  virtual void NotifyEndTransaction() { };
+
   virtual Mutex& GetMutex() = 0;
 
 private:
@@ -385,18 +399,26 @@ private:
   };
 
   void HandleLowMemory() {
-    AutoLock lock(GetMutex());
-    AgeAllGenerationsLocked(lock);
+    {
+      AutoLock lock(GetMutex());
+      AgeAllGenerationsLocked(lock);
+      NotifyEndTransactionLocked(lock);
+    }
+    NotifyEndTransaction();
   }
 
   void HandleTimeout() {
-    AutoLock lock(GetMutex());
-    AgeOneGenerationLocked(lock);
-    // Cancel the timer if we have no objects to track
-    if (IsEmptyLocked(lock)) {
-      mTimer->Cancel();
-      mTimer = nullptr;
+    {
+      AutoLock lock(GetMutex());
+      AgeOneGenerationLocked(lock);
+      // Cancel the timer if we have no objects to track
+      if (IsEmptyLocked(lock)) {
+        mTimer->Cancel();
+        mTimer = nullptr;
+      }
+      NotifyEndTransactionLocked(lock);
     }
+    NotifyEndTransaction();
   }
 
   static void TimerCallback(nsITimer* aTimer, void* aThis)
