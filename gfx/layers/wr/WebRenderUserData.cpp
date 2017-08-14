@@ -131,7 +131,7 @@ WebRenderImageData::UpdateImageKeyIfShared(ImageContainer* aContainer, bool aFor
   }
 
   if (mKey.isNothing()) {
-    WrImageKey key = WrBridge()->GetNextImageKey();
+    wr::WrImageKey key = WrBridge()->GetNextImageKey();
     mWRManager->WrBridge()->AddWebRenderParentCommand(OpAddSharedSurface(mExternalImageId.value(), key));
     mKey = Some(key);
   }
