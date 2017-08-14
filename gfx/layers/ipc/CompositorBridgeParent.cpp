@@ -498,6 +498,7 @@ CompositorBridgeParent::RecvWillClose()
 void CompositorBridgeParent::DeferredDestroy()
 {
   MOZ_ASSERT(!NS_IsMainThread());
+  mCompositorManager = nullptr;
   mSelfRef = nullptr;
 }
 
