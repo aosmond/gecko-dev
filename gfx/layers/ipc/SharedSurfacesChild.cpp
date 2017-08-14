@@ -30,7 +30,7 @@ public:
         SharedSurfacesChild::Unshare(mId);
       } else {
         wr::ExternalImageId id = mId;
-        SystemGroup::Dispatch("DestroySharedUserData", TaskCategory::Other,
+        SystemGroup::Dispatch(TaskCategory::Other,
                               NS_NewRunnableFunction("DestroySharedUserData", [id]() -> void {
           SharedSurfacesChild::Unshare(id);
         }));
