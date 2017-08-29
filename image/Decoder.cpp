@@ -47,6 +47,7 @@ private:
 Decoder::Decoder(RasterImage* aImage)
   : mImageData(nullptr)
   , mImageDataLength(0)
+  , mImageStride(0)
   , mColormap(nullptr)
   , mColormapSize(0)
   , mImage(aImage)
@@ -291,7 +292,7 @@ Decoder::AllocateFrame(uint32_t aFrameNum,
 
   if (mCurrentFrame) {
     // Gather the raw pointers the decoders will use.
-    mCurrentFrame->GetImageData(&mImageData, &mImageDataLength);
+    mCurrentFrame->GetImageData(&mImageData, &mImageStride, &mImageDataLength);
     mCurrentFrame->GetPaletteData(&mColormap, &mColormapSize);
 
     // We should now be on |aFrameNum|. (Note that we're comparing the frame

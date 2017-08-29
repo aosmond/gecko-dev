@@ -85,11 +85,11 @@ SurfaceSink::Configure(const SurfaceConfig& aConfig)
 
   mImageData = aConfig.mDecoder->mImageData;
   mImageDataLength = aConfig.mDecoder->mImageDataLength;
+  mImageStride = aConfig.mDecoder->mImageStride;
   mFlipVertically = aConfig.mFlipVertically;
 
   MOZ_ASSERT(mImageData);
-  MOZ_ASSERT(mImageDataLength ==
-               uint32_t(surfaceSize.width * surfaceSize.height * sizeof(uint32_t)));
+  MOZ_ASSERT(mImageDataLength == uint32_t(mImageStride * surfaceSize.height));
 
   ConfigureFilter(surfaceSize, sizeof(uint32_t));
   return NS_OK;
@@ -104,12 +104,11 @@ SurfaceSink::GetRowPointer() const
                ? InputSize().height - (mRow + 1)
                : mRow;
 
-  uint8_t* rowPtr = mImageData + row * InputSize().width * sizeof(uint32_t);
+  uint8_t* rowPtr = mImageData + row * mImageStride;
 
   MOZ_ASSERT(rowPtr >= mImageData);
   MOZ_ASSERT(rowPtr < mImageData + mImageDataLength);
-  MOZ_ASSERT(rowPtr + InputSize().width * sizeof(uint32_t) <=
-               mImageData + mImageDataLength);
+  MOZ_ASSERT(rowPtr + mImageStride <= mImageData + mImageDataLength);
 
   return rowPtr;
 }

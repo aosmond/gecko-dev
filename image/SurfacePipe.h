@@ -695,10 +695,16 @@ struct SurfaceConfig
 class SurfaceSink final : public AbstractSurfaceSink
 {
 public:
+  SurfaceSink()
+    : mImageStride(0)
+  { }
+
   nsresult Configure(const SurfaceConfig& aConfig);
 
 protected:
   uint8_t* GetRowPointer() const override;
+
+  int32_t mImageStride;        /// The stride of the surface.
 };
 
 class PalettedSurfaceSink;

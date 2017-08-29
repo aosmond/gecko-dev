@@ -639,13 +639,13 @@ imgFrame::Finish(Opacity aFrameOpacity /* = Opacity::SOME_TRANSPARENCY */,
   mMonitor.NotifyAll();
 }
 
-uint32_t
+int32_t
 imgFrame::GetImageBytesPerRow() const
 {
   mMonitor.AssertCurrentThreadOwns();
 
   if (mRawSurface) {
-    return mFrameRect.Width() * BytesPerPixel(mFormat);
+    return mRawSurface->Stride();
   }
 
   if (mPaletteDepth) {
@@ -662,14 +662,18 @@ imgFrame::GetImageDataLength() const
 }
 
 void
-imgFrame::GetImageData(uint8_t** aData, uint32_t* aLength) const
+imgFrame::GetImageData(uint8_t** aData,
+                       int32_t* aStride,
+                       uint32_t* aLength) const
 {
   MonitorAutoLock lock(mMonitor);
-  GetImageDataInternal(aData, aLength);
+  GetImageDataInternal(aData, aStride, aLength);
 }
 
 void
-imgFrame::GetImageDataInternal(uint8_t** aData, uint32_t* aLength) const
+imgFrame::GetImageDataInternal(uint8_t** aData,
+                               int32_t* aStride,
+                               uint32_t* aLength) const
 {
   mMonitor.AssertCurrentThreadOwns();
   MOZ_ASSERT(mLockCount > 0, "Image data should be locked");
@@ -691,15 +695,18 @@ imgFrame::GetImageDataInternal(uint8_t** aData, uint32_t* aLength) const
     *aData = nullptr;
   }
 
-  *aLength = GetImageDataLength();
+  int32_t stride = GetImageBytesPerRow();
+  *aStride = stride;
+  *aLength = stride * mFrameRect.Height();
 }
 
 uint8_t*
 imgFrame::GetImageData() const
 {
   uint8_t* data;
+  int32_t stride;
   uint32_t length;
-  GetImageData(&data, &length);
+  GetImageData(&data, &stride, &length);
   return data;
 }
 
@@ -858,17 +865,20 @@ imgFrame::GetAnimationData() const
   MonitorAutoLock lock(mMonitor);
   MOZ_ASSERT(mLockCount > 0, "Image data should be locked");
 
+  nsIntRect rect = GetRect();
   uint8_t* data;
+  int32_t stride;
   if (mPalettedImageData) {
     data = mPalettedImageData;
+    stride = rect.width;
   } else {
     uint32_t length;
-    GetImageDataInternal(&data, &length);
+    GetImageDataInternal(&data, &stride, &length);
   }
 
   bool hasAlpha = mFormat == SurfaceFormat::B8G8R8A8;
 
-  return AnimationData(data, PaletteDataLength(), mTimeout, GetRect(),
+  return AnimationData(data, PaletteDataLength(), mTimeout, rect, stride,
                        mBlendMethod, mBlendRect, mDisposalMethod, hasAlpha);
 }
 

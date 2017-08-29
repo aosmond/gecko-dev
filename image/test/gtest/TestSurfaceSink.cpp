@@ -876,9 +876,11 @@ TEST(ImageSurfaceSink, PalettedSurfaceSinkInitialization)
     // Check that the paletted image data is zero-initialized.
     RawAccessFrameRef currentFrame = aDecoder->GetCurrentFrameRef();
     uint8_t* imageData = nullptr;
+    int32_t imageStride = 0;
     uint32_t imageLength = 0;
-    currentFrame->GetImageData(&imageData, &imageLength);
+    currentFrame->GetImageData(&imageData, &imageStride, &imageLength);
     ASSERT_TRUE(imageData != nullptr);
+    ASSERT_EQ(100, imageStride);
     ASSERT_EQ(100u * 100u, imageLength);
     for (uint32_t i = 0; i < imageLength; ++i) {
       ASSERT_EQ(uint8_t(0), imageData[i]);

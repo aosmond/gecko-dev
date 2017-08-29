@@ -58,13 +58,14 @@ enum class Opacity : uint8_t {
 struct AnimationData
 {
   AnimationData(uint8_t* aRawData, uint32_t aPaletteDataLength,
-                FrameTimeout aTimeout, const nsIntRect& aRect,
+                FrameTimeout aTimeout, const nsIntRect& aRect, int32_t aStride,
                 BlendMethod aBlendMethod, const Maybe<gfx::IntRect>& aBlendRect,
                 DisposalMethod aDisposalMethod, bool aHasAlpha)
     : mRawData(aRawData)
     , mPaletteDataLength(aPaletteDataLength)
     , mTimeout(aTimeout)
     , mRect(aRect)
+    , mStride(aStride)
     , mBlendMethod(aBlendMethod)
     , mBlendRect(aBlendRect)
     , mDisposalMethod(aDisposalMethod)
@@ -75,6 +76,7 @@ struct AnimationData
   uint32_t mPaletteDataLength;
   FrameTimeout mTimeout;
   nsIntRect mRect;
+  int32_t mStride;
   BlendMethod mBlendMethod;
   Maybe<gfx::IntRect> mBlendRect;
   DisposalMethod mDisposalMethod;
@@ -230,7 +232,9 @@ public:
   IntSize GetImageSize() const { return mImageSize; }
   IntRect GetRect() const { return mFrameRect; }
   IntSize GetSize() const { return mFrameRect.Size(); }
-  void GetImageData(uint8_t** aData, uint32_t* length) const;
+  void GetImageData(uint8_t** aData,
+                    int32_t* aStride,
+                    uint32_t* aLength) const;
   uint8_t* GetImageData() const;
 
   bool GetIsPaletted() const;
@@ -264,8 +268,10 @@ private: // methods
 
   bool AreAllPixelsWritten() const;
   nsresult ImageUpdatedInternal(const nsIntRect& aUpdateRect);
-  void GetImageDataInternal(uint8_t** aData, uint32_t* length) const;
-  uint32_t GetImageBytesPerRow() const;
+  void GetImageDataInternal(uint8_t** aData,
+                            int32_t* aStride,
+                            uint32_t* aLength) const;
+  int32_t GetImageBytesPerRow() const;
   uint32_t GetImageDataLength() const;
   void FinalizeSurfaceInternal();
   already_AddRefed<SourceSurface> GetSourceSurfaceInternal();

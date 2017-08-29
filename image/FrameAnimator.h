@@ -360,25 +360,31 @@ private: // methods
   /** Clears an area of <aFrame> with transparent black.
    *
    * @param aFrameData Target Frame data
+   * @param aFrameStride Target Frame stride
    * @param aFrameRect The rectangle of the data pointed ot by aFrameData
    *
    * @note Does also clears the transparency mask
    */
-  static void ClearFrame(uint8_t* aFrameData, const gfx::IntRect& aFrameRect);
+  static void ClearFrame(uint8_t* aFrameData, int32_t aFrameStride,
+                         const gfx::IntRect& aFrameRect);
 
   //! @overload
-  static void ClearFrame(uint8_t* aFrameData, const gfx::IntRect& aFrameRect,
+  static void ClearFrame(uint8_t* aFrameData, int32_t aFrameStride,
+                         const gfx::IntRect& aFrameRect,
                          const gfx::IntRect& aRectToClear);
 
   //! Copy one frame's image and mask into another
-  static bool CopyFrameImage(const uint8_t* aDataSrc, const gfx::IntRect& aRectSrc,
-                             uint8_t* aDataDest, const gfx::IntRect& aRectDest);
+  static bool CopyFrameImage(const uint8_t* aDataSrc, int32_t aStrideSrc,
+                             const gfx::IntRect& aRectSrc, uint8_t* aDataDest,
+                             int32_t aStrideDest,
+                             const gfx::IntRect& aRectDest);
 
   /**
    * Draws one frame's image to into another, at the position specified by
    * aSrcRect.
    *
    * @aSrcData the raw data of the current frame being drawn
+   * @aSrcStride the stride of the source frame
    * @aSrcRect the size of the source frame, and the position of that frame in
    *           the composition frame
    * @aSrcPaletteLength the length (in bytes) of the palette at the beginning
@@ -386,14 +392,16 @@ private: // methods
    * @aSrcHasAlpha whether the source data represents an image with alpha
    * @aDstPixels the raw data of the composition frame where the current frame
    *             is drawn into (32-bit ARGB)
+   * @aDstStride the stride of the composition frame
    * @aDstRect the size of the composition frame
    * @aBlendMethod the blend method for how to blend src on the composition
    * frame.
    */
-  static nsresult DrawFrameTo(const uint8_t* aSrcData,
+  static nsresult DrawFrameTo(const uint8_t* aSrcData, int32_t aSrcStride,
                               const gfx::IntRect& aSrcRect,
                               uint32_t aSrcPaletteLength, bool aSrcHasAlpha,
-                              uint8_t* aDstPixels, const gfx::IntRect& aDstRect,
+                              uint8_t* aDstPixels, int32_t aDstStride,
+                              const gfx::IntRect& aDstRect,
                               BlendMethod aBlendMethod,
                               const Maybe<gfx::IntRect>& aBlendRect);
 

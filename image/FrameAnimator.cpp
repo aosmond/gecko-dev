@@ -735,10 +735,12 @@ FrameAnimator::DoBlend(DrawableSurface& aFrames,
           // If we just created the composite, it could have anything in its
           // buffer. Clear whole frame
           ClearFrame(compositingFrameData.mRawData,
+                     compositingFrameData.mStride,
                      compositingFrameData.mRect);
         } else {
           // Only blank out previous frame area (both color & Mask/Alpha)
           ClearFrame(compositingFrameData.mRawData,
+                     compositingFrameData.mStride,
                      compositingFrameData.mRect,
                      prevRect);
         }
@@ -746,6 +748,7 @@ FrameAnimator::DoBlend(DrawableSurface& aFrames,
 
       case DisposalMethod::CLEAR_ALL:
         ClearFrame(compositingFrameData.mRawData,
+                   compositingFrameData.mStride,
                    compositingFrameData.mRect);
         break;
 
@@ -757,8 +760,10 @@ FrameAnimator::DoBlend(DrawableSurface& aFrames,
             mCompositingPrevFrame->GetAnimationData();
 
           CopyFrameImage(compositingPrevFrameData.mRawData,
+                         compositingPrevFrameData.mStride,
                          compositingPrevFrameData.mRect,
                          compositingFrameData.mRawData,
+                         compositingFrameData.mStride,
                          compositingFrameData.mRect);
 
           // destroy only if we don't need it for this frame's disposal
@@ -768,6 +773,7 @@ FrameAnimator::DoBlend(DrawableSurface& aFrames,
           }
         } else {
           ClearFrame(compositingFrameData.mRawData,
+                     compositingFrameData.mStride,
                      compositingFrameData.mRect);
         }
         break;
@@ -787,21 +793,26 @@ FrameAnimator::DoBlend(DrawableSurface& aFrames,
           if (isFullPrevFrame && !prevFrame->GetIsPaletted()) {
             // Just copy the bits
             CopyFrameImage(prevFrameData.mRawData,
+                           prevFrameData.mStride,
                            prevRect,
                            compositingFrameData.mRawData,
+                           compositingFrameData.mStride,
                            compositingFrameData.mRect);
           } else {
             if (needToBlankComposite) {
               // Only blank composite when prev is transparent or not full.
               if (prevFrameData.mHasAlpha || !isFullPrevFrame) {
                 ClearFrame(compositingFrameData.mRawData,
+                           compositingFrameData.mStride,
                            compositingFrameData.mRect);
               }
             }
-            DrawFrameTo(prevFrameData.mRawData, prevFrameData.mRect,
+            DrawFrameTo(prevFrameData.mRawData, prevFrameData.mStride,
+                        prevFrameData.mRect,
                         prevFrameData.mPaletteDataLength,
                         prevFrameData.mHasAlpha,
                         compositingFrameData.mRawData,
+                        compositingFrameData.mStride,
                         compositingFrameData.mRect,
                         prevFrameData.mBlendMethod,
                         prevFrameData.mBlendRect);
@@ -812,6 +823,7 @@ FrameAnimator::DoBlend(DrawableSurface& aFrames,
     // If we just created the composite, it could have anything in its
     // buffers. Clear them
     ClearFrame(compositingFrameData.mRawData,
+               compositingFrameData.mStride,
                compositingFrameData.mRect);
   }
 
@@ -839,18 +851,22 @@ FrameAnimator::DoBlend(DrawableSurface& aFrames,
       mCompositingPrevFrame->GetAnimationData();
 
     CopyFrameImage(compositingFrameData.mRawData,
+                   compositingFrameData.mStride,
                    compositingFrameData.mRect,
                    compositingPrevFrameData.mRawData,
+                   compositingPrevFrameData.mStride,
                    compositingPrevFrameData.mRect);
 
     mCompositingPrevFrame->Finish();
   }
 
   // blit next frame into it's correct spot
-  DrawFrameTo(nextFrameData.mRawData, nextFrameData.mRect,
+  DrawFrameTo(nextFrameData.mRawData, nextFrameData.mStride,
+              nextFrameData.mRect,
               nextFrameData.mPaletteDataLength,
               nextFrameData.mHasAlpha,
               compositingFrameData.mRawData,
+              compositingFrameData.mStride,
               compositingFrameData.mRect,
               nextFrameData.mBlendMethod,
               nextFrameData.mBlendRect);
@@ -866,19 +882,20 @@ FrameAnimator::DoBlend(DrawableSurface& aFrames,
 //******************************************************************************
 // Fill aFrame with black. Does also clears the mask.
 void
-FrameAnimator::ClearFrame(uint8_t* aFrameData, const IntRect& aFrameRect)
+FrameAnimator::ClearFrame(uint8_t* aFrameData, int32_t aFrameStride,
+                          const IntRect& aFrameRect)
 {
   if (!aFrameData) {
     return;
   }
 
-  memset(aFrameData, 0, aFrameRect.Width() * aFrameRect.Height() * 4);
+  memset(aFrameData, 0, aFrameStride * aFrameRect.Height());
 }
 
 //******************************************************************************
 void
-FrameAnimator::ClearFrame(uint8_t* aFrameData, const IntRect& aFrameRect,
-                          const IntRect& aRectToClear)
+FrameAnimator::ClearFrame(uint8_t* aFrameData, int32_t aFrameStride,
+                          const IntRect& aFrameRect, const IntRect& aRectToClear)
 {
   if (!aFrameData || aFrameRect.Width() <= 0 || aFrameRect.Height() <= 0 ||
       aRectToClear.Width() <= 0 || aRectToClear.Height() <= 0) {
@@ -890,9 +907,8 @@ FrameAnimator::ClearFrame(uint8_t* aFrameData, const IntRect& aFrameRect,
     return;
   }
 
-  uint32_t bytesPerRow = aFrameRect.Width() * 4;
   for (int row = toClear.y; row < toClear.YMost(); ++row) {
-    memset(aFrameData + toClear.x * 4 + row * bytesPerRow, 0,
+    memset(aFrameData + toClear.x * 4 + row * aFrameStride, 0,
            toClear.Width() * 4);
   }
 }
@@ -902,12 +918,14 @@ FrameAnimator::ClearFrame(uint8_t* aFrameData, const IntRect& aFrameRect,
 // we can do about a failure, so there we don't return a nsresult
 bool
 FrameAnimator::CopyFrameImage(const uint8_t* aDataSrc,
+                              int32_t aStrideSrc,
                               const IntRect& aRectSrc,
                               uint8_t* aDataDest,
+                              int32_t aStrideDest,
                               const IntRect& aRectDest)
 {
-  uint32_t dataLengthSrc = aRectSrc.Width() * aRectSrc.Height() * 4;
-  uint32_t dataLengthDest = aRectDest.Width() * aRectDest.Height() * 4;
+  uint32_t dataLengthSrc = aStrideSrc * aRectSrc.Height();
+  uint32_t dataLengthDest = aStrideDest * aRectDest.Height();
 
   if (!aDataDest || !aDataSrc || dataLengthSrc != dataLengthDest) {
     return false;
@@ -919,9 +937,10 @@ FrameAnimator::CopyFrameImage(const uint8_t* aDataSrc,
 }
 
 nsresult
-FrameAnimator::DrawFrameTo(const uint8_t* aSrcData, const IntRect& aSrcRect,
-                           uint32_t aSrcPaletteLength, bool aSrcHasAlpha,
-                           uint8_t* aDstPixels, const IntRect& aDstRect,
+FrameAnimator::DrawFrameTo(const uint8_t* aSrcData, int32_t aSrcStride,
+                           const IntRect& aSrcRect, uint32_t aSrcPaletteLength,
+                           bool aSrcHasAlpha, uint8_t* aDstPixels,
+                           int32_t aDstStride, const IntRect& aDstRect,
                            BlendMethod aBlendMethod, const Maybe<IntRect>& aBlendRect)
 {
   NS_ENSURE_ARG_POINTER(aSrcData);
@@ -938,6 +957,10 @@ FrameAnimator::DrawFrameTo(const uint8_t* aSrcData, const IntRect& aSrcRect,
   }
 
   if (aSrcPaletteLength) {
+    MOZ_ASSERT(aSrcStride == aSrcRect.Width());
+    MOZ_ASSERT(aDstStride >= aDstRect.Width() * 4);
+    MOZ_ASSERT((aDstStride & 3) == 0);
+
     // Larger than the destination frame, clip it
     int32_t width = std::min(aSrcRect.Width(), aDstRect.Width() - aSrcRect.x);
     int32_t height = std::min(aSrcRect.Height(), aDstRect.Height() - aSrcRect.y);
@@ -958,7 +981,8 @@ FrameAnimator::DrawFrameTo(const uint8_t* aSrcData, const IntRect& aSrcRect,
     const uint32_t* colormap = reinterpret_cast<const uint32_t*>(aSrcData);
 
     // Skip to the right offset
-    dstPixels += aSrcRect.x + (aSrcRect.y * aDstRect.Width());
+    dstPixels += aSrcRect.x + (aSrcRect.y * aDstStride);
+    int32_t dstStride = aDstStride / 4;
     if (!aSrcHasAlpha) {
       for (int32_t r = height; r > 0; --r) {
         for (int32_t c = 0; c < width; c++) {
@@ -966,7 +990,7 @@ FrameAnimator::DrawFrameTo(const uint8_t* aSrcData, const IntRect& aSrcRect,
         }
         // Go to the next row in the source resp. destination image
         srcPixels += aSrcRect.Width();
-        dstPixels += aDstRect.Width();
+        dstPixels += dstStride;
       }
     } else {
       for (int32_t r = height; r > 0; --r) {
@@ -978,16 +1002,19 @@ FrameAnimator::DrawFrameTo(const uint8_t* aSrcData, const IntRect& aSrcRect,
         }
         // Go to the next row in the source resp. destination image
         srcPixels += aSrcRect.Width();
-        dstPixels += aDstRect.Width();
+        dstPixels += dstStride;
       }
     }
   } else {
+    MOZ_ASSERT(aSrcStride >= aSrcRect.Width() * 4);
+    MOZ_ASSERT(aDstStride >= aDstRect.Width() * 4);
+
     pixman_image_t* src =
       pixman_image_create_bits(
           aSrcHasAlpha ? PIXMAN_a8r8g8b8 : PIXMAN_x8r8g8b8,
           aSrcRect.Width(), aSrcRect.Height(),
           reinterpret_cast<uint32_t*>(const_cast<uint8_t*>(aSrcData)),
-          aSrcRect.Width() * 4);
+          aSrcStride);
     if (!src) {
       return NS_ERROR_OUT_OF_MEMORY;
     }
@@ -996,7 +1023,7 @@ FrameAnimator::DrawFrameTo(const uint8_t* aSrcData, const IntRect& aSrcRect,
                                aDstRect.Width(),
                                aDstRect.Height(),
                                reinterpret_cast<uint32_t*>(aDstPixels),
-                               aDstRect.Width() * 4);
+                               aDstStride);
     if (!dst) {
       pixman_image_unref(src);
       return NS_ERROR_OUT_OF_MEMORY;

@@ -222,8 +222,9 @@ PalettedRectIsSolidColor(Decoder* aDecoder, const IntRect& aRect, uint8_t aColor
 {
   RawAccessFrameRef currentFrame = aDecoder->GetCurrentFrameRef();
   uint8_t* imageData;
+  int32_t imageStride;
   uint32_t imageLength;
-  currentFrame->GetImageData(&imageData, &imageLength);
+  currentFrame->GetImageData(&imageData, &imageStride, &imageLength);
   ASSERT_TRUE_OR_RETURN(imageData, false);
 
   // Clamp to the frame rect. If any pixels outside the frame rect are included,
@@ -231,6 +232,7 @@ PalettedRectIsSolidColor(Decoder* aDecoder, const IntRect& aRect, uint8_t aColor
   // sense this function measures - they're transparent, and that doesn't
   // necessarily correspond to any color palette index at all.
   IntRect frameRect = currentFrame->GetRect();
+  ASSERT_EQ_OR_RETURN(imageStride, frameRect.Width(), false);
   ASSERT_EQ_OR_RETURN(imageLength, uint32_t(frameRect.Area()), false);
   IntRect rect = aRect.Intersect(frameRect);
   ASSERT_EQ_OR_RETURN(rect.Area(), aRect.Area(), false);
@@ -502,9 +504,11 @@ CheckPalettedWritePixels(Decoder* aDecoder,
   // Check that the generated image is correct.
   RawAccessFrameRef currentFrame = aDecoder->GetCurrentFrameRef();
   uint8_t* imageData;
+  int32_t imageStride;
   uint32_t imageLength;
-  currentFrame->GetImageData(&imageData, &imageLength);
+  currentFrame->GetImageData(&imageData, &imageStride, &imageLength);
   ASSERT_TRUE(imageData != nullptr);
+  ASSERT_EQ(outputWriteRect.Width(), imageStride);
   ASSERT_EQ(outputWriteRect.Width() * outputWriteRect.Height(), int32_t(imageLength));
   for (uint32_t i = 0; i < imageLength; ++i) {
     ASSERT_EQ(uint8_t(255), imageData[i]);
