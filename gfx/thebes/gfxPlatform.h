@@ -182,6 +182,7 @@ public:
     static void InitChild(const mozilla::gfx::ContentDeviceData& aData);
 
     static void InitLayersIPC();
+    static bool InitializedLayersIPC();
     static void ShutdownLayersIPC();
 
     /**

@@ -1038,6 +1038,12 @@ gfxPlatform::InitLayersIPC()
   }
 }
 
+/* static */ bool
+gfxPlatform::InitializedLayersIPC()
+{
+  return sLayersIPCIsUp;
+}
+
 /* static */ void
 gfxPlatform::ShutdownLayersIPC()
 {

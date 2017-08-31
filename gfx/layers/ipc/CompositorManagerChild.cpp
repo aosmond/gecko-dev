@@ -9,6 +9,7 @@
 #include "mozilla/layers/CompositorBridgeChild.h"
 #include "mozilla/layers/CompositorManagerParent.h"
 #include "mozilla/layers/CompositorThread.h"
+#include "gfxPlatform.h"
 #include "mozilla/gfx/gfxVars.h"
 #include "mozilla/gfx/GPUProcessManager.h"
 #include "mozilla/dom/ContentChild.h"   // for ContentChild
@@ -39,6 +40,11 @@ CompositorManagerChild::InitSameProcess(uint32_t aNamespace)
     return false;
   }
 
+  if (NS_WARN_IF(!gfxPlatform::InitializedLayersIPC())) {
+    MOZ_ASSERT_UNREACHABLE("Layers IPC not initialized or already shutdown");
+    return false;
+  }
+
   RefPtr<CompositorManagerParent> parent =
     CompositorManagerParent::CreateSameProcess();
   sInstance = new CompositorManagerChild(parent, aNamespace);
@@ -52,6 +58,11 @@ CompositorManagerChild::Init(Endpoint<PCompositorManagerChild>&& aEndpoint,
   MOZ_ASSERT(NS_IsMainThread());
   if (sInstance) {
     MOZ_ASSERT(sInstance->mNamespace != aNamespace);
+  }
+
+  if (NS_WARN_IF(!gfxPlatform::InitializedLayersIPC())) {
+    MOZ_ASSERT_UNREACHABLE("Layers IPC not initialized or already shutdown");
+    return false;
   }
 
   sInstance = new CompositorManagerChild(Move(aEndpoint), aNamespace);
