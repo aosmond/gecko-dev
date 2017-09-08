@@ -140,6 +140,16 @@ CompositorBridgeChild::Destroy()
   RefPtr<CompositorBridgeChild> selfRef = this;
 
   if (!mCanSend) {
+    if (mSectionAllocator) {
+      delete mSectionAllocator;
+      mSectionAllocator = nullptr;
+    }
+
+    if (mLayerManager) {
+      mLayerManager->Destroy();
+      mLayerManager = nullptr;
+    }
+
     // We may have already called destroy but still have lingering references
     // or CompositorBridgeChild::ActorDestroy was called. Ensure that we do our
     // post destroy clean up no matter what. It is safe to call multiple times.

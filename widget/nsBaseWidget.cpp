@@ -12,6 +12,7 @@
 
 #include "mozilla/layers/CompositorBridgeChild.h"
 #include "mozilla/layers/CompositorBridgeParent.h"
+#include "mozilla/layers/CompositorManagerChild.h"
 #include "mozilla/layers/PLayerTransactionChild.h"
 #include "mozilla/layers/ImageBridgeChild.h"
 #include "LiveResizeListener.h"
@@ -247,6 +248,7 @@ nsBaseWidget::Shutdown()
   NotifyLiveResizeStopped();
   RevokeTransactionIdAllocator();
   DestroyCompositor();
+  CompositorManagerChild::Shutdown();
   FreeShutdownObserver();
 #if defined(XP_WIN) || defined(MOZ_WIDGET_GTK)
   if (sPluginWidgetList) {
