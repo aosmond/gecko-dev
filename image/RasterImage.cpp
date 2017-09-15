@@ -70,7 +70,6 @@ NS_IMPL_ISUPPORTS(RasterImage, imgIContainer, nsIProperties,
 //******************************************************************************
 RasterImage::RasterImage(ImageURL* aURI /* = nullptr */) :
   ImageResource(aURI), // invoke superclass's constructor
-  mSize(0,0),
   mLockCount(0),
   mDecodeCount(0),
   mImageProducerID(ImageContainer::AllocateProducerID()),
@@ -80,7 +79,6 @@ RasterImage::RasterImage(ImageURL* aURI /* = nullptr */) :
   mFramesNotified(0),
 #endif
   mSourceBuffer(WrapNotNull(new SourceBuffer())),
-  mHasSize(false),
   mTransient(false),
   mSyncLoad(false),
   mDiscardable(false),

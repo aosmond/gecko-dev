@@ -322,12 +322,14 @@ protected:
   RefPtr<ProgressTracker>     mProgressTracker;
   RefPtr<ImageURL>            mURI;
   TimeStamp                     mLastRefreshTime;
+  nsIntSize                     mSize;
   uint64_t                      mInnerWindowId;
   uint32_t                      mAnimationConsumers;
   uint16_t                      mAnimationMode; // Enum values in imgIContainer
   bool                          mInitialized:1; // Have we been initalized?
   bool                          mAnimating:1;   // Are we currently animating?
   bool                          mError:1;       // Error handling
+  bool                          mHasSize:1;     // Has mSize been populated?
 };
 
 } // namespace image

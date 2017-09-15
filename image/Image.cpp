@@ -58,7 +58,8 @@ ImageResource::ImageResource(ImageURL* aURI) :
   mAnimationMode(kNormalAnimMode),
   mInitialized(false),
   mAnimating(false),
-  mError(false)
+  mError(false),
+  mHasSize(false)
 { }
 
 ImageResource::~ImageResource()
