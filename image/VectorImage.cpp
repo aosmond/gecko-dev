@@ -517,14 +517,19 @@ VectorImage::GetWidth(int32_t* aWidth)
 nsresult
 VectorImage::GetNativeSizes(nsTArray<IntSize>& aNativeSizes) const
 {
-  return NS_ERROR_NOT_IMPLEMENTED;
+  if (mSize.IsEmpty()) {
+    return NS_ERROR_NOT_AVAILABLE;
+  }
+
+  aNativeSizes.AppendElement(mSize);
+  return NS_OK;
 }
 
 //******************************************************************************
 size_t
 VectorImage::GetNativeSizesLength() const
 {
-  return 0;
+  return mSize.IsEmpty() ? 0 : 1;
 }
 
 //******************************************************************************
@@ -899,9 +904,10 @@ VectorImage::LookupCachedSurface(const SVGDrawingParameters& aParams)
   }
 
   LookupResult result =
-    SurfaceCache::Lookup(ImageKey(this),
-                         VectorSurfaceKey(aParams.size, aParams.svgContext));
-  if (!result) {
+    SurfaceCache::LookupBestMatch(ImageKey(this),
+                                  VectorSurfaceKey(aParams.size,
+                                                   aParams.svgContext));
+  if (!result || result.Type() == MatchType::SUBSTITUTE_BECAUSE_NOT_FOUND) {
     return nullptr;  // No matching surface, or the OS freed the volatile buffer.
   }
 
