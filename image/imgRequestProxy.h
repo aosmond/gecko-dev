@@ -244,6 +244,7 @@ private:
   bool mDeferNotifications : 1;
   bool mHadListener : 1;
   bool mHadDispatch : 1;
+  bool mHadDispatchOnload : 1;
 };
 
 // Used for static image proxies for which no requests are available, so

@@ -119,7 +119,8 @@ imgRequestProxy::imgRequestProxy() :
   mDecodeRequested(false),
   mDeferNotifications(false),
   mHadListener(false),
-  mHadDispatch(false)
+  mHadDispatch(false),
+  mHadDispatchOnload(false)
 {
   /* member initializers and constructor code */
   LOG_FUNC(gImgLog, "imgRequestProxy::imgRequestProxy");
@@ -265,6 +266,9 @@ imgRequestProxy::IsOnEventTarget() const
   MOZ_ASSERT(NS_IsMainThread());
 
   if (mTabGroup) {
+    // If we have a scheduler group, then we can only run in that group, or if
+    // we are unlabelled. The damage is already done with the latter because we
+    // had to flush the event queue to get here.
     MOZ_ASSERT(mEventTarget);
     return mTabGroup->IsSafeToRun();
   }
@@ -1036,7 +1040,11 @@ imgRequestProxy::BlockOnload()
     return;
   }
 
-  if (!IsOnEventTarget()) {
+  // If we have ever dispatched a block or unblock onload event, then we need
+  // to continue dispatching them, because they might come out of order if we
+  // dispatched the block onload, but were able to run the unblock inline.
+  if (mHadDispatchOnload || !IsOnEventTarget()) {
+    mHadDispatchOnload = true;
     RefPtr<imgRequestProxy> self(this);
     DispatchWithTarget(NS_NewRunnableFunction("imgRequestProxy::BlockOnload",
                                     [self]() -> void {
@@ -1063,7 +1071,11 @@ imgRequestProxy::UnblockOnload()
     return;
   }
 
-  if (!IsOnEventTarget()) {
+  // If we have ever dispatched a block or unblock onload event, then we need
+  // to continue dispatching them, because they might come out of order if we
+  // dispatched the block onload, but were able to run the unblock inline.
+  if (mHadDispatchOnload || !IsOnEventTarget()) {
+    mHadDispatchOnload = true;
     RefPtr<imgRequestProxy> self(this);
     DispatchWithTarget(NS_NewRunnableFunction("imgRequestProxy::UnblockOnload",
                                     [self]() -> void {
