@@ -1237,7 +1237,7 @@ nsBulletFrame::BlockOnload(imgIRequest* aRequest)
   nsIDocument* doc = GetOurCurrentDoc();
   if (doc) {
     mBlockingOnload = true;
-    doc->BlockOnload();
+    doc->BlockOnload(PresContext()->Document());
   }
 
   return NS_OK;
@@ -1254,7 +1254,7 @@ nsBulletFrame::UnblockOnload(imgIRequest* aRequest)
 
   nsIDocument* doc = GetOurCurrentDoc();
   if (doc) {
-    doc->UnblockOnload(false);
+    doc->UnblockOnload(false, PresContext()->Document());
   }
   mBlockingOnload = false;
 

@@ -782,7 +782,8 @@ nsImageLoadingContent::LoadImageWithChannel(nsIChannel* aChannel,
   AutoStateChanger changer(this, true);
 
   // Do the load.
-  RefPtr<imgRequestProxy>& req = PrepareNextRequest(eImageLoadType_Normal);
+  RefPtr<imgRequestProxy>& req =
+    PrepareNextRequest(eImageLoadType_NormalWithChannel);
   nsresult rv = loader->
     LoadImageWithChannel(aChannel, this, doc, aListener, getter_AddRefs(req));
   if (NS_SUCCEEDED(rv)) {
@@ -846,21 +847,24 @@ nsImageLoadingContent::ForceReload(bool aNotify /* = true */,
 NS_IMETHODIMP
 nsImageLoadingContent::BlockOnload(imgIRequest* aRequest)
 {
+  bool usesChannel;
   if (aRequest == mCurrentRequest) {
     NS_ASSERTION(!(mCurrentRequestFlags & REQUEST_BLOCKS_ONLOAD),
                  "Double BlockOnload!?");
     mCurrentRequestFlags |= REQUEST_BLOCKS_ONLOAD;
+    usesChannel = bool(mCurrentRequestFlags & REQUEST_USES_CHANNEL);
   } else if (aRequest == mPendingRequest) {
     NS_ASSERTION(!(mPendingRequestFlags & REQUEST_BLOCKS_ONLOAD),
                  "Double BlockOnload!?");
     mPendingRequestFlags |= REQUEST_BLOCKS_ONLOAD;
+    usesChannel = bool(mPendingRequestFlags & REQUEST_USES_CHANNEL);
   } else {
     return NS_OK;
   }
 
   nsIDocument* doc = GetOurCurrentDoc();
   if (doc) {
-    doc->BlockOnload();
+    doc->BlockOnload(!usesChannel ? GetOurOwnerDoc() : nullptr);
   }
 
   return NS_OK;
@@ -869,21 +873,24 @@ nsImageLoadingContent::BlockOnload(imgIRequest* aRequest)
 NS_IMETHODIMP
 nsImageLoadingContent::UnblockOnload(imgIRequest* aRequest)
 {
+  bool usesChannel;
   if (aRequest == mCurrentRequest) {
     NS_ASSERTION(mCurrentRequestFlags & REQUEST_BLOCKS_ONLOAD,
                  "Double UnblockOnload!?");
     mCurrentRequestFlags &= ~REQUEST_BLOCKS_ONLOAD;
+    usesChannel = bool(mCurrentRequestFlags & REQUEST_USES_CHANNEL);
   } else if (aRequest == mPendingRequest) {
     NS_ASSERTION(mPendingRequestFlags & REQUEST_BLOCKS_ONLOAD,
                  "Double UnblockOnload!?");
     mPendingRequestFlags &= ~REQUEST_BLOCKS_ONLOAD;
+    usesChannel = bool(mPendingRequestFlags & REQUEST_USES_CHANNEL);
   } else {
     return NS_OK;
   }
 
   nsIDocument* doc = GetOurCurrentDoc();
   if (doc) {
-    doc->UnblockOnload(false);
+    doc->UnblockOnload(false, !usesChannel ? GetOurOwnerDoc() : nullptr);
   }
 
   return NS_OK;
@@ -1436,6 +1443,10 @@ nsImageLoadingContent::PrepareCurrentRequest(ImageLoadType aImageLoadType)
     mCurrentRequestFlags |= REQUEST_IS_IMAGESET;
   }
 
+  if (aImageLoadType == eImageLoadType_NormalWithChannel) {
+    mCurrentRequestFlags |= REQUEST_USES_CHANNEL;
+  }
+
   // Return a reference.
   return mCurrentRequest;
 }
@@ -1453,6 +1464,10 @@ nsImageLoadingContent::PreparePendingRequest(ImageLoadType aImageLoadType)
 
   if (aImageLoadType == eImageLoadType_Imageset) {
     mPendingRequestFlags |= REQUEST_IS_IMAGESET;
+  }
+
+  if (aImageLoadType == eImageLoadType_NormalWithChannel) {
+    mPendingRequestFlags |= REQUEST_USES_CHANNEL;
   }
 
   // Return a reference.
@@ -1608,8 +1623,9 @@ nsImageLoadingContent::BindToTree(nsIDocument* aDocument, nsIContent* aParent,
   TrackImage(mCurrentRequest);
   TrackImage(mPendingRequest);
 
-  if (mCurrentRequestFlags & REQUEST_BLOCKS_ONLOAD)
-    aDocument->BlockOnload();
+  if ((mCurrentRequestFlags & REQUEST_BLOCKS_ONLOAD))
+    aDocument->BlockOnload(!(mCurrentRequestFlags & REQUEST_USES_CHANNEL)
+                           ? GetOurOwnerDoc() : nullptr);
 }
 
 void
@@ -1624,7 +1640,8 @@ nsImageLoadingContent::UnbindFromTree(bool aDeep, bool aNullParent)
   UntrackImage(mPendingRequest);
 
   if (mCurrentRequestFlags & REQUEST_BLOCKS_ONLOAD)
-    doc->UnblockOnload(false);
+    doc->UnblockOnload(false, !(mCurrentRequestFlags & REQUEST_USES_CHANNEL)
+                              ? GetOurOwnerDoc() : nullptr);
 }
 
 void

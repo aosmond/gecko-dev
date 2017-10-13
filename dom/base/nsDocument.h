@@ -715,7 +715,9 @@ public:
   virtual already_AddRefed<nsILayoutHistoryState> GetLayoutHistoryState() const override;
 
   virtual void BlockOnload() override;
+  virtual void BlockOnload(nsIDocument* aIgnoreDocument) override;
   virtual void UnblockOnload(bool aFireSync) override;
+  virtual void UnblockOnload(bool aFireSync, nsIDocument* aIgnoreDocument) override;
 
   virtual void AddStyleRelevantLink(mozilla::dom::Link* aLink) override;
   virtual void ForgetLink(mozilla::dom::Link* aLink) override;

@@ -87,7 +87,9 @@ protected:
     eImageLoadType_Normal,
     // From a <img srcset> or <picture> context. Affects type given to content
     // policy.
-    eImageLoadType_Imageset
+    eImageLoadType_Imageset,
+    // For normal images loaded with a channel
+    eImageLoadType_NormalWithChannel
   };
 
   /**
@@ -427,7 +429,9 @@ protected:
     REQUEST_IS_TRACKED = 0x00000004U,
     // Set if this is an imageset request, such as from <img srcset> or
     // <picture>
-    REQUEST_IS_IMAGESET = 0x00000008U
+    REQUEST_IS_IMAGESET = 0x00000008U,
+    // Set if this request used LoadImageWithChannel.
+    REQUEST_USES_CHANNEL = 0x00000010U,
   };
 
   // If the image was blocked or if there was an error loading, it's nice to

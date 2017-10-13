@@ -934,7 +934,8 @@ NS_IMETHODIMP
 nsImageBoxListener::BlockOnload(imgIRequest *aRequest)
 {
   if (mFrame && mFrame->GetContent() && mFrame->GetContent()->GetUncomposedDoc()) {
-    mFrame->GetContent()->GetUncomposedDoc()->BlockOnload();
+    nsIDocument* doc = mFrame->GetContent()->GetComposedDoc();
+    mFrame->GetContent()->GetUncomposedDoc()->BlockOnload(doc);
   }
 
   return NS_OK;
@@ -944,7 +945,8 @@ NS_IMETHODIMP
 nsImageBoxListener::UnblockOnload(imgIRequest *aRequest)
 {
   if (mFrame && mFrame->GetContent() && mFrame->GetContent()->GetUncomposedDoc()) {
-    mFrame->GetContent()->GetUncomposedDoc()->UnblockOnload(false);
+    nsIDocument* doc = mFrame->GetContent()->GetComposedDoc();
+    mFrame->GetContent()->GetUncomposedDoc()->UnblockOnload(false, doc);
   }
 
   return NS_OK;

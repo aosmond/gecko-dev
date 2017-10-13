@@ -9237,8 +9237,18 @@ nsDocument::AsyncBlockOnload()
 void
 nsDocument::BlockOnload()
 {
+  return BlockOnload(nullptr);
+}
+
+void
+nsDocument::BlockOnload(nsIDocument* aIgnoreDocument)
+{
   if (mDisplayDocument) {
     mDisplayDocument->BlockOnload();
+    return;
+  }
+
+  if (aIgnoreDocument == static_cast<nsIDocument*>(this)) {
     return;
   }
 
@@ -9266,8 +9276,18 @@ nsDocument::BlockOnload()
 void
 nsDocument::UnblockOnload(bool aFireSync)
 {
+  return UnblockOnload(aFireSync, nullptr);
+}
+
+void
+nsDocument::UnblockOnload(bool aFireSync, nsIDocument* aIgnoreDocument)
+{
   if (mDisplayDocument) {
     mDisplayDocument->UnblockOnload(aFireSync);
+    return;
+  }
+
+  if (aIgnoreDocument == static_cast<nsIDocument*>(this)) {
     return;
   }
 

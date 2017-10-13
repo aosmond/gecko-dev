@@ -499,7 +499,7 @@ ImageLoader::BlockOnload(imgIRequest* aRequest)
     return NS_OK;
   }
 
-  mDocument->BlockOnload();
+  mDocument->BlockOnload(mDocument);
 
   return NS_OK;
 }
@@ -511,7 +511,7 @@ ImageLoader::UnblockOnload(imgIRequest* aRequest)
     return NS_OK;
   }
 
-  mDocument->UnblockOnload(false);
+  mDocument->UnblockOnload(false, mDocument);
 
   return NS_OK;
 }

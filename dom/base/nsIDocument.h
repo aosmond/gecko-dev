@@ -1997,6 +1997,8 @@ public:
    * pressing the Stop button, say).
    */
   virtual void BlockOnload() = 0;
+  virtual void BlockOnload(nsIDocument* aIgnoreDocument) = 0;
+
   /**
    * @param aFireSync whether to fire onload synchronously.  If false,
    * onload will fire asynchronously after all onload blocks have been
@@ -2004,6 +2006,7 @@ public:
    * onload may fire from inside UnblockOnload.
    */
   virtual void UnblockOnload(bool aFireSync) = 0;
+  virtual void UnblockOnload(bool aFireSync, nsIDocument* aIgnoreDocument) = 0;
 
   void BlockDOMContentLoaded()
   {
