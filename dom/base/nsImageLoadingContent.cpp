@@ -786,6 +786,7 @@ nsImageLoadingContent::LoadImageWithChannel(nsIChannel* aChannel,
   nsresult rv = loader->
     LoadImageWithChannel(aChannel, this, doc, aListener, getter_AddRefs(req));
   if (NS_SUCCEEDED(rv)) {
+    CloneRequestForTree(GetOurCurrentDoc(), req);
     CloneScriptedRequests(req);
     TrackImage(req);
     ResetAnimationIfNeeded();
@@ -1078,6 +1079,7 @@ nsImageLoadingContent::LoadImage(nsIURI* aNewURI,
   aDocument->ForgetImagePreload(aNewURI);
 
   if (NS_SUCCEEDED(rv)) {
+    CloneRequestForTree(GetOurCurrentDoc(), req);
     CloneScriptedRequests(req);
     TrackImage(req);
     ResetAnimationIfNeeded();
@@ -1254,6 +1256,7 @@ nsImageLoadingContent::UseAsPrimaryRequest(imgRequestProxy* aRequest,
   RefPtr<imgRequestProxy>& req = PrepareNextRequest(aImageLoadType);
   nsresult rv = aRequest->SyncClone(this, GetOurOwnerDoc(), getter_AddRefs(req));
   if (NS_SUCCEEDED(rv)) {
+    CloneRequestForTree(GetOurCurrentDoc(), req);
     CloneScriptedRequests(req);
     TrackImage(req);
   } else {
@@ -1501,13 +1504,13 @@ nsImageLoadingContent::MakePendingRequestCurrent()
     (mPendingRequestFlags & REQUEST_IS_IMAGESET) ? eImageLoadType_Imageset
                                                  : eImageLoadType_Normal;
 
-  PrepareCurrentRequest(loadType) = mPendingRequest;
+  PrepareCurrentRequest(loadType) = Move(mPendingRequest);
   MakePendingScriptedRequestsCurrent();
-  mPendingRequest = nullptr;
   mCurrentRequestFlags = mPendingRequestFlags;
   mPendingRequestFlags = 0;
   mCurrentRequestRegistered = mPendingRequestRegistered;
   mPendingRequestRegistered = false;
+  mCurrentRequestForTree = Move(mPendingRequestForTree);
   ResetAnimationIfNeeded();
 }
 
@@ -1536,6 +1539,11 @@ nsImageLoadingContent::ClearCurrentRequest(nsresult aReason,
   mCurrentRequest->CancelAndForgetObserver(aReason);
   mCurrentRequest = nullptr;
   mCurrentRequestFlags = 0;
+
+  if (mCurrentRequestForTree) {
+    mCurrentRequestForTree->CancelAndForgetObserver(aReason);
+    mCurrentRequestForTree = nullptr;
+  }
 }
 
 void
@@ -1555,6 +1563,11 @@ nsImageLoadingContent::ClearPendingRequest(nsresult aReason,
   mPendingRequest->CancelAndForgetObserver(aReason);
   mPendingRequest = nullptr;
   mPendingRequestFlags = 0;
+
+  if (mPendingRequestForTree) {
+    mPendingRequestForTree->CancelAndForgetObserver(aReason);
+    mPendingRequestForTree = nullptr;
+  }
 }
 
 bool*
@@ -1596,6 +1609,36 @@ nsImageLoadingContent::HaveSize(imgIRequest *aImage)
 }
 
 void
+nsImageLoadingContent::CloneRequestForTree(nsIDocument* aDocument,
+                                           imgRequestProxy* aRequest)
+{
+  if (!aDocument || !aRequest) {
+    return;
+  }
+
+  nsIDocument* rootDoc = aDocument->GetRootDisplayDocument();
+  MOZ_ASSERT(rootDoc);
+
+  // No need to block again if it is just the same document.
+  if (rootDoc == GetOurOwnerDoc()) {
+    return;
+  }
+
+  RefPtr<imgRequestProxy>& req = aRequest == mCurrentRequest
+                                 ? mCurrentRequestForTree
+                                 : mPendingRequestForTree;
+  if (req) {
+    req->CancelAndForgetObserver(NS_BINDING_ABORTED);
+    req = nullptr;
+  }
+
+  nsCOMPtr<nsILoadGroup> loadGroup = rootDoc->GetDocumentLoadGroup();
+  nsresult rv = mCurrentRequest->Clone(nullptr, rootDoc, loadGroup,
+                                       getter_AddRefs(req));
+  Unused << NS_WARN_IF(NS_FAILED(rv));
+}
+
+void
 nsImageLoadingContent::BindToTree(nsIDocument* aDocument, nsIContent* aParent,
                                   nsIContent* aBindingParent,
                                   bool aCompileEventHandlers)
@@ -1608,8 +1651,8 @@ nsImageLoadingContent::BindToTree(nsIDocument* aDocument, nsIContent* aParent,
   TrackImage(mCurrentRequest);
   TrackImage(mPendingRequest);
 
-  if (mCurrentRequestFlags & REQUEST_BLOCKS_ONLOAD)
-    aDocument->BlockOnload();
+  CloneRequestForTree(aDocument, mCurrentRequest);
+  CloneRequestForTree(aDocument, mPendingRequest);
 }
 
 void
@@ -1623,8 +1666,15 @@ nsImageLoadingContent::UnbindFromTree(bool aDeep, bool aNullParent)
   UntrackImage(mCurrentRequest);
   UntrackImage(mPendingRequest);
 
-  if (mCurrentRequestFlags & REQUEST_BLOCKS_ONLOAD)
-    doc->UnblockOnload(false);
+  if (mCurrentRequestForTree) {
+    mCurrentRequestForTree->CancelAndForgetObserver(NS_BINDING_ABORTED);
+    mCurrentRequestForTree = nullptr;
+  }
+
+  if (mPendingRequestForTree) {
+    mPendingRequestForTree->CancelAndForgetObserver(NS_BINDING_ABORTED);
+    mPendingRequestForTree = nullptr;
+  }
 }
 
 void
@@ -1743,6 +1793,7 @@ nsImageLoadingContent::CreateStaticImageClone(nsImageLoadingContent* aDest) cons
   aDest->mCurrentRequest =
     nsContentUtils::GetStaticRequest(aDest->GetOurOwnerDoc(), mCurrentRequest);
   if (aDest->mCurrentRequest) {
+    aDest->CloneRequestForTree(aDest->GetOurCurrentDoc(), aDest->mCurrentRequest);
     aDest->CloneScriptedRequests(aDest->mCurrentRequest);
   }
   aDest->TrackImage(aDest->mCurrentRequest);

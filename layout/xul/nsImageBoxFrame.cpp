@@ -189,6 +189,12 @@ nsImageBoxFrame::DestroyFrom(nsIFrame* aDestructRoot)
 
     // Release image loader first so that it's refcnt can go to zero
     mImageRequest->CancelAndForgetObserver(NS_ERROR_FAILURE);
+    mImageRequest = nullptr;
+  }
+
+  if (mImageRequestForTree) {
+    mImageRequestForTree->CancelAndForgetObserver(NS_ERROR_FAILURE);
+    mImageRequestForTree = nullptr;
   }
 
   if (mListener)
@@ -231,6 +237,11 @@ nsImageBoxFrame::UpdateImage()
     mImageRequest = nullptr;
   }
 
+  if (mImageRequestForTree) {
+    mImageRequestForTree->CancelAndForgetObserver(NS_ERROR_FAILURE);
+    mImageRequestForTree = nullptr;
+  }
+
   // get the new image src
   nsAutoString src;
   mContent->GetAttr(kNameSpaceID_None, nsGkAtoms::src, src);
@@ -260,6 +271,16 @@ nsImageBoxFrame::UpdateImage()
                                                 contentPolicyType);
 
         if (NS_SUCCEEDED(rv) && mImageRequest) {
+          nsIDocument* rootDoc = mContent->GetUncomposedDoc();
+          if (rootDoc) {
+            rootDoc = rootDoc->GetRootDisplayDocument();
+          }
+          if (rootDoc && rootDoc != doc) {
+            nsCOMPtr<nsILoadGroup> loadGroup = rootDoc->GetDocumentLoadGroup();
+            mImageRequest->Clone(nullptr, rootDoc, loadGroup,
+                                 getter_AddRefs(mImageRequestForTree));
+          }
+
           nsLayoutUtils::RegisterImageRequestIfAnimated(presContext,
                                                         mImageRequest,
                                                         &mRequestRegistered);

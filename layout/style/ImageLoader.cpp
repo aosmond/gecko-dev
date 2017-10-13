@@ -28,6 +28,11 @@ ImageLoader::DropDocumentReference()
   // been destroyed, and it also calls ClearFrames when it is destroyed.
   ClearFrames(GetPresContext());
 
+  nsIDocument* rootDoc = mDocument->GetRootDisplayDocument();
+  if (rootDoc && rootDoc == mDocument) {
+    rootDoc = nullptr;
+  }
+
   for (auto it = mImages.Iter(); !it.Done(); it.Next()) {
     ImageLoader::Image* image = it.Get()->GetKey();
     imgIRequest* request = image->mRequests.GetWeak(mDocument);
@@ -35,6 +40,14 @@ ImageLoader::DropDocumentReference()
       request->CancelAndForgetObserver(NS_BINDING_ABORTED);
     }
     image->mRequests.Remove(mDocument);
+
+    if (rootDoc) {
+      request = image->mRequests.GetWeak(rootDoc);
+      if (request) {
+        request->CancelAndForgetObserver(NS_BINDING_ABORTED);
+      }
+      image->mRequests.Remove(rootDoc);
+    }
   }
   mImages.Clear();
 
@@ -285,6 +298,18 @@ ImageLoader::LoadImage(nsIURI* aURI, nsIPrincipal* aOriginPrincipal,
 
   if (NS_FAILED(rv)) {
     return;
+  }
+
+  nsIDocument* rootDoc = mDocument->GetRootDisplayDocument();
+  if (rootDoc && rootDoc != mDocument) {
+    nsCOMPtr<nsILoadGroup> loadGroup = rootDoc->GetDocumentLoadGroup();
+    RefPtr<imgRequestProxy> rootRequest;
+    rv = request->Clone(nullptr, rootDoc, loadGroup,
+                        getter_AddRefs(rootRequest));
+    if (NS_FAILED(rv)) {
+      return;
+    }
+    aImage->mRequests.Put(rootDoc, rootRequest);
   }
 
   aImage->mRequests.Put(nullptr, request);

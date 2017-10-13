@@ -128,6 +128,7 @@ private:
   nsSize mImageSize;
 
   RefPtr<imgRequestProxy> mImageRequest;
+  RefPtr<imgRequestProxy> mImageRequestForTree;
   nsCOMPtr<imgINotificationObserver> mListener;
 
   int32_t mLoadFlags;

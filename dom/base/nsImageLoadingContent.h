@@ -415,6 +415,8 @@ protected:
   /* MEMBERS */
   RefPtr<imgRequestProxy> mCurrentRequest;
   RefPtr<imgRequestProxy> mPendingRequest;
+  RefPtr<imgRequestProxy> mCurrentRequestForTree;
+  RefPtr<imgRequestProxy> mPendingRequestForTree;
   uint32_t mCurrentRequestFlags;
   uint32_t mPendingRequestFlags;
 
@@ -437,6 +439,12 @@ protected:
   nsCOMPtr<nsIURI>      mCurrentURI;
 
 private:
+  /**
+   * Clones the given "current" or "pending" request for composed document.
+   */
+  void CloneRequestForTree(nsIDocument* aDocument,
+                           imgRequestProxy* aRequest);
+
   /**
    * Clones the given "current" or "pending" request for each scripted observer.
    */

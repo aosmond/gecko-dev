@@ -136,6 +136,16 @@ nsBulletFrame::DidSetStyleContext(nsStyleContext* aOldStyleContext)
                             PresContext()->Document(),
                             getter_AddRefs(newRequestClone));
 
+      nsIDocument* rootDoc = GetOurCurrentDoc();
+      if (rootDoc) {
+        rootDoc = rootDoc->GetRootDisplayDocument();
+      }
+      if (rootDoc && rootDoc != PresContext()->Document()) {
+        nsCOMPtr<nsILoadGroup> loadGroup = rootDoc->GetDocumentLoadGroup();
+        newRequest->Clone(nullptr, rootDoc, loadGroup,
+                          getter_AddRefs(mImageRequestForTree));
+      }
+
       // Deregister the old request. We wait until after Clone is done in case
       // the old request and the new request are the same underlying image
       // accessed via different URLs.
@@ -1481,6 +1491,11 @@ nsBulletFrame::DeregisterAndCancelImageRequest()
     // Cancel the image request and forget about it.
     mImageRequest->CancelAndForgetObserver(NS_ERROR_FAILURE);
     mImageRequest = nullptr;
+  }
+
+  if (mImageRequestForTree) {
+    mImageRequestForTree->CancelAndForgetObserver(NS_ERROR_FAILURE);
+    mImageRequestForTree = nullptr;
   }
 }
 

@@ -140,6 +140,7 @@ protected:
 
   mozilla::LogicalMargin mPadding;
   RefPtr<imgRequestProxy> mImageRequest;
+  RefPtr<imgRequestProxy> mImageRequestForTree;
   RefPtr<nsBulletListener> mListener;
 
   mozilla::LogicalSize mIntrinsicSize;

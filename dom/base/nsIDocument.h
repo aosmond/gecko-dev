@@ -2283,6 +2283,17 @@ public:
   }
 
   /**
+   * Get the root display document for this document.
+   */
+  nsIDocument* GetRootDisplayDocument()
+  {
+    if (mDisplayDocument) {
+      return mDisplayDocument->GetRootDisplayDocument();
+    }
+    return this;
+  }
+
+  /**
    * A class that represents an external resource load that has begun but
    * doesn't have a document yet.  Observers can be registered on this object,
    * and will be notified after the document is created.  Observers registered
