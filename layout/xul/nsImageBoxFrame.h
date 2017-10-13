@@ -29,6 +29,7 @@ public:
   NS_DECL_IMGINOTIFICATIONOBSERVER
   NS_DECL_IMGIONLOADBLOCKER
 
+  nsIDocument* BlockingDocument() const;
   void SetFrame(nsImageBoxFrame *frame) { mFrame = frame; }
 
 private:

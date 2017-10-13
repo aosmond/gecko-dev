@@ -878,6 +878,13 @@ public:
                                                             imgRequestProxy* aRequest);
 
   /**
+   * Method to get the highest level display document for the given document.
+   * If aDocument has no display document, it will return itself. May be null.
+   */
+  static nsIDocument*
+  GetRootDisplayDocument(nsIDocument* aDocument);
+
+  /**
    * Method that decides whether a content node is draggable
    *
    * @param aContent The content node to test.

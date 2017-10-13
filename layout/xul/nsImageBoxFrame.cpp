@@ -930,11 +930,33 @@ nsImageBoxListener::Notify(imgIRequest *request, int32_t aType, const nsIntRect*
   return mFrame->Notify(request, aType, aData);
 }
 
+nsIDocument*
+nsImageBoxListener::BlockingDocument() const
+{
+  if (!mFrame) {
+    return nullptr;
+  }
+
+  nsIContent* content = mFrame->GetContent();
+  if (!content) {
+    return nullptr;
+  }
+
+  nsIDocument* doc =
+    nsContentUtils::GetRootDisplayDocument(content->GetUncomposedDoc());
+  if (doc == content->GetComposedDoc()) {
+    return nullptr;
+  }
+
+  return doc;
+}
+
 NS_IMETHODIMP
 nsImageBoxListener::BlockOnload(imgIRequest *aRequest)
 {
-  if (mFrame && mFrame->GetContent() && mFrame->GetContent()->GetUncomposedDoc()) {
-    mFrame->GetContent()->GetUncomposedDoc()->BlockOnload();
+  nsIDocument* doc = BlockingDocument();
+  if (doc) {
+    doc->BlockOnload();
   }
 
   return NS_OK;
@@ -943,8 +965,9 @@ nsImageBoxListener::BlockOnload(imgIRequest *aRequest)
 NS_IMETHODIMP
 nsImageBoxListener::UnblockOnload(imgIRequest *aRequest)
 {
-  if (mFrame && mFrame->GetContent() && mFrame->GetContent()->GetUncomposedDoc()) {
-    mFrame->GetContent()->GetUncomposedDoc()->UnblockOnload(false);
+  nsIDocument* doc = BlockingDocument();
+  if (doc) {
+    doc->UnblockOnload(false);
   }
 
   return NS_OK;

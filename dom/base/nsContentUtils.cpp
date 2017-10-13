@@ -3877,6 +3877,16 @@ nsContentUtils::GetStaticRequest(nsIDocument* aLoadingDocument,
   return retval.forget();
 }
 
+//static
+nsIDocument*
+nsContentUtils::GetRootDisplayDocument(nsIDocument* aDocument)
+{
+  if (!aDocument || !aDocument->GetDisplayDocument()) {
+    return aDocument;
+  }
+  return GetRootDisplayDocument(aDocument->GetDisplayDocument());
+}
+
 // static
 bool
 nsContentUtils::ContentIsDraggable(nsIContent* aContent)

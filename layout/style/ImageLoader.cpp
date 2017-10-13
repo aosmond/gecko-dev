@@ -495,7 +495,9 @@ ImageLoader::OnFrameUpdate(imgIRequest* aRequest)
 NS_IMETHODIMP
 ImageLoader::BlockOnload(imgIRequest* aRequest)
 {
-  if (!mDocument) {
+  // The image is already blocked on the load group for the owning document
+  // by the request returned by nsContentUtils::LoadImage.
+  if (!mDocument || !mDocument->GetDisplayDocument()) {
     return NS_OK;
   }
 
@@ -507,7 +509,9 @@ ImageLoader::BlockOnload(imgIRequest* aRequest)
 NS_IMETHODIMP
 ImageLoader::UnblockOnload(imgIRequest* aRequest)
 {
-  if (!mDocument) {
+  // The image is already blocked on the load group for the owning document
+  // by the request returned by nsContentUtils::LoadImage.
+  if (!mDocument || !mDocument->GetDisplayDocument()) {
     return NS_OK;
   }
 

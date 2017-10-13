@@ -1234,8 +1234,8 @@ nsBulletFrame::BlockOnload(imgIRequest* aRequest)
 
   NS_ASSERTION(!mBlockingOnload, "Double BlockOnload for an nsBulletFrame?");
 
-  nsIDocument* doc = GetOurCurrentDoc();
-  if (doc) {
+  nsIDocument* doc = nsContentUtils::GetRootDisplayDocument(GetOurCurrentDoc());
+  if (doc && doc != PresContext()->Document()) {
     mBlockingOnload = true;
     doc->BlockOnload();
   }
@@ -1250,13 +1250,14 @@ nsBulletFrame::UnblockOnload(imgIRequest* aRequest)
     return NS_OK;
   }
 
-  NS_ASSERTION(!mBlockingOnload, "Double UnblockOnload for an nsBulletFrame?");
-
-  nsIDocument* doc = GetOurCurrentDoc();
-  if (doc) {
+  nsIDocument* doc = nsContentUtils::GetRootDisplayDocument(GetOurCurrentDoc());
+  if (doc && doc != PresContext()->Document()) {
+    NS_ASSERTION(mBlockingOnload, "Double UnblockOnload for an nsBulletFrame?");
     doc->UnblockOnload(false);
+    mBlockingOnload = false;
+  } else {
+    NS_ASSERTION(!mBlockingOnload, "Double UnblockOnload for an nsBulletFrame?");
   }
-  mBlockingOnload = false;
 
   return NS_OK;
 }

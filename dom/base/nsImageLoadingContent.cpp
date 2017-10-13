@@ -858,8 +858,8 @@ nsImageLoadingContent::BlockOnload(imgIRequest* aRequest)
     return NS_OK;
   }
 
-  nsIDocument* doc = GetOurCurrentDoc();
-  if (doc) {
+  nsIDocument* doc = nsContentUtils::GetRootDisplayDocument(GetOurCurrentDoc());
+  if (doc && doc != GetOurOwnerDoc()) {
     doc->BlockOnload();
   }
 
@@ -881,8 +881,8 @@ nsImageLoadingContent::UnblockOnload(imgIRequest* aRequest)
     return NS_OK;
   }
 
-  nsIDocument* doc = GetOurCurrentDoc();
-  if (doc) {
+  nsIDocument* doc = nsContentUtils::GetRootDisplayDocument(GetOurCurrentDoc());
+  if (doc && doc != GetOurOwnerDoc()) {
     doc->UnblockOnload(false);
   }
 
@@ -1608,8 +1608,12 @@ nsImageLoadingContent::BindToTree(nsIDocument* aDocument, nsIContent* aParent,
   TrackImage(mCurrentRequest);
   TrackImage(mPendingRequest);
 
-  if (mCurrentRequestFlags & REQUEST_BLOCKS_ONLOAD)
-    aDocument->BlockOnload();
+  if (mCurrentRequestFlags & REQUEST_BLOCKS_ONLOAD) {
+    nsIDocument* doc = nsContentUtils::GetRootDisplayDocument(aDocument);
+    if (doc && doc != GetOurOwnerDoc()) {
+      doc->BlockOnload();
+    }
+  }
 }
 
 void
@@ -1623,8 +1627,12 @@ nsImageLoadingContent::UnbindFromTree(bool aDeep, bool aNullParent)
   UntrackImage(mCurrentRequest);
   UntrackImage(mPendingRequest);
 
-  if (mCurrentRequestFlags & REQUEST_BLOCKS_ONLOAD)
-    doc->UnblockOnload(false);
+  if (mCurrentRequestFlags & REQUEST_BLOCKS_ONLOAD) {
+    doc = nsContentUtils::GetRootDisplayDocument(doc);
+    if (doc && doc != GetOurOwnerDoc()) {
+      doc->UnblockOnload(false);
+    }
+  }
 }
 
 void
