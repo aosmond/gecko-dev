@@ -106,10 +106,6 @@ public:
                       const mozilla::gfx::IntRect* aRect = nullptr) override;
   virtual void OnLoadComplete(bool aLastPart) override;
 
-  // imgIOnloadBlocker methods:
-  virtual void BlockOnload() override;
-  virtual void UnblockOnload() override;
-
   // Other, internal-only methods:
   virtual void SetHasImage() override;
 
