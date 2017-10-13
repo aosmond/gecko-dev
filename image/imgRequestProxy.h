@@ -139,6 +139,10 @@ public:
   nsresult Clone(imgINotificationObserver* aObserver,
                  nsIDocument* aLoadingDocument,
                  imgRequestProxy** aClone);
+  nsresult Clone(imgINotificationObserver* aObserver,
+                 nsIDocument* aLoadingDocument,
+                 nsILoadGroup* aLoadGroup,
+                 imgRequestProxy** aClone);
   nsresult GetStaticRequest(nsIDocument* aLoadingDocument,
                             imgRequestProxy** aReturn);
 
@@ -198,6 +202,7 @@ protected:
 
   nsresult PerformClone(imgINotificationObserver* aObserver,
                         nsIDocument* aLoadingDocument,
+                        nsILoadGroup* aLoadGroup,
                         bool aSyncNotify,
                         imgRequestProxy** aClone);
 

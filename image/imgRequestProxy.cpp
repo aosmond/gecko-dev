@@ -740,7 +740,8 @@ imgRequestProxy::Clone(imgINotificationObserver* aObserver,
 {
   nsresult result;
   imgRequestProxy* proxy;
-  result = PerformClone(aObserver, nullptr, /* aSyncNotify */ true, &proxy);
+  result = PerformClone(aObserver, nullptr, nullptr,
+                        /* aSyncNotify */ true, &proxy);
   *aClone = proxy;
   return result;
 }
@@ -749,7 +750,7 @@ nsresult imgRequestProxy::SyncClone(imgINotificationObserver* aObserver,
                                     nsIDocument* aLoadingDocument,
                                     imgRequestProxy** aClone)
 {
-  return PerformClone(aObserver, aLoadingDocument,
+  return PerformClone(aObserver, aLoadingDocument, nullptr,
                       /* aSyncNotify */ true, aClone);
 }
 
@@ -757,13 +758,23 @@ nsresult imgRequestProxy::Clone(imgINotificationObserver* aObserver,
                                 nsIDocument* aLoadingDocument,
                                 imgRequestProxy** aClone)
 {
-  return PerformClone(aObserver, aLoadingDocument,
+  return PerformClone(aObserver, aLoadingDocument, nullptr,
+                      /* aSyncNotify */ false, aClone);
+}
+
+nsresult imgRequestProxy::Clone(imgINotificationObserver* aObserver,
+                                nsIDocument* aLoadingDocument,
+                                nsILoadGroup* aLoadGroup,
+                                imgRequestProxy** aClone)
+{
+  return PerformClone(aObserver, aLoadingDocument, aLoadGroup,
                       /* aSyncNotify */ false, aClone);
 }
 
 nsresult
 imgRequestProxy::PerformClone(imgINotificationObserver* aObserver,
                               nsIDocument* aLoadingDocument,
+                              nsILoadGroup* aLoadGroup,
                               bool aSyncNotify,
                               imgRequestProxy** aClone)
 {
@@ -781,10 +792,15 @@ imgRequestProxy::PerformClone(imgINotificationObserver* aObserver,
   // XXXldb That's not true anymore.  Stuff from imgLoader adds the
   // request to the loadgroup.
   clone->SetLoadFlags(mLoadFlags);
-  nsresult rv = clone->Init(mBehaviour->GetOwner(), mLoadGroup,
+  nsresult rv = clone->Init(mBehaviour->GetOwner(), aLoadGroup,
                             aLoadingDocument, mURI, aObserver);
   if (NS_FAILED(rv)) {
     return rv;
+  }
+
+  // We will get unblocked by the notifications if it has already completed.
+  if (aLoadGroup) {
+    clone->AddToLoadGroup();
   }
 
   // Assign to *aClone before calling Notify so that if the caller expects to
