@@ -844,52 +844,6 @@ nsImageLoadingContent::ForceReload(bool aNotify /* = true */,
   return result.StealNSResult();
 }
 
-NS_IMETHODIMP
-nsImageLoadingContent::BlockOnload(imgIRequest* aRequest)
-{
-  if (aRequest == mCurrentRequest) {
-    NS_ASSERTION(!(mCurrentRequestFlags & REQUEST_BLOCKS_ONLOAD),
-                 "Double BlockOnload!?");
-    mCurrentRequestFlags |= REQUEST_BLOCKS_ONLOAD;
-  } else if (aRequest == mPendingRequest) {
-    NS_ASSERTION(!(mPendingRequestFlags & REQUEST_BLOCKS_ONLOAD),
-                 "Double BlockOnload!?");
-    mPendingRequestFlags |= REQUEST_BLOCKS_ONLOAD;
-  } else {
-    return NS_OK;
-  }
-
-  nsIDocument* doc = GetOurCurrentDoc();
-  if (doc) {
-    doc->BlockOnload();
-  }
-
-  return NS_OK;
-}
-
-NS_IMETHODIMP
-nsImageLoadingContent::UnblockOnload(imgIRequest* aRequest)
-{
-  if (aRequest == mCurrentRequest) {
-    NS_ASSERTION(mCurrentRequestFlags & REQUEST_BLOCKS_ONLOAD,
-                 "Double UnblockOnload!?");
-    mCurrentRequestFlags &= ~REQUEST_BLOCKS_ONLOAD;
-  } else if (aRequest == mPendingRequest) {
-    NS_ASSERTION(mPendingRequestFlags & REQUEST_BLOCKS_ONLOAD,
-                 "Double UnblockOnload!?");
-    mPendingRequestFlags &= ~REQUEST_BLOCKS_ONLOAD;
-  } else {
-    return NS_OK;
-  }
-
-  nsIDocument* doc = GetOurCurrentDoc();
-  if (doc) {
-    doc->UnblockOnload(false);
-  }
-
-  return NS_OK;
-}
-
 /*
  * Non-interface methods
  */
