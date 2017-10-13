@@ -13,7 +13,6 @@
 
 #include "imgIContainer.h"
 #include "imgINotificationObserver.h"
-#include "imgIOnloadBlocker.h"
 
 class imgIContainer;
 class imgRequestProxy;
@@ -21,15 +20,13 @@ class imgRequestProxy;
 class nsBulletFrame;
 class BulletRenderer;
 
-class nsBulletListener final : public imgINotificationObserver,
-                               public imgIOnloadBlocker
+class nsBulletListener final : public imgINotificationObserver
 {
 public:
   nsBulletListener();
 
   NS_DECL_ISUPPORTS
   NS_DECL_IMGINOTIFICATIONOBSERVER
-  NS_DECL_IMGIONLOADBLOCKER
 
   void SetFrame(nsBulletFrame *frame) { mFrame = frame; }
 
@@ -58,14 +55,11 @@ public:
     , mIntrinsicSize(GetWritingMode())
     , mOrdinal(0)
     , mRequestRegistered(false)
-    , mBlockingOnload(false)
   {}
 
   virtual ~nsBulletFrame();
 
   NS_IMETHOD Notify(imgIRequest* aRequest, int32_t aType, const nsIntRect* aData);
-  NS_IMETHOD BlockOnload(imgIRequest* aRequest);
-  NS_IMETHOD UnblockOnload(imgIRequest* aRequest);
 
   // nsIFrame
   virtual void DestroyFrom(nsIFrame* aDestructRoot) override;
@@ -152,9 +146,6 @@ private:
   // This is a boolean flag indicating whether or not the current image request
   // has been registered with the refresh driver.
   bool mRequestRegistered : 1;
-
-  // Whether we're currently blocking onload.
-  bool mBlockingOnload : 1;
 };
 
 #endif /* nsBulletFrame_h___ */
