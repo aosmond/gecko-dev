@@ -360,6 +360,7 @@ imgRequestProxy::AddToLoadGroup()
   NS_ASSERTION(!mIsInLoadGroup, "Whaa, we're already in the loadgroup!");
 
   if (!mIsInLoadGroup && mLoadGroup) {
+    LOG_FUNC(gImgLog, "imgRequestProxy::AddToLoadGroup");
     mLoadGroup->AddRequest(this, nullptr);
     mIsInLoadGroup = true;
   }
@@ -371,6 +372,8 @@ imgRequestProxy::RemoveFromLoadGroup(bool releaseLoadGroup)
   if (!mIsInLoadGroup) {
     return;
   }
+
+  LOG_FUNC(gImgLog, "imgRequestProxy::RemoveFromLoadGroup");
 
   /* calling RemoveFromLoadGroup may cause the document to finish
      loading, which could result in our death.  We need to make sure
@@ -608,6 +611,8 @@ imgRequestProxy::GetLoadGroup(nsILoadGroup** loadGroup)
 NS_IMETHODIMP
 imgRequestProxy::SetLoadGroup(nsILoadGroup* loadGroup)
 {
+  LOG_FUNC(gImgLog, "imgRequestProxy::SetLoadGroup");
+
   /* If we are already in a load group, we don't want to stay in the original
      load group. But we want to make sure we add ourselves to the new load
      group before removing from the old because there may be a dependency
