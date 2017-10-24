@@ -2191,6 +2191,15 @@ imgLoader::LoadImage(nsIURI* aURI,
     isPrivate = nsContentUtils::IsInPrivateBrowsing(aLoadGroup);
   }
   MOZ_ASSERT(isPrivate == mRespectPrivacy);
+
+  if (aLoadingDocument) {
+    // The given load group should match that of the document if given. If
+    // that isn't the case, then we need to add more plumbing to ensure we
+    // block the document as well.
+    nsCOMPtr<nsILoadGroup> docLoadGroup =
+      aLoadingDocument->GetDocumentLoadGroup();
+    MOZ_ASSERT(docLoadGroup == aLoadGroup);
+  }
 #endif
 
   // Get the default load flags from the loadgroup (if possible)...
@@ -2546,6 +2555,16 @@ imgLoader::LoadImageWithChannel(nsIChannel* channel,
   nsCOMPtr<nsILoadGroup> loadGroup;
   channel->GetLoadGroup(getter_AddRefs(loadGroup));
 
+#ifdef DEBUG
+  if (doc) {
+    // The load group of the channel should always match that of the
+    // document if given. If that isn't the case, then we need to add more
+    // plumbing to ensure we block the document as well.
+    nsCOMPtr<nsILoadGroup> docLoadGroup = doc->GetDocumentLoadGroup();
+    MOZ_ASSERT(docLoadGroup == loadGroup);
+  }
+#endif
+
   // Filter out any load flags not from nsIRequest
   requestFlags &= nsIRequest::LOAD_REQUESTMASK;
 
@@ -2612,6 +2631,11 @@ imgLoader::LoadImageWithChannel(nsIChannel* channel,
     // OnStopRequest.
   }
 
+  if (NS_FAILED(rv)) {
+    return rv;
+  }
+
+  (*_retval)->AddToLoadGroup();
   return rv;
 }
 

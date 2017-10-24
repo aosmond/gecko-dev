@@ -608,6 +608,18 @@ imgRequestProxy::GetLoadGroup(nsILoadGroup** loadGroup)
 NS_IMETHODIMP
 imgRequestProxy::SetLoadGroup(nsILoadGroup* loadGroup)
 {
+  /* If we are already in a load group, we don't want to stay in the original
+     load group. But we want to make sure we add ourselves to the new load
+     group before removing from the old because there may be a dependency
+     between the load groups themselves. */
+  nsCOMPtr<imgIRequest> kungFuDeathGrip(this);
+  if (mIsInLoadGroup && mLoadGroup != loadGroup) {
+    if (loadGroup) {
+      loadGroup->AddRequest(this, nullptr);
+    }
+    mLoadGroup->RemoveRequest(this, nullptr, NS_OK);
+  }
+
   mLoadGroup = loadGroup;
   return NS_OK;
 }
@@ -774,6 +786,11 @@ imgRequestProxy::PerformClone(imgINotificationObserver* aObserver,
   *aClone = nullptr;
   RefPtr<imgRequestProxy> clone = NewClonedProxy();
 
+  nsCOMPtr<nsILoadGroup> loadGroup;
+  if (aLoadingDocument) {
+    loadGroup = aLoadingDocument->GetDocumentLoadGroup();
+  }
+
   // It is important to call |SetLoadFlags()| before calling |Init()| because
   // |Init()| adds the request to the loadgroup.
   // When a request is added to a loadgroup, its load flags are merged
@@ -781,7 +798,7 @@ imgRequestProxy::PerformClone(imgINotificationObserver* aObserver,
   // XXXldb That's not true anymore.  Stuff from imgLoader adds the
   // request to the loadgroup.
   clone->SetLoadFlags(mLoadFlags);
-  nsresult rv = clone->Init(mBehaviour->GetOwner(), mLoadGroup,
+  nsresult rv = clone->Init(mBehaviour->GetOwner(), loadGroup,
                             aLoadingDocument, mURI, aObserver);
   if (NS_FAILED(rv)) {
     return rv;
@@ -802,11 +819,13 @@ imgRequestProxy::PerformClone(imgINotificationObserver* aObserver,
     // assumes that we don't. This will be fixed in bug 580466. Note that if we
     // have a validator, we won't issue notifications anyways because they are
     // deferred, so there is no point in requesting.
+    clone->AddToLoadGroup();
     clone->SyncNotifyListener();
   } else {
     // Without a validator, we can request asynchronous notifications
     // immediately. If there was a validator, this would override the deferral
     // and that would be incorrect.
+    clone->AddToLoadGroup();
     clone->NotifyListener();
   }
 
