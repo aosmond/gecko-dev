@@ -806,6 +806,12 @@ imgRequestProxy::PerformClone(imgINotificationObserver* aObserver,
   // surprised.
   NS_ADDREF(*aClone = clone);
 
+  // Only touch the load group if we haven't finished yet.
+  RefPtr<ProgressTracker> tracker = GetProgressTracker();
+  if (!(tracker->GetProgress() & FLAG_LOAD_COMPLETE)) {
+    clone->AddToLoadGroup();
+  }
+
   if (GetOwner() && GetOwner()->GetValidator()) {
     // Note that if we have a validator, we don't want to issue notifications at
     // here because we want to defer until that completes.
@@ -816,13 +822,11 @@ imgRequestProxy::PerformClone(imgINotificationObserver* aObserver,
     // assumes that we don't. This will be fixed in bug 580466. Note that if we
     // have a validator, we won't issue notifications anyways because they are
     // deferred, so there is no point in requesting.
-    clone->AddToLoadGroup();
     clone->SyncNotifyListener();
   } else {
     // Without a validator, we can request asynchronous notifications
     // immediately. If there was a validator, this would override the deferral
     // and that would be incorrect.
-    clone->AddToLoadGroup();
     clone->NotifyListener();
   }
 
