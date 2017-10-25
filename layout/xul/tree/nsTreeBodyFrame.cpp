@@ -2177,8 +2177,8 @@ nsTreeBodyFrame::GetImage(int32_t aRowIndex, nsTreeColumn* aCol, bool aUseContex
 
     RefPtr<imgRequestProxy> imageRequest;
     if (styleRequest) {
-      styleRequest->SyncClone(imgNotificationObserver, doc,
-                              getter_AddRefs(imageRequest));
+      styleRequest->Clone(imgNotificationObserver, doc,
+                          getter_AddRefs(imageRequest));
     } else {
       nsCOMPtr<nsIURI> baseURI = mContent->GetBaseURI();
 

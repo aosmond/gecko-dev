@@ -757,14 +757,6 @@ imgRequestProxy::Clone(imgINotificationObserver* aObserver,
   return result;
 }
 
-nsresult imgRequestProxy::SyncClone(imgINotificationObserver* aObserver,
-                                    nsIDocument* aLoadingDocument,
-                                    imgRequestProxy** aClone)
-{
-  return PerformClone(aObserver, aLoadingDocument,
-                      /* aSyncNotify */ true, aClone);
-}
-
 nsresult imgRequestProxy::Clone(imgINotificationObserver* aObserver,
                                 nsIDocument* aLoadingDocument,
                                 imgRequestProxy** aClone)
