@@ -129,9 +129,6 @@ public:
   // imgRequest::RemoveProxy
   void ClearAnimationConsumers();
 
-  nsresult SyncClone(imgINotificationObserver* aObserver,
-                     nsIDocument* aLoadingDocument,
-                     imgRequestProxy** aClone);
   nsresult Clone(imgINotificationObserver* aObserver,
                  nsIDocument* aLoadingDocument,
                  imgRequestProxy** aClone);

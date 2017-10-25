@@ -279,9 +279,9 @@ nsImageBoxFrame::UpdateImage()
       // get the list-style-image
       imgRequestProxy *styleRequest = StyleList()->GetListStyleImage();
       if (styleRequest) {
-        styleRequest->SyncClone(mListener,
-                                mContent->GetComposedDoc(),
-                                getter_AddRefs(mImageRequest));
+        styleRequest->Clone(mListener,
+                            mContent->GetComposedDoc(),
+                            getter_AddRefs(mImageRequest));
       }
     }
   }
