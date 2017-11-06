@@ -12,7 +12,7 @@
 #include "nsRefPtrHashtable.h"
 
 namespace mozilla {
-namespace wr {
+namespace layers {
 
 class EpochRunnable
 {
@@ -93,9 +93,9 @@ public:
   EpochSchedulerManager()
   { }
 
-  already_AddRefed<EpochScheduler> Create(const PipelineId& aPipelineId);
-  EpochScheduler* Get(const PipelineId& aPipelineId);
-  void Advance(const PipelineId& aPipelineId, const wr::Epoch& aEpoch);
+  already_AddRefed<EpochScheduler> Create(const wr::PipelineId& aPipelineId);
+  EpochScheduler* Get(const wr::PipelineId& aPipelineId);
+  void Advance(const wr::PipelineId& aPipelineId, const wr::Epoch& aEpoch);
 
 private:
   ~EpochSchedulerManager();

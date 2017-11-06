@@ -27,6 +27,7 @@
 #include "mozilla/layers/SharedSurfacesParent.h"
 #include "mozilla/layers/TextureHost.h"
 #include "mozilla/layers/AsyncImagePipelineManager.h"
+#include "mozilla/layers/EpochScheduler.h"
 #include "mozilla/layers/WebRenderImageHost.h"
 #include "mozilla/layers/WebRenderTextureHost.h"
 #include "mozilla/TimeStamp.h"
@@ -163,12 +164,14 @@ WebRenderBridgeParent::WebRenderBridgeParent(CompositorBridgeParentBase* aCompos
                                              CompositorVsyncScheduler* aScheduler,
                                              RefPtr<wr::WebRenderAPI>&& aApi,
                                              RefPtr<AsyncImagePipelineManager>&& aImageMgr,
+                                             RefPtr<EpochScheduler>&& aEpochScheduler,
                                              RefPtr<CompositorAnimationStorage>&& aAnimStorage)
   : mCompositorBridge(aCompositorBridge)
   , mPipelineId(aPipelineId)
   , mWidget(aWidget)
   , mApi(aApi)
   , mAsyncImageManager(aImageMgr)
+  , mEpochScheduler(aEpochScheduler)
   , mCompositorScheduler(aScheduler)
   , mAnimStorage(aAnimStorage)
   , mChildLayerObserverEpoch(0)

@@ -27,6 +27,7 @@
 #include "mozilla/layers/RemoteContentController.h"
 #include "mozilla/layers/WebRenderBridgeParent.h"
 #include "mozilla/layers/AsyncImagePipelineManager.h"
+#include "mozilla/layers/EpochScheduler.h"
 #include "mozilla/mozalloc.h"           // for operator new, etc
 #include "nsDebug.h"                    // for NS_ASSERTION, etc
 #include "nsTArray.h"                   // for nsTArray
@@ -231,8 +232,10 @@ CrossProcessCompositorBridgeParent::AllocPWebRenderBridgeParent(const wr::Pipeli
   RefPtr<wr::WebRenderAPI> api = root->GetWebRenderAPI();
   api = api->Clone();
   RefPtr<AsyncImagePipelineManager> holder = root->AsyncImageManager();
+  RefPtr<EpochScheduler> epochScheduler =
+    cbp->GetEpochSchedulerManager()->Create(aPipelineId);
   RefPtr<CompositorAnimationStorage> animStorage = cbp->GetAnimationStorage();
-  parent = new WebRenderBridgeParent(this, aPipelineId, nullptr, root->CompositorScheduler(), Move(api), Move(holder), Move(animStorage));
+  parent = new WebRenderBridgeParent(this, aPipelineId, nullptr, root->CompositorScheduler(), Move(api), Move(holder), Move(epochScheduler), Move(animStorage));
   parent->AddRef(); // IPDL reference
 
   sIndirectLayerTrees[layersId].mCrossProcessParent = this;

@@ -6,7 +6,7 @@
 #include "EpochScheduler.h"
 
 namespace mozilla {
-namespace wr {
+namespace layers {
 
 EpochScheduler::~EpochScheduler()
 {
@@ -21,7 +21,7 @@ EpochScheduler::Dispatch(RefPtr<EpochRunnable>&& aEvent)
 }
 
 bool
-EpochScheduler::Advance(const Epoch& aEpoch)
+EpochScheduler::Advance(const wr::Epoch& aEpoch)
 {
   while (!mEvents.empty() && mEvents.front()->GetEpoch() <= aEpoch) {
     mEvents.front()->Run();
@@ -33,7 +33,7 @@ EpochScheduler::Advance(const Epoch& aEpoch)
 }
 
 void
-EpochScheduler::Shutdown(const Epoch& aEpoch)
+EpochScheduler::Shutdown(const wr::Epoch& aEpoch)
 {
   mShutdownEpoch.emplace(aEpoch);
 }
@@ -44,8 +44,12 @@ EpochScheduler::CancelShutdown()
   mShutdownEpoch.reset();
 }
 
+EpochSchedulerManager::~EpochSchedulerManager()
+{
+}
+
 already_AddRefed<EpochScheduler>
-EpochSchedulerManager::Create(const PipelineId& aPipelineId)
+EpochSchedulerManager::Create(const wr::PipelineId& aPipelineId)
 {
   RefPtr<EpochScheduler>& scheduler =
     mSchedulers.GetOrInsert(wr::AsUint64(aPipelineId));
@@ -59,7 +63,7 @@ EpochSchedulerManager::Create(const PipelineId& aPipelineId)
 }
 
 void
-EpochSchedulerManager::Advance(const PipelineId& aPipelineId, const Epoch& aEpoch)
+EpochSchedulerManager::Advance(const wr::PipelineId& aPipelineId, const wr::Epoch& aEpoch)
 {
   EpochScheduler* scheduler = mSchedulers.GetWeak(wr::AsUint64(aPipelineId));
   if (!scheduler) {
@@ -69,5 +73,5 @@ EpochSchedulerManager::Advance(const PipelineId& aPipelineId, const Epoch& aEpoc
   scheduler->Advance(aEpoch);
 }
 
-} // wr
+} // layers
 } // mozilla

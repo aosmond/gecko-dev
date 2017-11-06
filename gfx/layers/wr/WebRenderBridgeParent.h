@@ -40,6 +40,7 @@ class CompositorAnimationStorage;
 class CompositorBridgeParentBase;
 class CompositorVsyncScheduler;
 class AsyncImagePipelineManager;
+class EpochScheduler;
 class WebRenderImageHost;
 
 class WebRenderBridgeParent final : public PWebRenderBridgeParent
@@ -53,6 +54,7 @@ public:
                         CompositorVsyncScheduler* aScheduler,
                         RefPtr<wr::WebRenderAPI>&& aApi,
                         RefPtr<AsyncImagePipelineManager>&& aImageMgr,
+                        RefPtr<EpochScheduler>&& aEpochScheduler,
                         RefPtr<CompositorAnimationStorage>&& aAnimStorage);
 
   static WebRenderBridgeParent* CreateDestroyed(const wr::PipelineId& aPipelineId);
@@ -61,6 +63,7 @@ public:
   already_AddRefed<wr::WebRenderAPI> GetWebRenderAPI() { return do_AddRef(mApi); }
   wr::Epoch WrEpoch() { return wr::NewEpoch(mWrEpoch); }
   AsyncImagePipelineManager* AsyncImageManager() { return mAsyncImageManager; }
+  EpochScheduler* GetEpochScheduler() { return mEpochScheduler.get(); }
   CompositorVsyncScheduler* CompositorScheduler() { return mCompositorScheduler.get(); }
 
   mozilla::ipc::IPCResult RecvNewCompositable(const CompositableHandle& aHandle,
@@ -249,6 +252,7 @@ private:
   RefPtr<widget::CompositorWidget> mWidget;
   RefPtr<wr::WebRenderAPI> mApi;
   RefPtr<AsyncImagePipelineManager> mAsyncImageManager;
+  RefPtr<EpochScheduler> mEpochScheduler;
   RefPtr<CompositorVsyncScheduler> mCompositorScheduler;
   RefPtr<CompositorAnimationStorage> mAnimStorage;
   // mActiveAnimations is used to avoid leaking animations when WebRenderBridgeParent is

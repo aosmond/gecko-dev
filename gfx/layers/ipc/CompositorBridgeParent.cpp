@@ -59,6 +59,7 @@
 #include "mozilla/layers/RemoteContentController.h"
 #include "mozilla/layers/WebRenderBridgeParent.h"
 #include "mozilla/layers/AsyncImagePipelineManager.h"
+#include "mozilla/layers/EpochScheduler.h"
 #include "mozilla/layout/RenderFrameParent.h"
 #include "mozilla/webrender/WebRenderAPI.h"
 #include "mozilla/media/MediaSystemResourceService.h" // for MediaSystemResourceService
@@ -487,6 +488,8 @@ CompositorBridgeParent::StopAndClearResources()
   // Clear mAnimationStorage here to ensure that the compositor thread
   // still exists when we destroy it.
   mAnimationStorage = nullptr;
+
+  mEpochSchedulerManager = nullptr;
 }
 
 mozilla::ipc::IPCResult
@@ -1716,9 +1719,11 @@ CompositorBridgeParent::AllocPWebRenderBridgeParent(const wr::PipelineId& aPipel
   }
   mAsyncImageManager = new AsyncImagePipelineManager(api->Clone());
   RefPtr<AsyncImagePipelineManager> asyncMgr = mAsyncImageManager;
+  mEpochSchedulerManager = new EpochSchedulerManager();
+  RefPtr<EpochScheduler> epochScheduler = mEpochSchedulerManager->Create(aPipelineId);
   api->SetRootPipeline(aPipelineId);
   RefPtr<CompositorAnimationStorage> animStorage = GetAnimationStorage();
-  mWrBridge = new WebRenderBridgeParent(this, aPipelineId, mWidget, nullptr, Move(api), Move(asyncMgr), Move(animStorage));
+  mWrBridge = new WebRenderBridgeParent(this, aPipelineId, mWidget, nullptr, Move(api), Move(asyncMgr), Move(epochScheduler), Move(animStorage));
   mWrBridge.get()->AddRef(); // IPDL reference
 
   *aIdNamespace = mWrBridge->GetIdNamespace();
@@ -1974,10 +1979,10 @@ CompositorBridgeParent::DidComposite(TimeStamp& aCompositeStart,
 void
 CompositorBridgeParent::NotifyDidCompositeToPipeline(const wr::PipelineId& aPipelineId, const wr::Epoch& aEpoch, TimeStamp& aCompositeStart, TimeStamp& aCompositeEnd)
 {
-  if (!mWrBridge || !mAsyncImageManager) {
+  if (!mWrBridge || !mEpochSchedulerManager) {
     return;
   }
-  mAsyncImageManager->Update(aPipelineId, aEpoch);
+  mEpochSchedulerManager->Advance(aPipelineId, aEpoch);
 
   if (mPaused) {
     return;

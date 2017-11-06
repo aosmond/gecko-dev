@@ -66,6 +66,7 @@ class APZCTreeManager;
 class APZCTreeManagerParent;
 class AsyncCompositionManager;
 class AsyncImagePipelineManager;
+class EpochSchedulerManager;
 class Compositor;
 class CompositorAnimationStorage;
 class CompositorBridgeParent;
@@ -425,6 +426,8 @@ public:
 
   widget::CompositorWidget* GetWidget() { return mWidget; }
 
+  EpochSchedulerManager* GetEpochSchedulerManager() { return mEpochSchedulerManager; }
+
   void ForceComposeToTarget(gfx::DrawTarget* aTarget, const gfx::IntRect* aRect = nullptr);
 
   PAPZCTreeManagerParent* AllocPAPZCTreeManagerParent(const uint64_t& aLayersId) override;
@@ -567,6 +570,7 @@ protected:
   RefPtr<Compositor> mCompositor;
   RefPtr<AsyncCompositionManager> mCompositionManager;
   RefPtr<AsyncImagePipelineManager> mAsyncImageManager;
+  RefPtr<EpochSchedulerManager> mEpochSchedulerManager;
   RefPtr<WebRenderBridgeParent> mWrBridge;
   widget::CompositorWidget* mWidget;
   TimeStamp mTestTime;

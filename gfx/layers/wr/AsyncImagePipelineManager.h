@@ -11,6 +11,7 @@
 
 #include "CompositableHost.h"
 #include "mozilla/gfx/Point.h"
+#include "mozilla/layers/EpochScheduler.h"
 #include "mozilla/layers/TextureHost.h"
 #include "mozilla/Maybe.h"
 #include "mozilla/webrender/WebRenderAPI.h"
@@ -30,6 +31,19 @@ class CompositableHost;
 class CompositorVsyncScheduler;
 class WebRenderImageHost;
 class WebRenderTextureHost;
+class TextureHost;
+
+class EpochTextureHostRunnable final : public EpochRunnable
+{
+public:
+  EpochTextureHostRunnable(const wr::Epoch& aEpoch, TextureHost* aTextureHost)
+    : EpochRunnable(aEpoch)
+    , mTextureHost(aTextureHost)
+  { }
+
+private:
+  RefPtr<TextureHost> mTextureHost;
+};
 
 class AsyncImagePipelineManager final
 {
