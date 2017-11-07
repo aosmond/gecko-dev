@@ -1717,10 +1717,10 @@ CompositorBridgeParent::AllocPWebRenderBridgeParent(const wr::PipelineId& aPipel
     *aTextureFactoryIdentifier = TextureFactoryIdentifier(LayersBackend::LAYERS_NONE);
     return mWrBridge;
   }
-  mAsyncImageManager = new AsyncImagePipelineManager(api->Clone());
-  RefPtr<AsyncImagePipelineManager> asyncMgr = mAsyncImageManager;
   mEpochSchedulerManager = new EpochSchedulerManager();
   RefPtr<EpochScheduler> epochScheduler = mEpochSchedulerManager->Create(aPipelineId);
+  mAsyncImageManager = new AsyncImagePipelineManager(api->Clone(), mEpochSchedulerManager);
+  RefPtr<AsyncImagePipelineManager> asyncMgr = mAsyncImageManager;
   api->SetRootPipeline(aPipelineId);
   RefPtr<CompositorAnimationStorage> animStorage = GetAnimationStorage();
   mWrBridge = new WebRenderBridgeParent(this, aPipelineId, mWidget, nullptr, Move(api), Move(asyncMgr), Move(epochScheduler), Move(animStorage));

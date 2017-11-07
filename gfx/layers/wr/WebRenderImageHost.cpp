@@ -196,8 +196,7 @@ WebRenderImageHost::SetCurrentTextureHost(TextureHost* aTexture)
       !!mCurrentTextureHost &&
       mCurrentTextureHost != aTexture &&
       mCurrentTextureHost->AsWebRenderTextureHost()) {
-    MOZ_ASSERT(mWrBridge->AsyncImageManager());
-    wr::PipelineId piplineId = mWrBridge->PipelineId();
+    MOZ_ASSERT(mWrBridge->GetEpochScheduler());
     wr::Epoch epoch = mWrBridge->WrEpoch();
     mWrBridge->GetEpochScheduler()->Dispatch(
       new EpochTextureHostRunnable(epoch, mCurrentTextureHost));

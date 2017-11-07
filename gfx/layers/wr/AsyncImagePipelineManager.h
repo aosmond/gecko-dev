@@ -50,7 +50,8 @@ class AsyncImagePipelineManager final
 public:
   NS_INLINE_DECL_THREADSAFE_REFCOUNTING(AsyncImagePipelineManager)
 
-  explicit AsyncImagePipelineManager(already_AddRefed<wr::WebRenderAPI>&& aApi);
+  AsyncImagePipelineManager(already_AddRefed<wr::WebRenderAPI>&& aApi,
+                            EpochSchedulerManager* aEpochManager);
 
 protected:
   ~AsyncImagePipelineManager();
@@ -58,11 +59,7 @@ protected:
 public:
   void Destroy();
 
-  void AddPipeline(const wr::PipelineId& aPipelineId);
-  void RemovePipeline(const wr::PipelineId& aPipelineId, const wr::Epoch& aEpoch);
-
   void HoldExternalImage(const wr::PipelineId& aPipelineId, const wr::Epoch& aEpoch, WebRenderTextureHost* aTexture);
-  void Update(const wr::PipelineId& aPipelineId, const wr::Epoch& aEpoch);
 
   TimeStamp GetCompositionTime() const {
     return mCompositionTime;
@@ -120,21 +117,6 @@ private:
     return key;
   }
 
-  struct ForwardingTextureHost {
-    ForwardingTextureHost(const wr::Epoch& aEpoch, TextureHost* aTexture)
-      : mEpoch(aEpoch)
-      , mTexture(aTexture)
-    {}
-    wr::Epoch mEpoch;
-    CompositableTextureHostRef mTexture;
-  };
-
-  struct PipelineTexturesHolder {
-    // Holds forwarding WebRenderTextureHosts.
-    std::queue<ForwardingTextureHost> mTextureHosts;
-    Maybe<wr::Epoch> mDestroyedEpoch;
-  };
-
   struct AsyncImagePipeline {
     AsyncImagePipeline();
     void Update(const LayoutDeviceRect& aScBounds,
@@ -164,6 +146,7 @@ private:
     wr::ImageRendering mFilter;
     wr::MixBlendMode mMixBlendMode;
     RefPtr<WebRenderImageHost> mImageHost;
+    RefPtr<EpochScheduler> mEpochScheduler;
     CompositableTextureHostRef mCurrentTexture;
     nsTArray<wr::ImageKey> mKeys;
   };
@@ -179,10 +162,10 @@ private:
                              TextureHost::ResourceUpdateOp);
 
   RefPtr<wr::WebRenderAPI> mApi;
+  RefPtr<EpochSchedulerManager> mEpochSchedulerManager;
   wr::IdNamespace mIdNamespace;
   uint32_t mResourceId;
 
-  nsClassHashtable<nsUint64HashKey, PipelineTexturesHolder> mPipelineTexturesHolders;
   nsClassHashtable<nsUint64HashKey, AsyncImagePipeline> mAsyncImagePipelines;
   uint32_t mAsyncImageEpoch;
   bool mWillGenerateFrame;

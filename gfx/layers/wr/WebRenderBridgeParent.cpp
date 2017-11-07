@@ -184,7 +184,6 @@ WebRenderBridgeParent::WebRenderBridgeParent(CompositorBridgeParentBase* aCompos
 {
   MOZ_ASSERT(mAsyncImageManager);
   MOZ_ASSERT(mAnimStorage);
-  mAsyncImageManager->AddPipeline(mPipelineId);
   if (mWidget) {
     MOZ_ASSERT(!mCompositorScheduler);
     mCompositorScheduler = new CompositorVsyncScheduler(this, mWidget);
@@ -1007,7 +1006,7 @@ WebRenderBridgeParent::UpdateWebRender(CompositorVsyncScheduler* aScheduler,
 
   Unused << GetNextWrEpoch(); // Update webrender epoch
   // Register pipeline to updated AsyncImageManager.
-  mAsyncImageManager->AddPipeline(mPipelineId);
+  // FIXME mAsyncImageManager->AddPipeline(mPipelineId);
 }
 
 mozilla::ipc::IPCResult
@@ -1406,7 +1405,7 @@ WebRenderBridgeParent::ClearResources()
   }
   mAsyncCompositables.Clear();
 
-  mAsyncImageManager->RemovePipeline(mPipelineId, wr::NewEpoch(wrEpoch));
+  mEpochScheduler->Shutdown(wr::NewEpoch(wrEpoch));
   mApi->RemovePipeline(mPipelineId);
 
   for (std::unordered_set<uint64_t>::iterator iter = mActiveAnimations.begin(); iter != mActiveAnimations.end(); iter++) {

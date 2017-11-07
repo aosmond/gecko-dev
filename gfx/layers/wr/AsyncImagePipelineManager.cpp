@@ -26,8 +26,10 @@ AsyncImagePipelineManager::AsyncImagePipeline::AsyncImagePipeline()
  , mMixBlendMode(wr::MixBlendMode::Normal)
 {}
 
-AsyncImagePipelineManager::AsyncImagePipelineManager(already_AddRefed<wr::WebRenderAPI>&& aApi)
+AsyncImagePipelineManager::AsyncImagePipelineManager(already_AddRefed<wr::WebRenderAPI>&& aApi,
+                                                     EpochSchedulerManager* aEpochManager)
  : mApi(aApi)
+ , mEpochSchedulerManager(aEpochManager)
  , mIdNamespace(mApi->GetNamespace())
  , mResourceId(0)
  , mAsyncImageEpoch(0)
@@ -69,41 +71,6 @@ AsyncImagePipelineManager::GetAndResetWillGenerateFrame()
 }
 
 void
-AsyncImagePipelineManager::AddPipeline(const wr::PipelineId& aPipelineId)
-{
-  if (mDestroyed) {
-    return;
-  }
-  uint64_t id = wr::AsUint64(aPipelineId);
-
-  PipelineTexturesHolder* holder = mPipelineTexturesHolders.Get(wr::AsUint64(aPipelineId));
-  if(holder) {
-    // This could happen during tab move between different windows.
-    // Previously removed holder could be still alive for waiting destroyed.
-    MOZ_ASSERT(holder->mDestroyedEpoch.isSome());
-    holder->mDestroyedEpoch = Nothing(); // Revive holder
-    return;
-  }
-  holder = new PipelineTexturesHolder();
-  mPipelineTexturesHolders.Put(id, holder);
-}
-
-void
-AsyncImagePipelineManager::RemovePipeline(const wr::PipelineId& aPipelineId, const wr::Epoch& aEpoch)
-{
-  if (mDestroyed) {
-    return;
-  }
-
-  PipelineTexturesHolder* holder = mPipelineTexturesHolders.Get(wr::AsUint64(aPipelineId));
-  MOZ_ASSERT(holder);
-  if (!holder) {
-    return;
-  }
-  holder->mDestroyedEpoch = Some(aEpoch);
-}
-
-void
 AsyncImagePipelineManager::AddAsyncImagePipeline(const wr::PipelineId& aPipelineId, WebRenderImageHost* aImageHost)
 {
   if (mDestroyed) {
@@ -115,8 +82,8 @@ AsyncImagePipelineManager::AddAsyncImagePipeline(const wr::PipelineId& aPipeline
   MOZ_ASSERT(!mAsyncImagePipelines.Get(id));
   AsyncImagePipeline* holder = new AsyncImagePipeline();
   holder->mImageHost = aImageHost;
+  holder->mEpochScheduler = mEpochSchedulerManager->Create(aPipelineId);
   mAsyncImagePipelines.Put(id, holder);
-  AddPipeline(aPipelineId);
 }
 
 void
@@ -136,8 +103,8 @@ AsyncImagePipelineManager::RemoveAsyncImagePipeline(const wr::PipelineId& aPipel
       resources.DeleteImage(key);
     }
     mApi->UpdateResources(resources);
+    holder->mEpochScheduler->Shutdown(wr::NewEpoch(mAsyncImageEpoch));
     entry.Remove();
-    RemovePipeline(aPipelineId, wr::NewEpoch(mAsyncImageEpoch));
   }
 }
 
@@ -301,7 +268,7 @@ AsyncImagePipelineManager::ApplyAsyncImages()
       // We may, however, have updated some resources.
       mApi->UpdatePipelineResources(resourceUpdates, pipelineId, epoch);
       if (pipeline->mCurrentTexture) {
-        HoldExternalImage(pipelineId, epoch, pipeline->mCurrentTexture->AsWebRenderTextureHost());
+        pipeline->mEpochScheduler->Dispatch(new EpochTextureHostRunnable(epoch, pipeline->mCurrentTexture));
       }
       continue;
     }
@@ -337,7 +304,7 @@ AsyncImagePipelineManager::ApplyAsyncImages()
                                                   wr::ToLayoutRect(rect),
                                                   pipeline->mFilter,
                                                   range_keys);
-      HoldExternalImage(pipelineId, epoch, pipeline->mCurrentTexture->AsWebRenderTextureHost());
+      pipeline->mEpochScheduler->Dispatch(new EpochTextureHostRunnable(epoch, pipeline->mCurrentTexture));
     } else {
       MOZ_ASSERT(keys.Length() == 1);
       builder.PushImage(wr::ToLayoutRect(rect),
@@ -366,37 +333,13 @@ AsyncImagePipelineManager::HoldExternalImage(const wr::PipelineId& aPipelineId, 
   }
   MOZ_ASSERT(aTexture);
 
-  PipelineTexturesHolder* holder = mPipelineTexturesHolders.Get(wr::AsUint64(aPipelineId));
-  MOZ_ASSERT(holder);
-  if (!holder) {
+  EpochScheduler* scheduler = mEpochSchedulerManager->Get(aPipelineId);
+  MOZ_ASSERT(scheduler);
+  if (!scheduler) {
     return;
   }
   // Hold WebRenderTextureHost until end of its usage on RenderThread
-  holder->mTextureHosts.push(ForwardingTextureHost(aEpoch, aTexture));
-}
-
-void
-AsyncImagePipelineManager::Update(const wr::PipelineId& aPipelineId, const wr::Epoch& aEpoch)
-{
-  if (mDestroyed) {
-    return;
-  }
-  if (auto entry = mPipelineTexturesHolders.Lookup(wr::AsUint64(aPipelineId))) {
-    PipelineTexturesHolder* holder = entry.Data();
-    // Remove Pipeline
-    if (holder->mDestroyedEpoch.isSome() && holder->mDestroyedEpoch.ref() <= aEpoch) {
-      entry.Remove();
-      return;
-    }
-
-    // Release TextureHosts based on Epoch
-    while (!holder->mTextureHosts.empty()) {
-      if (aEpoch <= holder->mTextureHosts.front().mEpoch) {
-        break;
-      }
-      holder->mTextureHosts.pop();
-    }
-  }
+  scheduler->Dispatch(new EpochTextureHostRunnable(aEpoch, aTexture));
 }
 
 } // namespace layers

@@ -62,6 +62,12 @@ EpochSchedulerManager::Create(const wr::PipelineId& aPipelineId)
   return rv.forget();
 }
 
+EpochScheduler*
+EpochSchedulerManager::Get(const wr::PipelineId& aPipelineId)
+{
+  return mSchedulers.GetWeak(wr::AsUint64(aPipelineId));
+}
+
 void
 EpochSchedulerManager::Advance(const wr::PipelineId& aPipelineId, const wr::Epoch& aEpoch)
 {
