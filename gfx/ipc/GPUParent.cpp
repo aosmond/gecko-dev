@@ -313,6 +313,7 @@ CopyFeatureChange(Feature aFeature, FeatureChange* aOut)
 mozilla::ipc::IPCResult
 GPUParent::RecvGetDeviceStatus(GPUDeviceData* aOut)
 {
+#if 0
   CopyFeatureChange(Feature::D3D11_COMPOSITING, &aOut->d3d11Compositing());
   CopyFeatureChange(Feature::OPENGL_COMPOSITING, &aOut->oglCompositing());
   CopyFeatureChange(Feature::ADVANCED_LAYERS, &aOut->advancedLayers());
@@ -328,6 +329,8 @@ GPUParent::RecvGetDeviceStatus(GPUDeviceData* aOut)
 #endif
 
   return IPC_OK();
+#endif
+  return IPC_FAIL_NO_REASON(this);
 }
 
 mozilla::ipc::IPCResult

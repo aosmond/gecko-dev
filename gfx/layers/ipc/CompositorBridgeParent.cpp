@@ -1632,7 +1632,7 @@ CompositorBridgeParent::RecvMapAndNotifyChildCreated(const uint64_t& aChild,
 {
   // We only use this message when the remote compositor is in the GPU process.
   // It is harmless to call it, though.
-  MOZ_ASSERT(XRE_IsGPUProcess());
+  //MOZ_ASSERT(XRE_IsGPUProcess());
 
   LayerTreeOwnerTracker::Get()->Map(aChild, aOwnerPid);
 

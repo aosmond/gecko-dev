@@ -28,6 +28,7 @@ StaticRefPtr<CompositorManagerChild> CompositorManagerChild::sInstance;
 CompositorManagerChild::IsInitialized(uint64_t aProcessToken)
 {
   MOZ_ASSERT(NS_IsMainThread());
+  printf_stderr("[AO][%5d] IsInitialized -- process token %lu\n", base::GetCurrentProcId(), aProcessToken);
   return sInstance && sInstance->CanSend() &&
          sInstance->mProcessToken == aProcessToken;
 }
@@ -36,6 +37,7 @@ CompositorManagerChild::IsInitialized(uint64_t aProcessToken)
 CompositorManagerChild::InitSameProcess(uint32_t aNamespace,
                                         uint64_t aProcessToken)
 {
+  printf_stderr("[AO][%5d] InitSameProcess -- process token %lu\n", base::GetCurrentProcId(), aProcessToken);
   MOZ_ASSERT(NS_IsMainThread());
   if (NS_WARN_IF(IsInitialized(aProcessToken))) {
     MOZ_ASSERT_UNREACHABLE("Already initialized same process");
@@ -60,6 +62,7 @@ CompositorManagerChild::Init(Endpoint<PCompositorManagerChild>&& aEndpoint,
                              uint32_t aNamespace,
                              uint64_t aProcessToken /* = 0 */)
 {
+  printf_stderr("[AO][%5d] Init -- process token %lu\n", base::GetCurrentProcId(), aProcessToken);
   MOZ_ASSERT(NS_IsMainThread());
   if (sInstance) {
     MOZ_ASSERT(sInstance->mNamespace != aNamespace);
