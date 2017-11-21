@@ -2333,7 +2333,7 @@ nsBaseWidget::UpdateScrollCapture()
     return;
   }
 
-  ImageContainer::NonOwningImage holder(new SourceSurfaceImage(snapshot));
+  ImageContainer::NonOwningImage holder(new SourceSurfaceImage(Move(snapshot)));
 
   AutoTArray<ImageContainer::NonOwningImage, 1> imageList;
   imageList.AppendElement(holder);

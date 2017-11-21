@@ -55,7 +55,7 @@ ImageMemoryCounter::ImageMemoryCounter(Image* aImage,
 
 void
 ImageResource::SetCurrentImage(ImageContainer* aContainer,
-                               SourceSurface* aSurface,
+                               RefPtr<SourceSurface>&& aSurface,
                                bool aInTransaction)
 {
   MOZ_ASSERT(NS_IsMainThread());
@@ -70,7 +70,8 @@ ImageResource::SetCurrentImage(ImageContainer* aContainer,
   // |image| holds a reference to a SourceSurface which in turn holds a lock on
   // the current frame's data buffer, ensuring that it doesn't get freed as
   // long as the layer system keeps this ImageContainer alive.
-  RefPtr<layers::Image> image = new layers::SourceSurfaceImage(aSurface);
+  RefPtr<layers::Image> image =
+    new layers::SourceSurfaceImage(Move(aSurface));
 
   // We can share the producer ID with other containers because it is only
   // used internally to validate the frames given to a particular container
@@ -228,7 +229,7 @@ ImageResource::GetImageContainerImpl(LayerManager* aManager,
     }
   }
 
-  SetCurrentImage(container, surface, true);
+  SetCurrentImage(container, Move(surface), true);
   entry->mLastDrawResult = drawResult;
   return container.forget();
 }
@@ -313,7 +314,7 @@ ImageResource::UpdateImageContainer(const Maybe<SurfaceKey>& aSurfaceKey)
     // managed to convert the weak reference into a strong reference, that
     // means that an imagelib user still is holding onto the container. Thus
     // we cannot consolidate and must keep updating the duplicate container.
-    SetCurrentImage(container, surface, false);
+    SetCurrentImage(container, Move(surface), false);
   }
 }
 
