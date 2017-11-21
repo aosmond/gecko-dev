@@ -382,7 +382,7 @@ protected:
 
 private:
   void SetCurrentImage(layers::ImageContainer* aContainer,
-                       gfx::SourceSurface* aSurface,
+                       RefPtr<gfx::SourceSurface>&& aSurface,
                        bool aInTransaction);
 
   struct ImageContainerEntry {

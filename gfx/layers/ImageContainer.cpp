@@ -820,7 +820,7 @@ SourceSurfaceImage::SourceSurfaceImage(const gfx::IntSize& aSize, gfx::SourceSur
     mTextureFlags(TextureFlags::DEFAULT)
 {}
 
-SourceSurfaceImage::SourceSurfaceImage(gfx::SourceSurface* aSourceSurface)
+SourceSurfaceImage::SourceSurfaceImage(RefPtr<gfx::SourceSurface>&& aSourceSurface)
   : Image(nullptr, ImageFormat::CAIRO_SURFACE),
     mSize(aSourceSurface->GetSize()),
     mSourceSurface(aSourceSurface),

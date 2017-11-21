@@ -947,7 +947,7 @@ public:
   virtual gfx::IntSize GetSize() override { return mSize; }
 
   SourceSurfaceImage(const gfx::IntSize& aSize, gfx::SourceSurface* aSourceSurface);
-  explicit SourceSurfaceImage(gfx::SourceSurface* aSourceSurface);
+  explicit SourceSurfaceImage(RefPtr<gfx::SourceSurface>&& aSourceSurface);
   ~SourceSurfaceImage();
 
 private:
