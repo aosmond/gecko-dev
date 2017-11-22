@@ -17,12 +17,14 @@ namespace layers {
 
 using namespace mozilla::gfx;
 
+UserDataKey SharedSurfacesChild::sSharedKey;
+
 class SharedSurfacesChild::ImageKeyData final
 {
 public:
   RefPtr<WebRenderLayerManager> mManager;
   wr::ImageKey mImageKey;
-  uint32_t mGenerationId;
+  bool mStale;
 };
 
 class SharedSurfacesChild::SharedUserData final
@@ -90,9 +92,22 @@ public:
     mShared = true;
   }
 
+  void MarkKeysStale()
+  {
+    auto i = mKeys.Length();
+    while (i > 0) {
+      --i;
+      ImageKeyData& entry = mKeys[i];
+      if (entry.mManager->IsDestroyed()) {
+        mKeys.RemoveElementAt(i);
+      } else {
+        entry.mStale = true;
+      }
+    }
+  }
+
   wr::ImageKey UpdateKey(WebRenderLayerManager* aManager,
-                         wr::IpcResourceUpdateQueue& aResources,
-                         uint32_t aGenerationId)
+                         wr::IpcResourceUpdateQueue& aResources)
   {
     MOZ_ASSERT(aManager);
     MOZ_ASSERT(!aManager->IsDestroyed());
@@ -113,10 +128,10 @@ public:
         mKeys.RemoveElementAt(i);
       } else if (entry.mManager == aManager) {
         found = true;
-        if (entry.mGenerationId != aGenerationId) {
+        if (entry.mStale) {
           aManager->AddImageKeyForDiscard(entry.mImageKey);
-          entry.mGenerationId = aGenerationId;
           entry.mImageKey = aManager->WrBridge()->GetNextImageKey();
+          entry.mStale = false;
           aResources.AddExternalImage(mId, entry.mImageKey);
         }
         key = entry.mImageKey;
@@ -125,7 +140,7 @@ public:
 
     if (!found) {
       key = aManager->WrBridge()->GetNextImageKey();
-      mKeys.AppendElement(ImageKeyData { aManager, key, aGenerationId });
+      mKeys.AppendElement(ImageKeyData { aManager, key, false });
       aResources.AddExternalImage(mId, key);
     }
 
@@ -146,11 +161,30 @@ SharedSurfacesChild::DestroySharedUserData(void* aClosure)
   delete data;
 }
 
+/* static */ void
+SharedSurfacesChild::SurfaceUpdated(SourceSurface* aSurface)
+{
+  MOZ_ASSERT(NS_IsMainThread());
+  MOZ_ASSERT(aSurface);
+
+  if (aSurface->GetType() != SurfaceType::DATA_SHARED) {
+    return;
+  }
+
+  auto sharedSurface = static_cast<SourceSurfaceSharedData*>(aSurface);
+  SharedUserData* data =
+    static_cast<SharedUserData*>(sharedSurface->GetUserData(&sSharedKey));
+  if (!data) {
+    return;
+  }
+
+  data->MarkKeysStale();
+}
+
 /* static */ nsresult
 SharedSurfacesChild::Share(SourceSurfaceSharedData* aSurface,
                            WebRenderLayerManager* aManager,
                            wr::IpcResourceUpdateQueue& aResources,
-                           uint32_t aGenerationId,
                            wr::ImageKey& aKey)
 {
   MOZ_ASSERT(NS_IsMainThread());
@@ -162,7 +196,6 @@ SharedSurfacesChild::Share(SourceSurfaceSharedData* aSurface,
     return NS_ERROR_NOT_INITIALIZED;
   }
 
-  static UserDataKey sSharedKey;
   SharedUserData* data =
     static_cast<SharedUserData*>(aSurface->GetUserData(&sSharedKey));
   if (!data) {
@@ -174,7 +207,7 @@ SharedSurfacesChild::Share(SourceSurfaceSharedData* aSurface,
     data->SetId(manager->GetNextExternalImageId());
   } else if (data->IsShared()) {
     // It has already been shared with the GPU process, reuse the id.
-    aKey = data->UpdateKey(aManager, aResources, aGenerationId);
+    aKey = data->UpdateKey(aManager, aResources);
     return NS_OK;
   }
 
@@ -192,7 +225,7 @@ SharedSurfacesChild::Share(SourceSurfaceSharedData* aSurface,
   if (pid == base::GetCurrentProcId()) {
     SharedSurfacesParent::AddSameProcess(data->Id(), aSurface);
     data->MarkShared();
-    aKey = data->UpdateKey(aManager, aResources, aGenerationId);
+    aKey = data->UpdateKey(aManager, aResources);
     return NS_OK;
   }
 
@@ -227,7 +260,7 @@ SharedSurfacesChild::Share(SourceSurfaceSharedData* aSurface,
                                 SurfaceDescriptorShared(aSurface->GetSize(),
                                                         aSurface->Stride(),
                                                         format, handle));
-  aKey = data->UpdateKey(aManager, aResources, aGenerationId);
+  aKey = data->UpdateKey(aManager, aResources);
   return NS_OK;
 }
 
@@ -245,9 +278,8 @@ SharedSurfacesChild::Share(ImageContainer* aContainer,
     return NS_ERROR_NOT_IMPLEMENTED;
   }
 
-  uint32_t generation = 0;
   AutoTArray<ImageContainer::OwningImage,4> images;
-  aContainer->GetCurrentImages(&images, &generation);
+  aContainer->GetCurrentImages(&images);
   if (images.IsEmpty()) {
     return NS_ERROR_NOT_AVAILABLE;
   }
@@ -262,8 +294,7 @@ SharedSurfacesChild::Share(ImageContainer* aContainer,
   }
 
   auto sharedSurface = static_cast<SourceSurfaceSharedData*>(surface.get());
-  return Share(sharedSurface, aManager, aResources,
-               generation, aKey);
+  return Share(sharedSurface, aManager, aResources, aKey);
 }
 
 /* static */ void

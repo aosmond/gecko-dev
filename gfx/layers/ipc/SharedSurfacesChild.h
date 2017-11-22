@@ -11,10 +11,12 @@
 #include "mozilla/Attributes.h"         // for override
 #include "mozilla/RefPtr.h"             // for already_AddRefed
 #include "mozilla/StaticPtr.h"          // for StaticRefPtr
+#include "mozilla/gfx/UserData.h"       // for UserDataKey
 #include "mozilla/webrender/WebRenderTypes.h" // for wr::ImageKey
 
 namespace mozilla {
 namespace gfx {
+class SourceSurface;
 class SourceSurfaceSharedData;
 } // namespace gfx
 
@@ -33,7 +35,6 @@ public:
   static nsresult Share(gfx::SourceSurfaceSharedData* aSurface,
                         WebRenderLayerManager* aManager,
                         wr::IpcResourceUpdateQueue& aResources,
-                        uint32_t aGenerationId,
                         wr::ImageKey& aKey);
 
   static nsresult Share(ImageContainer* aContainer,
@@ -41,12 +42,16 @@ public:
                         wr::IpcResourceUpdateQueue& aResources,
                         wr::ImageKey& aKey);
 
+  static void SurfaceUpdated(gfx::SourceSurface* aSurface);
+
 private:
   SharedSurfacesChild() = delete;
   ~SharedSurfacesChild() = delete;
 
   class ImageKeyData;
   class SharedUserData;
+
+  static UserDataKey sSharedKey;
 
   static void Unshare(const wr::ExternalImageId& aId, nsTArray<ImageKeyData>& aKeys);
   static void DestroySharedUserData(void* aClosure);
