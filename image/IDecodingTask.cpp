@@ -62,7 +62,8 @@ IDecodingTask::IsOnEventTarget() const
 
 void
 IDecodingTask::NotifyProgress(NotNull<RasterImage*> aImage,
-                              NotNull<Decoder*> aDecoder)
+                              NotNull<Decoder*> aDecoder,
+                              const SurfaceKey& aSurfaceKey)
 {
   MOZ_ASSERT(aDecoder->HasProgress() && !aDecoder->IsMetadataDecode());
   EnsureHasEventTarget(aImage);
@@ -77,12 +78,12 @@ IDecodingTask::NotifyProgress(NotNull<RasterImage*> aImage,
   IntRect invalidRect = aDecoder->TakeInvalidRect();
   Maybe<uint32_t> frameCount = aDecoder->TakeCompleteFrameCount();
   DecoderFlags decoderFlags = aDecoder->GetDecoderFlags();
-  SurfaceFlags surfaceFlags = aDecoder->GetSurfaceFlags();
+  Maybe<SurfaceKey> surfaceKey = Some(aSurfaceKey);
 
   // Synchronously notify if we can.
   if (IsOnEventTarget() && !(decoderFlags & DecoderFlags::ASYNC_NOTIFY)) {
     aImage->NotifyProgress(progress, invalidRect, frameCount,
-                           decoderFlags, surfaceFlags);
+                           decoderFlags, surfaceKey);
     return;
   }
 
@@ -92,13 +93,14 @@ IDecodingTask::NotifyProgress(NotNull<RasterImage*> aImage,
                            "IDecodingTask::NotifyProgress",
                            [=]() -> void {
     image->NotifyProgress(progress, invalidRect, frameCount,
-                          decoderFlags, surfaceFlags);
+                          decoderFlags, surfaceKey);
   }), NS_DISPATCH_NORMAL);
 }
 
 void
 IDecodingTask::NotifyDecodeComplete(NotNull<RasterImage*> aImage,
-                                    NotNull<Decoder*> aDecoder)
+                                    NotNull<Decoder*> aDecoder,
+                                    const Maybe<SurfaceKey>& aSurfaceKey)
 {
   MOZ_ASSERT(aDecoder->HasError() || !aDecoder->InFrame(),
              "Decode complete in the middle of a frame?");
@@ -112,24 +114,24 @@ IDecodingTask::NotifyDecodeComplete(NotNull<RasterImage*> aImage,
   IntRect invalidRect = aDecoder->TakeInvalidRect();
   Maybe<uint32_t> frameCount = aDecoder->TakeCompleteFrameCount();
   DecoderFlags decoderFlags = aDecoder->GetDecoderFlags();
-  SurfaceFlags surfaceFlags = aDecoder->GetSurfaceFlags();
 
   // Synchronously notify if we can.
   if (IsOnEventTarget() && !(decoderFlags & DecoderFlags::ASYNC_NOTIFY)) {
     aImage->NotifyDecodeComplete(finalStatus, metadata, telemetry, progress,
                                  invalidRect, frameCount, decoderFlags,
-                                 surfaceFlags);
+                                 aSurfaceKey);
     return;
   }
 
   // We're forced to notify asynchronously.
   NotNull<RefPtr<RasterImage>> image = aImage;
+  Maybe<SurfaceKey> surfaceKey = aSurfaceKey;
   mEventTarget->Dispatch(NS_NewRunnableFunction(
                            "IDecodingTask::NotifyDecodeComplete",
                            [=]() -> void {
     image->NotifyDecodeComplete(finalStatus, metadata, telemetry, progress,
                                 invalidRect, frameCount, decoderFlags,
-                                surfaceFlags);
+                                surfaceKey);
   }), NS_DISPATCH_NORMAL);
 }
 
@@ -165,7 +167,7 @@ MetadataDecodingTask::Run()
   LexerResult result = mDecoder->Decode(WrapNotNull(this));
 
   if (result.is<TerminalState>()) {
-    NotifyDecodeComplete(mDecoder->GetImage(), mDecoder);
+    NotifyDecodeComplete(mDecoder->GetImage(), mDecoder, Nothing());
     return;  // We're done.
   }
 

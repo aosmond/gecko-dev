@@ -366,7 +366,17 @@ protected:
                           const Maybe<SVGImageContext>& aSVGContext,
                           uint32_t aFlags);
 
-  void UpdateImageContainer();
+  /**
+   * Update the image containers. This should be called whenever the
+   * invaldation rect is non-empty. For example, this could be when we have
+   * progressed decoding a frame, or when an animation has progressed.
+   *
+   * @param aSurfaceKey   Given if and only if a specific surface has made
+   *                      progress (e.g. additional rows decoded). If set to
+   *                      Nothing(), then all of the image containers will be
+   *                      updated.
+   */
+  void UpdateImageContainer(const Maybe<SurfaceKey>& aSurfaceKey);
 
   void ReleaseImageContainer();
 

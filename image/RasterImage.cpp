@@ -684,7 +684,10 @@ RasterImage::GetImageContainerAtSize(LayerManager* aManager,
                                      const Maybe<SVGImageContext>& aSVGContext,
                                      uint32_t aFlags)
 {
-  return GetImageContainerImpl(aManager, aSize, aSVGContext, aFlags);
+  // We do not pass in the given SVG context because in theory it could differ
+  // between calls, but actually have no impact on the actual contents of the
+  // image container.
+  return GetImageContainerImpl(aManager, aSize, Nothing(), aFlags);
 }
 
 size_t
@@ -1642,19 +1645,17 @@ RasterImage::NotifyProgress(Progress aProgress,
                             const Maybe<uint32_t>& aFrameCount /* = Nothing() */,
                             DecoderFlags aDecoderFlags
                               /* = DefaultDecoderFlags() */,
-                            SurfaceFlags aSurfaceFlags
-                              /* = DefaultSurfaceFlags() */)
+                            const Maybe<SurfaceKey>& aSurfaceKey
+                              /* = Nothing() */)
 {
   MOZ_ASSERT(NS_IsMainThread());
 
   // Ensure that we stay alive long enough to finish notifying.
   RefPtr<RasterImage> image = this;
 
-  const bool wasDefaultFlags = aSurfaceFlags == DefaultSurfaceFlags();
-
-  if (!aInvalidRect.IsEmpty() && wasDefaultFlags) {
+  if (!aInvalidRect.IsEmpty()) {
     // Update our image container since we're invalidating.
-    UpdateImageContainer();
+    UpdateImageContainer(aSurfaceKey);
   }
 
   if (!(aDecoderFlags & DecoderFlags::FIRST_FRAME_ONLY)) {
@@ -1683,9 +1684,10 @@ RasterImage::NotifyDecodeComplete(const DecoderFinalStatus& aStatus,
                                   const IntRect& aInvalidRect,
                                   const Maybe<uint32_t>& aFrameCount,
                                   DecoderFlags aDecoderFlags,
-                                  SurfaceFlags aSurfaceFlags)
+                                  const Maybe<SurfaceKey>& aSurfaceKey)
 {
   MOZ_ASSERT(NS_IsMainThread());
+  MOZ_ASSERT(aSurfaceKey.isNothing() == aStatus.mWasMetadataDecode);
 
   // If the decoder detected an error, log it to the error console.
   if (aStatus.mShouldReportError) {
@@ -1699,7 +1701,7 @@ RasterImage::NotifyDecodeComplete(const DecoderFinalStatus& aStatus,
     // surfaces and redecode to recover. We'll drop the results from this
     // decoder on the floor, since they aren't valid.
     RecoverFromInvalidFrames(mSize,
-                             FromSurfaceFlags(aSurfaceFlags));
+                             FromSurfaceFlags(aSurfaceKey->Flags()));
     return;
   }
 
@@ -1713,7 +1715,7 @@ RasterImage::NotifyDecodeComplete(const DecoderFinalStatus& aStatus,
 
   // Send out any final notifications.
   NotifyProgress(aProgress, aInvalidRect, aFrameCount,
-                 aDecoderFlags, aSurfaceFlags);
+                 aDecoderFlags, aSurfaceKey);
 
   if (!(aDecoderFlags & DecoderFlags::FIRST_FRAME_ONLY) &&
       mHasBeenDecoded && mAnimationState) {

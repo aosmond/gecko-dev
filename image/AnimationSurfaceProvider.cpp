@@ -156,7 +156,8 @@ AnimationSurfaceProvider::Run()
 
     // Notify for the progress we've made so far.
     if (mDecoder->HasProgress()) {
-      NotifyProgress(WrapNotNull(mImage), WrapNotNull(mDecoder));
+      NotifyProgress(WrapNotNull(mImage), WrapNotNull(mDecoder),
+                     GetSurfaceKey());
     }
 
     if (result == LexerResult(Yield::NEED_MORE_DATA)) {
@@ -261,7 +262,8 @@ AnimationSurfaceProvider::FinishDecoding()
   MOZ_ASSERT(mDecoder);
 
   // Send notifications.
-  NotifyDecodeComplete(WrapNotNull(mImage), WrapNotNull(mDecoder));
+  Maybe<SurfaceKey> surfaceKey = Some(GetSurfaceKey());
+  NotifyDecodeComplete(WrapNotNull(mImage), WrapNotNull(mDecoder), surfaceKey);
 
   // Destroy our decoder; we don't need it anymore.
   mDecoder = nullptr;

@@ -148,7 +148,7 @@ DecodedSurfaceProvider::Run()
 
   // Notify for the progress we've made so far.
   if (mDecoder->HasProgress()) {
-    NotifyProgress(WrapNotNull(mImage), WrapNotNull(mDecoder));
+    NotifyProgress(WrapNotNull(mImage), WrapNotNull(mDecoder), GetSurfaceKey());
   }
 
   MOZ_ASSERT(result.is<Yield>());
@@ -198,7 +198,8 @@ DecodedSurfaceProvider::FinishDecoding()
   MOZ_ASSERT(mDecoder);
 
   // Send notifications.
-  NotifyDecodeComplete(WrapNotNull(mImage), WrapNotNull(mDecoder));
+  Maybe<SurfaceKey> surfaceKey = Some(GetSurfaceKey());
+  NotifyDecodeComplete(WrapNotNull(mImage), WrapNotNull(mDecoder), surfaceKey);
 
   // If we have a new and complete surface, we can try to prune similarly sized
   // surfaces if the cache supports it.
