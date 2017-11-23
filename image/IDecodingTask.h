@@ -22,6 +22,7 @@ namespace image {
 
 class Decoder;
 class RasterImage;
+class SurfaceKey;
 
 /// A priority hint that DecodePool can use when scheduling an IDecodingTask.
 enum class TaskPriority : uint8_t
@@ -54,11 +55,13 @@ protected:
 
   /// Notify @aImage of @aDecoder's progress.
   void NotifyProgress(NotNull<RasterImage*> aImage,
-                      NotNull<Decoder*> aDecoder);
+                      NotNull<Decoder*> aDecoder,
+                      const SurfaceKey& aSurfaceKey);
 
   /// Notify @aImage that @aDecoder has finished.
   void NotifyDecodeComplete(NotNull<RasterImage*> aImage,
-                            NotNull<Decoder*> aDecoder);
+                            NotNull<Decoder*> aDecoder,
+                            const Maybe<SurfaceKey>& aSurfaceKey);
 
 private:
   void EnsureHasEventTarget(NotNull<RasterImage*> aImage);

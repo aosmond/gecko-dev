@@ -195,15 +195,15 @@ public:
    * @param aDecoderFlags The decoder flags used by the decoder that generated
    *                      these notifications, or DefaultDecoderFlags() if the
    *                      notifications don't come from a decoder.
-   * @param aSurfaceFlags The surface flags used by the decoder that generated
-   *                      these notifications, or DefaultSurfaceFlags() if the
-   *                      notifications don't come from a decoder.
+   * @param aSurfaceKey   The surface key of the surface that generated these
+   *                      notifications, or Nothing() if the notifications don't
+   *                      come from a decoder.
    */
   void NotifyProgress(Progress aProgress,
                       const gfx::IntRect& aInvalidRect = nsIntRect(),
                       const Maybe<uint32_t>& aFrameCount = Nothing(),
                       DecoderFlags aDecoderFlags = DefaultDecoderFlags(),
-                      SurfaceFlags aSurfaceFlags = DefaultSurfaceFlags());
+                      const Maybe<SurfaceKey>& aSurfaceKey = Nothing());
 
   /**
    * Records decoding results, sends out any final notifications, updates the
@@ -222,7 +222,8 @@ public:
    *                      This is a lower bound for the total number of animation
    *                      frames this image has.
    * @param aDecoderFlags The decoder flags used by the decoder.
-   * @param aSurfaceFlags The surface flags used by the decoder.
+   * @param aSurfaceKey   The surface key of the surface that generated these
+   *                      notifications, or Nothing() if a metadata decode.
    */
   void NotifyDecodeComplete(const DecoderFinalStatus& aStatus,
                             const ImageMetadata& aMetadata,
@@ -231,7 +232,7 @@ public:
                             const gfx::IntRect& aInvalidRect,
                             const Maybe<uint32_t>& aFrameCount,
                             DecoderFlags aDecoderFlags,
-                            SurfaceFlags aSurfaceFlags);
+                            const Maybe<SurfaceKey>& aSurfaceKey);
 
   // Helper method for NotifyDecodeComplete.
   void ReportDecoderError();

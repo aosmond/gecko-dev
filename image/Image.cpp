@@ -233,7 +233,7 @@ ImageResource::GetImageContainerImpl(LayerManager* aManager,
 }
 
 void
-ImageResource::UpdateImageContainer()
+ImageResource::UpdateImageContainer(const Maybe<SurfaceKey>& aSurfaceKey)
 {
   MOZ_ASSERT(NS_IsMainThread());
 
