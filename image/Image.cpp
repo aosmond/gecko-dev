@@ -8,6 +8,7 @@
 #include "nsRefreshDriver.h"
 #include "mozilla/TimeStamp.h"
 #include "mozilla/Tuple.h"        // for Tie
+#include "mozilla/layers/SharedSurfacesChild.h" // for SharedSurfacesChild
 
 namespace mozilla {
 namespace image {
@@ -237,25 +238,82 @@ ImageResource::UpdateImageContainer(const Maybe<SurfaceKey>& aSurfaceKey)
 {
   MOZ_ASSERT(NS_IsMainThread());
 
+  if (aSurfaceKey && aSurfaceKey->Flags() != DefaultSurfaceFlags()) {
+    // If the surface that changed doesn't have the default flags, then we know
+    // that it is not in any of the image containers. We only support the
+    // default flags at present.
+    return;
+  }
+
   for (int i = mImageContainers.Length() - 1; i >= 0; --i) {
     ImageContainerEntry& entry = mImageContainers[i];
     RefPtr<ImageContainer> container = entry.mContainer.get();
-    if (container) {
-      IntSize bestSize;
-      RefPtr<SourceSurface> surface;
-      Tie(entry.mLastDrawResult, bestSize, surface) =
-        GetFrameInternal(entry.mSize, entry.mSVGContext,
-                         FRAME_CURRENT, entry.mFlags);
-
-      // It is possible that this is a factor-of-2 substitution. Since we
-      // managed to convert the weak reference into a strong reference, that
-      // means that an imagelib user still is holding onto the container. thus
-      // we cannot consolidate and must keep updating the duplicate container.
-      SetCurrentImage(container, surface, false);
-    } else {
+    if (!container) {
       // Stop tracking if our weak pointer to the image container was freed.
       mImageContainers.RemoveElementAt(i);
+      continue;
     }
+
+    if (aSurfaceKey && aSurfaceKey->SVGContext() != entry.mSVGContext) {
+      // The surface that changed has a different SVG context from us, and
+      // thus cannot be used with this container.
+      continue;
+    }
+
+    RefPtr<SourceSurface> prevSurface;
+    AutoTArray<ImageContainer::OwningImage,4> images;
+    container->GetCurrentImages(&images);
+    if (!images.IsEmpty()) {
+      prevSurface = images[0].mImage->GetAsSourceSurface();
+      MOZ_ASSERT(prevSurface);
+    }
+
+    if (aSurfaceKey && prevSurface &&
+        prevSurface->GetSize() == entry.mSize &&
+        aSurfaceKey->Size() != entry.mSize) {
+      // Our previously selected surface is the desired size (so it isn't a
+      // substitute), and the surface that changed has a different size. No need
+      // to recheck the surface cache for this container.
+      continue;
+    }
+
+    IntSize bestSize;
+    RefPtr<SourceSurface> surface;
+    Tie(entry.mLastDrawResult, bestSize, surface) =
+      GetFrameInternal(entry.mSize, entry.mSVGContext,
+                       FRAME_CURRENT, entry.mFlags);
+
+    // Note that when we progress an animation, we call this method without a
+    // surface key. While the animated compositing frame *can* change the
+    // underlying buffer unlike normal frames, we don't currently place
+    // animation frames in shared surfaces. As such, as long as we advance the
+    // generation counter (even if the surface remains the same), the fallback
+    // mechanism to get the updated current frame to WebRender will work.
+    if (aSurfaceKey) {
+      if (surface && surface->GetSize() == aSurfaceKey->Size()) {
+        // The surface is a match for the key unless the playback type differs.
+        // We need to ensure the ImageKeys are updated if using WebRender. We
+        // don't need to call this if we aren't given a surface key, because
+        // once a surface has completed rasterizing, we never update it again.
+        // Which surface we place in the container may change however. Calling
+        // this multiple times on the same surface should not have any
+        // meaningful impact on performance (it may be placed in multiple
+        // containers due to FLAG_HIGH_QUALITY_SCALING).
+        //
+        layers::SharedSurfacesChild::SurfaceUpdated(surface);
+      } else if (surface == prevSurface) {
+        // The surface we got from the cache matches that already in the
+        // container and it cannot be the surface that changed. No need to
+        // update the container.
+        continue;
+      }
+    }
+
+    // It is possible that this is a factor-of-2 substitution. Since we
+    // managed to convert the weak reference into a strong reference, that
+    // means that an imagelib user still is holding onto the container. Thus
+    // we cannot consolidate and must keep updating the duplicate container.
+    SetCurrentImage(container, surface, false);
   }
 }
 
