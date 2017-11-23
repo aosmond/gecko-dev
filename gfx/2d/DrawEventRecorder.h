@@ -10,6 +10,7 @@
 #include "2D.h"
 #include "RecordedEvent.h"
 #include "RecordingTypes.h"
+#include "mozilla/Range.h"
 #include <ostream>
 #include <fstream>
 
@@ -21,6 +22,8 @@ namespace mozilla {
 namespace gfx {
 
 class PathRecording;
+
+class DrawEventRecorderMemory;
 
 class DrawEventRecorderPrivate : public DrawEventRecorder
 {
@@ -114,6 +117,8 @@ public:
 
   bool WantsExternalFonts() { return mExternalFonts; }
 
+  virtual Range<uint8_t> GetRange() { return Range<uint8_t>(); }
+
 protected:
   virtual void Flush() = 0;
 
@@ -190,6 +195,11 @@ public:
   void WipeRecording();
   void Finish() override;
   void FlushItem(IntRect) override;
+
+  Range<uint8_t> GetRange() override
+  {
+    return Range<uint8_t>((uint8_t*)mOutputStream.mData, mOutputStream.mLength);
+  }
 
   MemStream mOutputStream;
   /* The index stream is of the form:

@@ -6,6 +6,7 @@
 #include "SharedSurfacesChild.h"
 #include "SharedSurfacesParent.h"
 #include "CompositorManagerChild.h"
+#include "mozilla/gfx/SourceSurfaceRecording.h"
 #include "mozilla/layers/IpcResourceUpdateQueue.h"
 #include "mozilla/layers/SourceSurfaceSharedData.h"
 #include "mozilla/layers/WebRenderBridgeChild.h"
@@ -27,25 +28,24 @@ public:
   bool mStale;
 };
 
-class SharedSurfacesChild::SharedUserData final
+class SharedSurfacesChild::UserData
 {
 public:
-  explicit SharedUserData(const wr::ExternalImageId& aId)
-    : mId(aId)
-    , mShared(false)
+  explicit UserData()
+    : mShared(false)
   { }
 
-  ~SharedUserData()
+  virtual ~UserData()
   {
     if (mShared) {
       mShared = false;
       if (NS_IsMainThread()) {
-        SharedSurfacesChild::Unshare(mId, mKeys);
+        SharedSurfacesChild::Unshare(GetExternalImageId(), mKeys);
       } else {
         class DestroyRunnable final : public Runnable
         {
         public:
-          DestroyRunnable(const wr::ExternalImageId& aId,
+          DestroyRunnable(Maybe<wr::ExternalImageId>&& aId,
                           nsTArray<ImageKeyData>&& aKeys)
             : Runnable("SharedSurfacesChild::SharedUserData::DestroyRunnable")
             , mId(aId)
@@ -59,26 +59,15 @@ public:
           }
 
         private:
-          wr::ExternalImageId mId;
+          Maybe<wr::ExternalImageId> mId;
           AutoTArray<ImageKeyData, 1> mKeys;
         };
 
-        nsCOMPtr<nsIRunnable> task = new DestroyRunnable(mId, Move(mKeys));
+        nsCOMPtr<nsIRunnable> task =
+          new DestroyRunnable(GetExternalImageId(), Move(mKeys));
         SystemGroup::Dispatch(TaskCategory::Other, task.forget());
       }
     }
-  }
-
-  const wr::ExternalImageId& Id() const
-  {
-    return mId;
-  }
-
-  void SetId(const wr::ExternalImageId& aId)
-  {
-    mId = aId;
-    mKeys.Clear();
-    mShared = false;
   }
 
   bool IsShared() const
@@ -132,7 +121,7 @@ public:
           aManager->AddImageKeyForDiscard(entry.mImageKey);
           entry.mImageKey = aManager->WrBridge()->GetNextImageKey();
           entry.mStale = false;
-          aResources.AddExternalImage(mId, entry.mImageKey);
+          AddResource(aResources, entry.mImageKey);
         }
         key = entry.mImageKey;
       }
@@ -141,16 +130,88 @@ public:
     if (!found) {
       key = aManager->WrBridge()->GetNextImageKey();
       mKeys.AppendElement(ImageKeyData { aManager, key, false });
-      aResources.AddExternalImage(mId, key);
+      AddResource(aResources, key);
     }
 
     return key;
   }
 
-private:
+protected:
+  virtual void AddResource(wr::IpcResourceUpdateQueue& aResources,
+                           const wr::ImageKey& aKey) const = 0;
+
+  virtual Maybe<wr::ExternalImageId> GetExternalImageId() const
+  {
+    return Nothing();
+  }
+
   AutoTArray<ImageKeyData, 1> mKeys;
-  wr::ExternalImageId mId;
   bool mShared : 1;
+};
+
+class SharedSurfacesChild::SharedUserData final
+  : public SharedSurfacesChild::UserData
+{
+public:
+  explicit SharedUserData(const wr::ExternalImageId& aId)
+    : mId(aId)
+  { }
+
+  const wr::ExternalImageId& Id() const
+  {
+    return mId;
+  }
+
+  void SetId(const wr::ExternalImageId& aId)
+  {
+    mId = aId;
+    mKeys.Clear();
+    mShared = false;
+  }
+
+protected:
+  Maybe<wr::ExternalImageId> GetExternalImageId() const override
+  {
+    return Some(mId);
+  }
+
+  void AddResource(wr::IpcResourceUpdateQueue& aResources,
+                   const wr::ImageKey& aKey) const override
+  {
+    aResources.AddExternalImage(mId, aKey);
+  }
+
+private:
+  wr::ExternalImageId mId;
+};
+
+class SharedSurfacesChild::RecordUserData final
+  : public SharedSurfacesChild::UserData
+{
+public:
+  RecordUserData(SourceSurfaceRecording* aSurface)
+    : mSurface(aSurface)
+  {
+    MOZ_ASSERT(mSurface);
+    MarkShared();
+  }
+
+protected:
+  void AddResource(wr::IpcResourceUpdateQueue& aResources,
+                   const wr::ImageKey& aKey) const override
+  {
+    DrawEventRecorderPrivate* recorder = mSurface->GetRecorder();
+    MOZ_ASSERT(recorder);
+
+    Range<uint8_t> bytes = recorder->GetRange();
+    MOZ_ASSERT(bytes.length() > 0);
+
+    wr::ImageDescriptor descriptor(mSurface->GetSize(), 0, mSurface->GetFormat());
+    aResources.AddBlobImage(aKey, descriptor, bytes);
+  }
+
+private:
+  SourceSurfaceRecording* MOZ_OWNING_REF mSurface;
 };
 
 /* static */ void
@@ -162,12 +223,22 @@ SharedSurfacesChild::DestroySharedUserData(void* aClosure)
 }
 
 /* static */ void
+SharedSurfacesChild::DestroyRecordUserData(void* aClosure)
+{
+  MOZ_ASSERT(aClosure);
+  auto data = static_cast<RecordUserData*>(aClosure);
+  delete data;
+}
+
+/* static */ void
 SharedSurfacesChild::SurfaceUpdated(SourceSurface* aSurface)
 {
   MOZ_ASSERT(NS_IsMainThread());
   MOZ_ASSERT(aSurface);
 
-  if (aSurface->GetType() != SurfaceType::DATA_SHARED) {
+  SurfaceType type = aSurface->GetType();
+  if (type != SurfaceType::DATA_SHARED) {
+    MOZ_ASSERT(type != SurfaceType::RECORDING, "We should never update a recording!");
     return;
   }
 
@@ -182,7 +253,7 @@ SharedSurfacesChild::SurfaceUpdated(SourceSurface* aSurface)
 }
 
 /* static */ nsresult
-SharedSurfacesChild::Share(SourceSurfaceSharedData* aSurface,
+SharedSurfacesChild::Share(SourceSurface* aSurface,
                            WebRenderLayerManager* aManager,
                            wr::IpcResourceUpdateQueue& aResources,
                            wr::ImageKey& aKey)
@@ -191,6 +262,28 @@ SharedSurfacesChild::Share(SourceSurfaceSharedData* aSurface,
   MOZ_ASSERT(aSurface);
   MOZ_ASSERT(aManager);
 
+  switch (aSurface->GetType()) {
+    case SurfaceType::DATA_SHARED: {
+      auto sharedSurface = static_cast<SourceSurfaceSharedData*>(aSurface);
+      return Share(sharedSurface, aManager, aResources, aKey);
+    }
+    case SurfaceType::RECORDING: {
+      auto recordSurface = static_cast<SourceSurfaceRecording*>(aSurface);
+      return Share(recordSurface, aManager, aResources, aKey);
+    }
+    default:
+      break;
+  }
+
+  return NS_ERROR_NOT_IMPLEMENTED;
+}
+
+/* static */ nsresult
+SharedSurfacesChild::Share(SourceSurfaceSharedData* aSurface,
+                           WebRenderLayerManager* aManager,
+                           wr::IpcResourceUpdateQueue& aResources,
+                           wr::ImageKey& aKey)
+{
   CompositorManagerChild* manager = CompositorManagerChild::GetInstance();
   if (NS_WARN_IF(!manager || !manager->CanSend())) {
     return NS_ERROR_NOT_INITIALIZED;
@@ -265,6 +358,25 @@ SharedSurfacesChild::Share(SourceSurfaceSharedData* aSurface,
 }
 
 /* static */ nsresult
+SharedSurfacesChild::Share(SourceSurfaceRecording* aSurface,
+                           WebRenderLayerManager* aManager,
+                           wr::IpcResourceUpdateQueue& aResources,
+                           wr::ImageKey& aKey)
+{
+  RecordUserData* data =
+    static_cast<RecordUserData*>(aSurface->GetUserData(&sSharedKey));
+  if (!data) {
+    data = new RecordUserData(aSurface);
+    aSurface->AddUserData(&sSharedKey, data, DestroyRecordUserData);
+  }
+
+  // There is no extra sharing step with recorded blob images. The key itself
+  // was created with the data inlined.
+  aKey = data->UpdateKey(aManager, aResources);
+  return NS_OK;
+}
+
+/* static */ nsresult
 SharedSurfacesChild::Share(ImageContainer* aContainer,
                            WebRenderLayerManager* aManager,
                            wr::IpcResourceUpdateQueue& aResources,
@@ -289,25 +401,28 @@ SharedSurfacesChild::Share(ImageContainer* aContainer,
     return NS_ERROR_NOT_IMPLEMENTED;
   }
 
-  if (surface->GetType() != SurfaceType::DATA_SHARED) {
-    return NS_ERROR_NOT_IMPLEMENTED;
-  }
-
-  auto sharedSurface = static_cast<SourceSurfaceSharedData*>(surface.get());
-  return Share(sharedSurface, aManager, aResources, aKey);
+  return Share(surface, aManager, aResources, aKey);
 }
 
 /* static */ void
-SharedSurfacesChild::Unshare(const wr::ExternalImageId& aId,
+SharedSurfacesChild::Unshare(const Maybe<wr::ExternalImageId>& aId,
                              nsTArray<ImageKeyData>& aKeys)
 {
   MOZ_ASSERT(NS_IsMainThread());
 
   for (const auto& entry : aKeys) {
-    WebRenderBridgeChild* wrBridge = entry.mManager->WrBridge();
-    if (wrBridge) {
-      wrBridge->DeallocExternalImageId(aId);
+    entry.mManager->AddImageKeyForDiscard(entry.mImageKey);
+
+    if (aId) {
+      WebRenderBridgeChild* wrBridge = entry.mManager->WrBridge();
+      if (wrBridge) {
+        wrBridge->DeallocExternalImageId(aId.ref());
+      }
     }
+  }
+
+  if (!aId) {
+    return;
   }
 
   CompositorManagerChild* manager = CompositorManagerChild::GetInstance();
@@ -315,17 +430,18 @@ SharedSurfacesChild::Unshare(const wr::ExternalImageId& aId,
     return;
   }
 
+  const auto& id = aId.ref();
   if (manager->OtherPid() == base::GetCurrentProcId()) {
     // We are in the combined UI/GPU process. Call directly to it to remove its
     // wrapper surface to free the underlying buffer.
-    MOZ_ASSERT(manager->OwnsExternalImageId(aId));
-    SharedSurfacesParent::RemoveSameProcess(aId);
-  } else if (manager->OwnsExternalImageId(aId)) {
+    MOZ_ASSERT(manager->OwnsExternalImageId(id));
+    SharedSurfacesParent::RemoveSameProcess(id);
+  } else if (manager->OwnsExternalImageId(id)) {
     // Only attempt to release current mappings in the GPU process. It is
     // possible we had a surface that was previously shared, the GPU process
     // crashed / was restarted, and then we freed the surface. In that case
     // we know the mapping has already been freed.
-    manager->SendRemoveSharedSurface(aId);
+    manager->SendRemoveSharedSurface(id);
   }
 }
 

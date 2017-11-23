@@ -471,6 +471,12 @@ public:
         case SurfaceType::DATA_SHARED:
           mMessage << "SurfaceType::DATA_SHARED";
           break;
+        case SurfaceType::DATA_RECORDING:
+          mMessage << "SurfaceType::DATA_RECORDING";
+          break;
+        case SurfaceType::WRAPPED_RECORDING:
+          mMessage << "SurfaceType::WRAPPED_RECORDING";
+          break;
         default:
           mMessage << "Invalid SurfaceType (" << (int)aType << ")";
           break;

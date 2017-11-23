@@ -9,6 +9,7 @@
 #include <stddef.h>                     // for size_t
 #include <stdint.h>                     // for uint32_t, uint64_t
 #include "mozilla/Attributes.h"         // for override
+#include "mozilla/Maybe.h"              // for Maybe
 #include "mozilla/RefPtr.h"             // for already_AddRefed
 #include "mozilla/StaticPtr.h"          // for StaticRefPtr
 #include "mozilla/gfx/UserData.h"       // for UserDataKey
@@ -17,6 +18,7 @@
 namespace mozilla {
 namespace gfx {
 class SourceSurface;
+class SourceSurfaceRecording;
 class SourceSurfaceSharedData;
 } // namespace gfx
 
@@ -32,7 +34,7 @@ class WebRenderLayerManager;
 class SharedSurfacesChild final
 {
 public:
-  static nsresult Share(gfx::SourceSurfaceSharedData* aSurface,
+  static nsresult Share(gfx::SourceSurface* aSurface,
                         WebRenderLayerManager* aManager,
                         wr::IpcResourceUpdateQueue& aResources,
                         wr::ImageKey& aKey);
@@ -45,16 +47,30 @@ public:
   static void SurfaceUpdated(gfx::SourceSurface* aSurface);
 
 private:
+  static nsresult Share(gfx::SourceSurfaceSharedData* aSurface,
+                        WebRenderLayerManager* aManager,
+                        wr::IpcResourceUpdateQueue& aResources,
+                        wr::ImageKey& aKey);
+
+  static nsresult Share(gfx::SourceSurfaceRecording* aSurface,
+                        WebRenderLayerManager* aManager,
+                        wr::IpcResourceUpdateQueue& aResources,
+                        wr::ImageKey& aKey);
+
   SharedSurfacesChild() = delete;
   ~SharedSurfacesChild() = delete;
 
   class ImageKeyData;
+  class UserData;
+  class RecordUserData;
   class SharedUserData;
 
   static UserDataKey sSharedKey;
 
-  static void Unshare(const wr::ExternalImageId& aId, nsTArray<ImageKeyData>& aKeys);
+  static void Unshare(const Maybe<wr::ExternalImageId>& aId,
+                      nsTArray<ImageKeyData>& aKeys);
   static void DestroySharedUserData(void* aClosure);
+  static void DestroyRecordUserData(void* aClosure);
 };
 
 } // namespace layers

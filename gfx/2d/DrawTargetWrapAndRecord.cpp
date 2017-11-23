@@ -93,7 +93,7 @@ public:
     mRecorder->RecordEvent(RecordedSourceSurfaceDestruction(ReferencePtr(this)));
   }
 
-  virtual SurfaceType GetType() const { return SurfaceType::RECORDING; }
+  virtual SurfaceType GetType() const { return SurfaceType::WRAPPED_RECORDING; }
   virtual IntSize GetSize() const { return mFinalSurface->GetSize(); }
   virtual SurfaceFormat GetFormat() const { return mFinalSurface->GetFormat(); }
   virtual already_AddRefed<DataSourceSurface> GetDataSurface() { return mFinalSurface->GetDataSurface(); }
@@ -127,7 +127,10 @@ public:
 static SourceSurface *
 GetSourceSurface(SourceSurface *aSurface)
 {
-  if (aSurface->GetType() != SurfaceType::RECORDING) {
+  SurfaceType type = aSurface->GetType();
+  if (type != SurfaceType::WRAPPED_RECORDING) {
+    MOZ_ASSERT(type != SurfaceType::RECORDING);
+    MOZ_ASSERT(type != SurfaceType::DATA_RECORDING);
     return aSurface;
   }
 

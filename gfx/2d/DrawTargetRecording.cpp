@@ -5,6 +5,7 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #include "DrawTargetRecording.h"
+#include "SourceSurfaceRecording.h"
 #include "PathRecording.h"
 #include <stdio.h>
 
@@ -77,74 +78,11 @@ EnsureSurfaceStoredRecording(DrawEventRecorderPrivate *aRecorder, SourceSurface 
                         userData, &RecordingSourceSurfaceUserDataFunc);
 }
 
-class SourceSurfaceRecording : public SourceSurface
+SourceSurfaceRecording::~SourceSurfaceRecording()
 {
-public:
-  MOZ_DECLARE_REFCOUNTED_VIRTUAL_TYPENAME(SourceSurfaceRecording)
-  SourceSurfaceRecording(IntSize aSize, SurfaceFormat aFormat, DrawEventRecorderPrivate *aRecorder)
-    : mSize(aSize), mFormat(aFormat), mRecorder(aRecorder)
-  {
-    mRecorder->AddStoredObject(this);
-  }
-
-  ~SourceSurfaceRecording()
-  {
-    mRecorder->RemoveStoredObject(this);
-    mRecorder->RecordEvent(RecordedSourceSurfaceDestruction(ReferencePtr(this)));
-  }
-
-  virtual SurfaceType GetType() const { return SurfaceType::RECORDING; }
-  virtual IntSize GetSize() const { return mSize; }
-  virtual SurfaceFormat GetFormat() const { return mFormat; }
-  virtual already_AddRefed<DataSourceSurface> GetDataSurface() { return nullptr; }
-
-  IntSize mSize;
-  SurfaceFormat mFormat;
-  RefPtr<DrawEventRecorderPrivate> mRecorder;
-};
-
-class DataSourceSurfaceRecording : public DataSourceSurface
-{
-public:
-  MOZ_DECLARE_REFCOUNTED_VIRTUAL_TYPENAME(DataSourceSurfaceRecording, override)
-  DataSourceSurfaceRecording(UniquePtr<uint8_t[]> aData, IntSize aSize,
-                             int32_t aStride, SurfaceFormat aFormat)
-    : mData(Move(aData))
-    , mSize(aSize)
-    , mStride(aStride)
-    , mFormat(aFormat)
-  {
-  }
-
-  ~DataSourceSurfaceRecording()
-  {
-  }
-
-  static already_AddRefed<DataSourceSurface>
-  Init(uint8_t *aData, IntSize aSize, int32_t aStride, SurfaceFormat aFormat)
-  {
-    //XXX: do we need to ensure any alignment here?
-    auto data = MakeUnique<uint8_t[]>(aStride * aSize.height * BytesPerPixel(aFormat));
-    if (data) {
-      memcpy(data.get(), aData, aStride * aSize.height * BytesPerPixel(aFormat));
-      RefPtr<DataSourceSurfaceRecording> surf = new DataSourceSurfaceRecording(Move(data), aSize, aStride, aFormat);
-      return surf.forget();
-    }
-    return nullptr;
-  }
-
-  virtual SurfaceType GetType() const override { return SurfaceType::RECORDING; }
-  virtual IntSize GetSize() const override { return mSize; }
-  virtual int32_t Stride() override { return mStride; }
-  virtual SurfaceFormat GetFormat() const override { return mFormat; }
-  virtual uint8_t* GetData() override { return mData.get(); }
-
-  UniquePtr<uint8_t[]> mData;
-  IntSize mSize;
-  int32_t mStride;
-  SurfaceFormat mFormat;
-};
-
+  mRecorder->RemoveStoredObject(this);
+  mRecorder->RecordEvent(RecordedSourceSurfaceDestruction(ReferencePtr(this)));
+}
 
 class GradientStopsRecording : public GradientStops
 {

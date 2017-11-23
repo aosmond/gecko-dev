@@ -55,6 +55,7 @@ EXPORTS.mozilla.gfx += [
     'SourceSurfaceCairo.h',
     'SourceSurfaceCapture.h',
     'SourceSurfaceRawData.h',
+    'SourceSurfaceRecording.h',
     'StackArray.h',
     'Swizzle.h',
     'Tools.h',
