@@ -1881,13 +1881,11 @@ imgLoader::ValidateEntry(imgCacheEntry* aEntry,
 {
   LOG_SCOPE(gImgLog, "imgLoader::ValidateEntry");
 
-  bool hasExpired;
+  // If the expiration time is zero, then the request has not gotten far enough
+  // to know when it will expire.
   uint32_t expirationTime = aEntry->GetExpiryTime();
-  if (expirationTime <= SecondsFromPRTime(PR_Now())) {
-    hasExpired = true;
-  } else {
-    hasExpired = false;
-  }
+  bool hasExpired = expirationTime != 0 &&
+                    expirationTime <= SecondsFromPRTime(PR_Now());
 
   nsresult rv;
 
