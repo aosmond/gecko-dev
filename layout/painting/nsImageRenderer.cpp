@@ -19,6 +19,7 @@
 #include "nsCSSRendering.h"
 #include "nsCSSRenderingGradients.h"
 #include "nsIFrame.h"
+#include "nsImageFrame.h"
 #include "nsStyleStructInlines.h"
 #include "nsSVGDisplayableFrame.h"
 #include "SVGObserverUtils.h"
@@ -121,7 +122,25 @@ nsImageRenderer::PrepareImage()
 
   if (!mImage->IsComplete()) {
     // Make sure the image is actually decoding.
-    bool frameComplete = mImage->StartDecoding();
+    bool frameComplete;
+    if (mForFrame->IsImageFrame()) {
+      auto f = static_cast<nsImageFrame*>(mForFrame);
+      frameComplete = NS_SUCCEEDED(f->MaybeDecodeForPredictedSize(false));
+    } else {
+      nsPresContext* presContext = mForFrame->PresContext();
+      nsIPresShell* presShell = presContext->PresShell();
+
+      const LayoutDeviceSize destSize =
+        LayoutDeviceSize::FromAppUnits(mForFrame->GetContentRectRelativeToSelf().Size(),
+                                       presContext->AppUnitsPerDevPixel());
+      LayoutDeviceToLayerScale2D resolutionToScreen(
+        presShell->GetCumulativeResolution() *
+        nsLayoutUtils::GetTransformToAncestorScaleExcludingAnimated(mForFrame));
+      const LayerSize layerSize = destSize * resolutionToScreen;
+      const LayerIntSize layerIntSize = RoundedToInt(layerSize);
+      frameComplete =
+        mImage->StartDecoding(IntSize(layerIntSize.width, layerIntSize.height));
+    }
 
     // Check again to see if we finished.
     // We cannot prepare the image for rendering if it is not fully loaded.

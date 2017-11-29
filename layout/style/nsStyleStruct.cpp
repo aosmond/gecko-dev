@@ -2540,14 +2540,14 @@ nsStyleImage::ComputeActualCropRect(nsIntRect& aActualCropRect,
 }
 
 bool
-nsStyleImage::StartDecoding() const
+nsStyleImage::StartDecoding(const nsIntSize& aSize) const
 {
   if (mType == eStyleImageType_Image) {
     imgRequestProxy* req = GetImageData();
     if (!req) {
       return false;
     }
-    return req->StartDecodingWithResult(imgIContainer::FLAG_ASYNC_NOTIFY);
+    return req->StartDecodingWithSize(aSize);
   }
   // null image types always return false from IsComplete, so we do the same here.
   return mType != eStyleImageType_Null ? true : false;

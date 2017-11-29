@@ -119,7 +119,6 @@ imgRequestProxy::imgRequestProxy() :
   mIsInLoadGroup(false),
   mForceDispatchLoadGroup(false),
   mListenerIsStrongRef(false),
-  mDecodeRequested(false),
   mDeferNotifications(false),
   mHadListener(false),
   mHadDispatch(false)
@@ -236,6 +235,10 @@ imgRequestProxy::ChangeOwner(imgRequest* aNewOwner)
 
   GetOwner()->RemoveProxy(this, NS_OK);
 
+  // If we'd previously requested a synchronous decode, request a decode on the
+  // new image.
+  aNewOwner->MergeDecodeRequest(GetOwner());
+
   mBehaviour->SetOwner(aNewOwner);
 
   // If we were locked, apply the locks here
@@ -251,13 +254,6 @@ imgRequestProxy::ChangeOwner(imgRequest* aNewOwner)
   }
 
   AddToOwner(nullptr);
-
-  // If we'd previously requested a synchronous decode, request a decode on the
-  // new image.
-  if (mDecodeRequested) {
-    StartDecoding(imgIContainer::FLAG_NONE);
-  }
-
   return NS_OK;
 }
 
@@ -541,34 +537,30 @@ imgRequestProxy::CancelAndForgetObserver(nsresult aStatus)
 NS_IMETHODIMP
 imgRequestProxy::StartDecoding(uint32_t aFlags)
 {
-  // Flag this, so we know to transfer the request if our owner changes
-  mDecodeRequested = true;
-
   RefPtr<Image> image = GetImage();
   if (image) {
     return image->StartDecoding(aFlags);
   }
 
   if (GetOwner()) {
-    GetOwner()->StartDecoding();
+    GetOwner()->StartDecoding(IntSize(0, 0));
   }
 
   return NS_OK;
 }
 
 bool
-imgRequestProxy::StartDecodingWithResult(uint32_t aFlags)
+imgRequestProxy::StartDecodingWithSize(const nsIntSize& aSize)
 {
-  // Flag this, so we know to transfer the request if our owner changes
-  mDecodeRequested = true;
-
   RefPtr<Image> image = GetImage();
   if (image) {
-    return image->StartDecodingWithResult(aFlags);
+    uint32_t flags = imgIContainer::FLAG_HIGH_QUALITY_SCALING |
+                     imgIContainer::FLAG_ASYNC_NOTIFY;
+    return NS_SUCCEEDED(image->RequestDecodeForSize(aSize, flags));
   }
 
   if (GetOwner()) {
-    GetOwner()->StartDecoding();
+    GetOwner()->StartDecoding(aSize);
   }
 
   return false;

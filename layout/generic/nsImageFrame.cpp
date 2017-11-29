@@ -730,20 +730,23 @@ nsImageFrame::NotifyNewCurrentRequest(imgIRequest *aRequest,
   }
 }
 
-void
-nsImageFrame::MaybeDecodeForPredictedSize()
+nsresult
+nsImageFrame::MaybeDecodeForPredictedSize(bool aRequireImage /* = true */)
 {
   // Check that we're ready to decode.
-  if (!mImage) {
-    return;  // Nothing to do yet.
+  if (aRequireImage && !mImage) {
+    // Nothing to do yet.
+    return NS_ERROR_NOT_AVAILABLE;
   }
 
   if (mComputedSize.IsEmpty()) {
-    return;  // We won't draw anything, so no point in decoding.
+    // We won't draw anything, so no point in decoding.
+    return NS_ERROR_NOT_AVAILABLE;
   }
 
   if (GetVisibility() != Visibility::APPROXIMATELY_VISIBLE) {
-    return;  // We're not visible, so don't decode.
+    // We're not visible, so don't decode.
+    return NS_ERROR_NOT_AVAILABLE;
   }
 
   // OK, we're ready to decode. Compute the scale to the screen...
@@ -766,23 +769,30 @@ nsImageFrame::MaybeDecodeForPredictedSize()
   const ScreenSize predictedScreenSize = destRect.Size() * resolutionToScreen;
   const ScreenIntSize predictedScreenIntSize = RoundedToInt(predictedScreenSize);
   if (predictedScreenIntSize.IsEmpty()) {
-    return;
+    return NS_ERROR_NOT_AVAILABLE;
   }
 
   // Determine the optimal image size to use.
   uint32_t flags = imgIContainer::FLAG_HIGH_QUALITY_SCALING
                  | imgIContainer::FLAG_ASYNC_NOTIFY;
-  SamplingFilter samplingFilter =
-    nsLayoutUtils::GetSamplingFilterForFrame(this);
-  gfxSize gfxPredictedScreenSize = gfxSize(predictedScreenIntSize.width,
-                                           predictedScreenIntSize.height);
-  nsIntSize predictedImageSize =
-    mImage->OptimalImageSizeForDest(gfxPredictedScreenSize,
-                                    imgIContainer::FRAME_CURRENT,
-                                    samplingFilter, flags);
+  nsIntSize predictedImageSize;
+  if (mImage) {
+    SamplingFilter samplingFilter =
+      nsLayoutUtils::GetSamplingFilterForFrame(this);
+
+    gfxSize gfxPredictedScreenSize = gfxSize(predictedScreenIntSize.width,
+                                             predictedScreenIntSize.height);
+    predictedImageSize =
+      mImage->OptimalImageSizeForDest(gfxPredictedScreenSize,
+                                      imgIContainer::FRAME_CURRENT,
+                                      samplingFilter, flags);
+  } else {
+    predictedImageSize.width = predictedScreenIntSize.width,
+    predictedImageSize.height = predictedScreenIntSize.height;
+  }
 
   // Request a decode.
-  mImage->RequestDecodeForSize(predictedImageSize, flags);
+  return mImage->RequestDecodeForSize(predictedImageSize, flags);
 }
 
 nsRect

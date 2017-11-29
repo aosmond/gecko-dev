@@ -237,7 +237,6 @@ private:
   bool mIsInLoadGroup : 1;
   bool mForceDispatchLoadGroup : 1;
   bool mListenerIsStrongRef : 1;
-  bool mDecodeRequested : 1;
 
   // Whether we want to defer our notifications by the non-virtual Observer
   // interfaces as image loads proceed.

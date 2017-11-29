@@ -408,9 +408,12 @@ imgRequest::ContinueEvict()
 }
 
 void
-imgRequest::StartDecoding()
+imgRequest::StartDecoding(const nsIntSize& aSize)
 {
   MutexAutoLock lock(mMutex);
+  if (aSize.IsEmpty() || mDecodeSize < aSize) {
+    mDecodeSize = aSize;
+  }
   mDecodeRequested = true;
 }
 
@@ -419,6 +422,21 @@ imgRequest::IsDecodeRequested() const
 {
   MutexAutoLock lock(mMutex);
   return mDecodeRequested;
+}
+
+void
+imgRequest::MergeDecodeRequest(const imgRequest* aOther)
+{
+  MOZ_ASSERT(aOther);
+  nsIntSize size;
+  {
+    MutexAutoLock lock(aOther->mMutex);
+    if (!aOther->mDecodeRequested) {
+      return;
+    }
+    size = aOther->mDecodeSize;
+  }
+  StartDecoding(size);
 }
 
 nsresult imgRequest::GetURI(ImageURL** aURI)
@@ -1115,7 +1133,9 @@ imgRequest::FinishPreparingForNewPart(const NewPartResult& aResult)
   }
 
   if (IsDecodeRequested()) {
-    aResult.mImage->StartDecoding(imgIContainer::FLAG_NONE);
+    uint32_t flags = imgIContainer::FLAG_HIGH_QUALITY_SCALING |
+                     imgIContainer::FLAG_ASYNC_NOTIFY;
+    aResult.mImage->RequestDecodeForSize(mDecodeSize, flags);
   }
 }
 

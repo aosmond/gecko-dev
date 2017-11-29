@@ -66,6 +66,13 @@ NS_IMPL_ISUPPORTS(RasterImage, imgIContainer, nsIProperties,
                   imgIContainerDebug)
 #endif
 
+static bool Debug(ImageURL* aURI)
+{
+  return aURI &&
+         //strcmp(aURI->Spec(), "https://abs.twimg.com/emoji/v2/72x72/1f9d0.png") == 0;
+         strcmp(aURI->Spec(), "https://abs.twimg.com/a/1511833274/img/t1/emoji-categories@2x.png") == 0;
+}
+
 //******************************************************************************
 RasterImage::RasterImage(ImageURL* aURI /* = nullptr */) :
   ImageResource(aURI), // invoke superclass's constructor
@@ -1097,7 +1104,7 @@ RasterImage::StartDecoding(uint32_t aFlags)
   }
 
   if (!mHasSize) {
-    mWantFullDecode = true;
+    SetWantFullDecode(IntSize(0, 0));
     return NS_OK;
   }
 
@@ -1113,13 +1120,31 @@ RasterImage::StartDecodingWithResult(uint32_t aFlags)
   }
 
   if (!mHasSize) {
-    mWantFullDecode = true;
+    SetWantFullDecode(IntSize(0, 0));
     return false;
   }
 
   uint32_t flags = (aFlags & FLAG_ASYNC_NOTIFY) | FLAG_SYNC_DECODE_IF_FAST;
   DrawableSurface surface = RequestDecodeForSizeInternal(mSize, flags);
   return surface && surface->IsFinished();
+}
+
+void
+RasterImage::SetWantFullDecode(const IntSize& aSize)
+{
+  MOZ_ASSERT(!mHasSize);
+
+  if (Debug(mURI)) {
+    printf_stderr("[AO][%p] SetWantFullDecode -- %dx%d\n", static_cast<ImageResource*>(this), aSize.width, aSize.height);
+  }
+
+  // Ensure that we request the decode at the largest size given to avoid
+  // downscaling and then upscaling. If anything requests a decode at its
+  // native size (e.g. empty), then we reset the size completely.
+  if (aSize.IsEmpty() || mWantFullDecodeSize < aSize) {
+    mWantFullDecodeSize = aSize;
+  }
+  mWantFullDecode = true;
 }
 
 NS_IMETHODIMP
@@ -1131,7 +1156,10 @@ RasterImage::RequestDecodeForSize(const IntSize& aSize, uint32_t aFlags)
     return NS_ERROR_FAILURE;
   }
 
-  RequestDecodeForSizeInternal(aSize, aFlags);
+  DrawableSurface surface = RequestDecodeForSizeInternal(aSize, aFlags);
+  if (!surface || !surface->IsFinished()) {
+    return NS_ERROR_IN_PROGRESS;
+  }
 
   return NS_OK;
 }
@@ -1146,7 +1174,7 @@ RasterImage::RequestDecodeForSizeInternal(const IntSize& aSize, uint32_t aFlags)
   }
 
   if (!mHasSize) {
-    mWantFullDecode = true;
+    SetWantFullDecode(aSize);
     return DrawableSurface();
   }
 
@@ -1206,8 +1234,12 @@ RasterImage::Decode(const IntSize& aSize,
 
   // If we don't have a size yet, we can't do any other decoding.
   if (!mHasSize) {
-    mWantFullDecode = true;
+    SetWantFullDecode(aSize);
     return false;
+  }
+
+  if (Debug(mURI)) {
+    printf_stderr("[AO][%p] Decode -- %dx%d\n", static_cast<ImageResource*>(this), aSize.width, aSize.height);
   }
 
   // We're about to decode again, which may mean that some of the previous sizes
@@ -1450,6 +1482,9 @@ RasterImage::Draw(gfxContext* aContext,
     SendOnUnlockedDraw(aFlags);
   }
 
+  if (Debug(mURI)) {
+    printf_stderr("[AO][%p] Draw -- %dx%d\n", static_cast<ImageResource*>(this), aSize.width, aSize.height);
+  }
 
   // If we're not using SamplingFilter::GOOD, we shouldn't high-quality scale or
   // downscale during decode.
@@ -1765,8 +1800,14 @@ RasterImage::NotifyDecodeComplete(const DecoderFinalStatus& aStatus,
 
     // If we were a metadata decode and a full decode was requested, do it.
     if (mWantFullDecode) {
+      uint32_t flags = imgIContainer::FLAG_HIGH_QUALITY_SCALING |
+                       imgIContainer::FLAG_ASYNC_NOTIFY;
+      if (!CanDownscaleDuringDecode(mWantFullDecodeSize, flags)) {
+        mWantFullDecodeSize = mSize;
+      }
       mWantFullDecode = false;
-      RequestDecodeForSize(mSize, DECODE_FLAGS_DEFAULT);
+      RequestDecodeForSize(mWantFullDecodeSize, flags);
+      //RequestDecodeForSize(mSize, flags);
     }
   }
 }

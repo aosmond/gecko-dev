@@ -17,6 +17,7 @@
 #include "nsProxyRelease.h"
 #include "nsStringGlue.h"
 #include "nsError.h"
+#include "nsSize.h"
 #include "nsIAsyncVerifyRedirectCallback.h"
 #include "mozilla/Mutex.h"
 #include "mozilla/net/ReferrerPolicy.h"
@@ -95,7 +96,10 @@ public:
   void ContinueEvict();
 
   // Request that we start decoding the image as soon as data becomes available.
-  void StartDecoding();
+  void StartDecoding(const nsIntSize& aSize);
+
+  // Merge in decoding requests in another request.
+  void MergeDecodeRequest(const imgRequest* aOther);
 
   inline uint64_t InnerWindowID() const {
     return mInnerWindowId;
@@ -292,6 +296,7 @@ private:
   // must not be a part of this bitfield.
   RefPtr<ProgressTracker> mProgressTracker;
   RefPtr<Image> mImage;
+  nsIntSize mDecodeSize;
   bool mIsMultiPartChannel : 1;
   bool mGotData : 1;
   bool mIsInCache : 1;

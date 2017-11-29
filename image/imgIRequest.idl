@@ -7,10 +7,16 @@
 #include "nsISupports.idl"
 #include "nsIRequest.idl"
 
+%{C++
+#include "nsSize.h"
+%}
+
 interface imgIContainer;
 interface imgINotificationObserver;
 interface nsIURI;
 interface nsIPrincipal;
+
+[ref] native nsIntSize(nsIntSize);
 
 /**
  * imgIRequest interface
@@ -159,7 +165,7 @@ interface imgIRequest : nsIRequest
    * Exactly like startDecoding above except returns whether the current frame
    * of the image is complete or not.
    */
-  [noscript, notxpcom] boolean startDecodingWithResult(in uint32_t aFlags);
+  [noscript, notxpcom] boolean startDecodingWithSize([const] in nsIntSize aSize);
 
   /**
    * Locks an image. If the image does not exist yet, locks it once it becomes

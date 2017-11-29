@@ -376,6 +376,7 @@ private:
 
 private: // data
   nsIntSize                  mSize;
+  nsIntSize                  mWantFullDecodeSize;
   nsTArray<nsIntSize>        mNativeSizes;
   Orientation                mOrientation;
 
@@ -466,6 +467,8 @@ private: // data
   bool CanDiscard();
 
   bool IsOpaque();
+
+  void SetWantFullDecode(const gfx::IntSize& aSize);
 
   DrawableSurface RequestDecodeForSizeInternal(const gfx::IntSize& aSize, uint32_t aFlags);
 

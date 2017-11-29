@@ -229,13 +229,14 @@ protected:
                         const nsRect& aDirtyRect, imgIContainer* aImage,
                         uint32_t aFlags);
 
+public:
   /**
    * If we're ready to decode - that is, if our current request's image is
    * available and our decoding heuristics are satisfied - then trigger a decode
    * for our image at the size we predict it will be drawn next time it's
    * painted.
    */
-  void MaybeDecodeForPredictedSize();
+  nsresult MaybeDecodeForPredictedSize(bool aRequireImage = true);
 
 protected:
   friend class nsImageListener;

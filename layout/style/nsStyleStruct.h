@@ -510,7 +510,7 @@ struct nsStyleImage
    * IsComplete because IsComplete may not be up to date if notifications
    * from decoding are pending because they are being sent async.
    */
-  bool StartDecoding() const;
+  bool StartDecoding(const nsIntSize& aSize) const;
   /**
    * @return true if the item is definitely opaque --- i.e., paints every
    * pixel within its bounds opaquely, and the bounds contains at least a pixel.

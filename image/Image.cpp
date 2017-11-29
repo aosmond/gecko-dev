@@ -112,6 +112,14 @@ ImageResource::GetImageContainerImpl(LayerManager* aManager,
     SendOnUnlockedDraw(aFlags);
   }
 
+  printf_stderr("[AO][%p] GetImageContainerImpl -- %s\n", this, mURI ? mURI->Spec() : "<null>");
+  printf_stderr("[AO][%p] GetImageContainerImpl -- %dx%d -> %dx%d, flags %d, svg context %d\n",
+    this, aSize.width, aSize.height, size.width, size.height, aFlags, aSVGContext.isSome());
+
+  if (mURI && strcmp(mURI->Spec(), "https://abs.twimg.com/emoji/v2/72x72/1f9d0.png") == 0) {
+    printf_stderr("[AO] break me\n");
+  }
+
   uint32_t flags = (aFlags & ~(FLAG_SYNC_DECODE |
                                FLAG_SYNC_DECODE_IF_FAST)) | FLAG_ASYNC_NOTIFY;
   RefPtr<layers::ImageContainer> container;
@@ -139,6 +147,7 @@ ImageResource::GetImageContainerImpl(LayerManager* aManager,
       case DrawResult::SUCCESS:
       case DrawResult::BAD_IMAGE:
       case DrawResult::BAD_ARGS:
+        printf_stderr("[AO][%p] GetImageContainerImpl -- container %p\n", this, container.get());
         return container.forget();
       case DrawResult::NOT_READY:
       case DrawResult::INCOMPLETE:
@@ -168,6 +177,7 @@ ImageResource::GetImageContainerImpl(LayerManager* aManager,
   // factor-of-2 mode). In that case we don't want to create an entry for this
   // specific size, but rather re-use the entry for the substituted size.
   if (bestSize != size) {
+    printf_stderr("[AO][%p] GetImageContainerImpl -- best %dx%d\n", this, bestSize.width, bestSize.height);
     MOZ_ASSERT(!bestSize.IsEmpty());
 
     // We can only remove the entry if we no longer have a container, because if
@@ -196,6 +206,7 @@ ImageResource::GetImageContainerImpl(LayerManager* aManager,
             case DrawResult::SUCCESS:
             case DrawResult::BAD_IMAGE:
             case DrawResult::BAD_ARGS:
+              printf_stderr("[AO][%p] GetImageContainerImpl -- container %p\n", this, container.get());
               return container.forget();
             case DrawResult::NOT_READY:
             case DrawResult::INCOMPLETE:
@@ -227,6 +238,7 @@ ImageResource::GetImageContainerImpl(LayerManager* aManager,
     }
   }
 
+  printf_stderr("[AO][%p] GetImageContainerImpl -- container %p, set\n", this, container.get());
   SetCurrentImage(container, surface, true);
   entry->mLastDrawResult = drawResult;
   return container.forget();
@@ -251,6 +263,8 @@ ImageResource::UpdateImageContainer()
       // managed to convert the weak reference into a strong reference, that
       // means that an imagelib user still is holding onto the container. thus
       // we cannot consolidate and must keep updating the duplicate container.
+      printf_stderr("[AO][%p] GetImageContainerImpl -- update container %p, size %dx%d, best %dx%d\n",
+          this, container.get(), entry.mSize.width, entry.mSize.height, bestSize.width, bestSize.height);
       SetCurrentImage(container, surface, false);
     } else {
       // Stop tracking if our weak pointer to the image container was freed.
