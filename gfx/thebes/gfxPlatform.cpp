@@ -745,8 +745,9 @@ gfxPlatform::Init()
 #else
     #error "No gfxPlatform implementation available"
 #endif
-    gPlatform->InitAcceleration();
+    gPlatform->InitAccelerationPre();
     gPlatform->InitWebRenderConfig();
+    gPlatform->InitAccelerationPost();
     gPlatform->InitOMTPConfig();
 
     if (gfxConfig::IsEnabled(Feature::GPU_PROCESS)) {
@@ -2308,7 +2309,7 @@ gfxPlatform::UpdateCanUseHardwareVideoDecoding()
 }
 
 void
-gfxPlatform::InitAcceleration()
+gfxPlatform::InitAccelerationPre()
 {
   if (sLayersAccelerationPrefsInitialized) {
     return;

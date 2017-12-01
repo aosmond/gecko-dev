@@ -340,9 +340,9 @@ UpdateANGLEConfig()
 }
 
 void
-gfxWindowsPlatform::InitAcceleration()
+gfxWindowsPlatform::InitAccelerationPre()
 {
-  gfxPlatform::InitAcceleration();
+  gfxPlatform::InitAccelerationPre();
 
   // Set up the D3D11 feature levels we can ask for.
   if (IsWin8OrLater()) {
@@ -358,6 +358,12 @@ gfxWindowsPlatform::InitAcceleration()
   InitializeConfig();
   InitializeDevices();
   UpdateANGLEConfig();
+}
+
+void
+gfxWindowsPlatform::InitAccelerationPost()
+{
+  gfxPlatform::InitAccelerationPost();
   UpdateRenderMode();
 
   // If we have Skia and we didn't init dwrite already, do it now.
@@ -436,7 +442,8 @@ gfxWindowsPlatform::UpdateBackendPrefs()
   uint32_t contentMask = BackendTypeBit(BackendType::CAIRO) |
                          BackendTypeBit(BackendType::SKIA);
   BackendType defaultBackend = BackendType::SKIA;
-  if (gfxConfig::IsEnabled(Feature::DIRECT2D) && Factory::HasD2D1Device()) {
+  if (gfxConfig::IsEnabled(Feature::DIRECT2D) &&
+      Factory::HasD2D1Device() && !gfxVars::UseWebRender()) {
     contentMask |= BackendTypeBit(BackendType::DIRECT2D1_1);
     canvasMask |= BackendTypeBit(BackendType::DIRECT2D1_1);
     defaultBackend = BackendType::DIRECT2D1_1;

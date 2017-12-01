@@ -721,7 +721,8 @@ protected:
     gfxPlatform();
     virtual ~gfxPlatform();
 
-    virtual void InitAcceleration();
+    virtual void InitAccelerationPre();
+    virtual void InitAccelerationPost() { }
 
     /**
      * Called immediately before deleting the gfxPlatform object.
