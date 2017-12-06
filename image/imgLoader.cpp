@@ -1768,7 +1768,7 @@ imgLoader::ValidateRequestWithNewChannel(imgRequest* request,
       // In the mean time, we must defer notifications because we are added to
       // the imgRequest's proxy list, and we can get extra notifications
       // resulting from methods such as StartDecoding(). See bug 579122.
-      proxy->SetNotificationsDeferred(true);
+      //proxy->SetNotificationsDeferred(true);
 
       // Attach the proxy without notifying
       request->GetValidator()->AddProxy(proxy);
@@ -1834,7 +1834,7 @@ imgLoader::ValidateRequestWithNewChannel(imgRequest* request,
   // In the mean time, we must defer notifications because we are added to
   // the imgRequest's proxy list, and we can get extra notifications
   // resulting from methods such as StartDecoding(). See bug 579122.
-  req->SetNotificationsDeferred(true);
+  //req->SetNotificationsDeferred(true);
 
   // Add the proxy without notifying
   hvc->AddProxy(req);
@@ -2988,10 +2988,11 @@ imgCacheValidator::OnStartRequest(nsIRequest* aRequest, nsISupports* ctxt)
 
         // Proxies waiting on cache validation should be deferring
         // notifications. Undefer them.
+        /*
         MOZ_ASSERT(proxy->NotificationsDeferred(),
                    "Proxies waiting on cache validation should be "
-                   "deferring notifications!");
-        proxy->SetNotificationsDeferred(false);
+                   "deferring notifications!");*/
+        //proxy->SetNotificationsDeferred(false);
 
         // Notify synchronously, because we're already in OnStartRequest, an
         // asynchronously-called function.
@@ -3062,7 +3063,7 @@ imgCacheValidator::OnStartRequest(nsIRequest* aRequest, nsISupports* ctxt)
 
     // Notify synchronously, because we're already in OnStartRequest, an
     // asynchronously-called function.
-    proxy->SetNotificationsDeferred(false);
+    //proxy->SetNotificationsDeferred(false);
     proxy->SyncNotifyListener();
   }
 

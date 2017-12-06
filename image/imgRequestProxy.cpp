@@ -164,13 +164,13 @@ imgRequestProxy::~imgRequestProxy()
   NullOutListener();
 
   if (GetOwner()) {
-    /* Call RemoveProxy with a successful status.  This will keep the
+    /* Call RemoveFromOwner with a successful status.  This will keep the
        channel, if still downloading data, from being canceled if 'this' is
        the last observer.  This allows the image to continue to download and
        be cached even if no one is using it currently.
     */
     mCanceled = true;
-    GetOwner()->RemoveProxy(this, NS_OK);
+    RemoveFromOwner(NS_OK);
   }
 
   RemoveFromLoadGroup();
@@ -237,6 +237,7 @@ imgRequestProxy::ChangeOwner(imgRequest* aNewOwner)
   GetOwner()->RemoveProxy(this, NS_OK);
 
   mBehaviour->SetOwner(aNewOwner);
+  MOZ_ASSERT(!GetValidator(), "New owner also is being validated!");
 
   // If we were locked, apply the locks here
   for (uint32_t i = 0; i < oldLockCount; i++) {
@@ -351,11 +352,28 @@ imgRequestProxy::AddToOwner(nsIDocument* aLoadingDocument)
     mEventTarget = do_GetMainThread();
   }
 
-  if (!GetOwner()) {
+  imgRequest* owner = GetOwner();
+  if (!owner) {
     return;
   }
 
-  GetOwner()->AddProxy(this);
+  owner->AddProxy(this);
+}
+
+void
+imgRequestProxy::RemoveFromOwner(nsresult aStatus)
+{
+  imgRequest* owner = GetOwner();
+  if (!owner) {
+    return;
+  }
+
+  imgCacheValidator* validator = owner->GetValidator();
+  if (validator) {
+    validator->RemoveProxy(this);
+  }
+
+  owner->RemoveProxy(this, aStatus);
 }
 
 void
@@ -492,12 +510,9 @@ imgRequestProxy::Cancel(nsresult status)
 }
 
 void
-imgRequestProxy::DoCancel(nsresult status)
+imgRequestProxy::DoCancel(nsresult aStatus)
 {
-  if (GetOwner()) {
-    GetOwner()->RemoveProxy(this, status);
-  }
-
+  RemoveFromOwner(aStatus);
   RemoveFromLoadGroup();
   NullOutListener();
 }
@@ -519,17 +534,7 @@ imgRequestProxy::CancelAndForgetObserver(nsresult aStatus)
 
   mCanceled = true;
   mForceDispatchLoadGroup = true;
-
-  imgRequest* owner = GetOwner();
-  if (owner) {
-    imgCacheValidator* validator = owner->GetValidator();
-    if (validator) {
-      validator->RemoveProxy(this);
-    }
-
-    owner->RemoveProxy(this, aStatus);
-  }
-
+  RemoveFromOwner(aStatus);
   RemoveFromLoadGroup();
   mForceDispatchLoadGroup = false;
 
@@ -878,7 +883,6 @@ imgRequestProxy::PerformClone(imgINotificationObserver* aObserver,
     // know when the validation will complete, and if it will cause us to
     // discard our cached state anyways. We are probably already blocked by the
     // original LoadImage(WithChannel) request in any event.
-    clone->SetNotificationsDeferred(true);
     validator->AddProxy(clone);
   } else {
     // We only want to add the request to the load group of the owning document
@@ -1200,6 +1204,11 @@ imgRequestProxy::NotifyListener()
   // processing when we receive notifications (like OnStopRequest()), and we
   // need to check mCanceled everywhere too.
 
+  if (NotificationsDeferred()) {
+    // We are either validating, or already have a notify pending.
+    return;
+  }
+
   RefPtr<ProgressTracker> progressTracker = GetProgressTracker();
   if (GetOwner()) {
     // Send the notifications to our listener asynchronously.
@@ -1220,6 +1229,7 @@ imgRequestProxy::SyncNotifyListener()
   // instead of through the proxy, but there are several places we do extra
   // processing when we receive notifications (like OnStopRequest()), and we
   // need to check mCanceled everywhere too.
+  MOZ_ASSERT(!NotificationsDeferred());
 
   RefPtr<ProgressTracker> progressTracker = GetProgressTracker();
   progressTracker->SyncNotify(this);

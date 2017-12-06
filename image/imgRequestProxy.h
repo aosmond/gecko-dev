@@ -113,11 +113,11 @@ public:
 
   // Whether we want notifications from ProgressTracker to be deferred until
   // an event it has scheduled has been fired.
-  virtual bool NotificationsDeferred() const override
+  virtual bool NotificationsDeferred() const final override
   {
-    return mDeferNotifications;
+    return mDeferNotifications || GetValidator();
   }
-  virtual void SetNotificationsDeferred(bool aDeferNotifications) override
+  void SetNotificationsDeferred(bool aDeferNotifications) final override
   {
     mDeferNotifications = aDeferNotifications;
   }
@@ -214,6 +214,9 @@ private:
   friend class imgCacheValidator;
 
   void AddToOwner(nsIDocument* aLoadingDocument);
+
+  /* Remove the proxy from its owner and validator. */
+  void RemoveFromOwner(nsresult aStatus);
 
   nsresult DispatchWithTargetIfAvailable(already_AddRefed<nsIRunnable> aEvent);
   void DispatchWithTarget(already_AddRefed<nsIRunnable> aEvent);
