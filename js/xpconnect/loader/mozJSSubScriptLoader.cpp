@@ -535,7 +535,7 @@ mozJSSubScriptLoader::ReadScript(nsIURI* uri,
     int64_t len = -1;
 
     rv = chan->GetContentLength(&len);
-    if (NS_FAILED(rv) || len == -1) {
+    if (NS_FAILED(rv) || len <= -1) {
         ReportError(cx, LOAD_ERROR_NOCONTENT, uri);
         return false;
     }

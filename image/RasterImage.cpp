@@ -66,6 +66,14 @@ NS_IMPL_ISUPPORTS(RasterImage, imgIContainer, nsIProperties,
                   imgIContainerDebug)
 #endif
 
+static bool
+RasterDebug(RasterImage* aImage)
+{
+  MOZ_ASSERT(aImage);
+  ImageURL* url = aImage->GetURI();
+  return url && strcmp(url->Spec(), "http://web-platform.test:8000/css/css-backgrounds/support/100x100-blue-and-orange.png") == 0;
+}
+
 //******************************************************************************
 RasterImage::RasterImage(ImageURL* aURI /* = nullptr */) :
   ImageResource(aURI), // invoke superclass's constructor
@@ -87,11 +95,18 @@ RasterImage::RasterImage(ImageURL* aURI /* = nullptr */) :
   mAnimationFinished(false),
   mWantFullDecode(false)
 {
+  if (RasterDebug(this)) {
+    printf_stderr("[AO][%p] RasterImage\n", this);
+  }
 }
 
 //******************************************************************************
 RasterImage::~RasterImage()
 {
+  if (RasterDebug(this)) {
+    printf_stderr("[AO][%p] ~RasterImage\n", this);
+  }
+
   // Make sure our SourceBuffer is marked as complete. This will ensure that any
   // outstanding decoders terminate.
   if (!mSourceBuffer->IsComplete()) {
@@ -375,6 +390,9 @@ RasterImage::LookupFrame(const IntSize& aSize,
 
     // If we can or did sync decode, we should already have the frame.
     if (ranSync || (aFlags & FLAG_SYNC_DECODE)) {
+      if (RasterDebug(this)) {
+        printf_stderr("[AO][%p] LookupFrame -- sync decoded after miss, type %u result %d\n", this, uint32_t(result.Type()), bool(result));
+      }
       result = LookupFrameInternal(requestedSize, aFlags, aPlaybackType);
     }
   }
@@ -474,6 +492,10 @@ void
 RasterImage::OnSurfaceDiscarded(const SurfaceKey& aSurfaceKey)
 {
   MOZ_ASSERT(mProgressTracker);
+
+  if (RasterDebug(this)) {
+    printf_stderr("[AO][%p] OnSurfaceDiscarded -- size %dx%d\n", this, aSurfaceKey.Size().width, aSurfaceKey.Size().height);
+  }
 
   bool animatedFramesDiscarded =
     mAnimationState && aSurfaceKey.Playback() == PlaybackType::eAnimated;
@@ -593,6 +615,10 @@ RasterImage::GetFrameInternal(const IntSize& aSize,
 {
   MOZ_ASSERT(aWhichFrame <= FRAME_MAX_VALUE);
 
+  if (RasterDebug(this)) {
+    printf_stderr("[AO][%p] GetFrameInternal -- want size %dx%d\n", this, aSize.width, aSize.height);
+  }
+
   if (aSize.IsEmpty() || aWhichFrame > FRAME_MAX_VALUE) {
     return MakeTuple(DrawResult::BAD_ARGS, aSize,
                      RefPtr<SourceSurface>());
@@ -624,6 +650,12 @@ RasterImage::GetFrameInternal(const IntSize& aSize,
   }
 
   RefPtr<SourceSurface> surface = result.Surface()->GetSourceSurface();
+
+  if (RasterDebug(this) && surface) {
+    IntSize s = surface->GetSize();
+    printf_stderr("[AO][%p] GetFrameInternal -- got size %dx%d\n", this, s.width, s.height);
+  }
+
   if (!result.Surface()->IsFinished()) {
     return MakeTuple(DrawResult::INCOMPLETE, suggestedSize, Move(surface));
   }
@@ -1069,6 +1101,10 @@ RasterImage::Discard()
   MOZ_ASSERT(!mAnimationState || gfxPrefs::ImageMemAnimatedDiscardable(),
     "Asked to discard for animated image");
 
+  if (RasterDebug(this)) {
+    printf_stderr("[AO][%p] Discard\n", this);
+  }
+
   // Delete all the decoded frames.
   SurfaceCache::RemoveImage(ImageKey(this));
 
@@ -1273,6 +1309,9 @@ RasterImage::Decode(const IntSize& aSize,
   }
 
   mDecodeCount++;
+  if (RasterDebug(this)) {
+    printf_stderr("[AO][%p] Decode -- size %dx%d flags %u\n", this, aSize.width, aSize.height, aFlags);
+  }
 
   // We're ready to decode; start the decoder.
   return LaunchDecodingTask(task, this, aFlags, mAllSourceData);
@@ -1396,6 +1435,9 @@ RasterImage::DrawInternal(DrawableSurface&& aSurface,
   // By now we may have a frame with the requested size. If not, we need to
   // adjust the drawing parameters accordingly.
   IntSize finalSize = aSurface->GetImageSize();
+  if (RasterDebug(this)) {
+    printf_stderr("[AO][%p] DrawInternal -- got size %dx%d\n", this, finalSize.width, finalSize.height);
+  }
   bool couldRedecodeForBetterFrame = false;
   if (finalSize != aSize) {
     gfx::Size scale(double(aSize.width) / finalSize.width,
@@ -1453,12 +1495,20 @@ RasterImage::Draw(gfxContext* aContext,
     SendOnUnlockedDraw(aFlags);
   }
 
-
   // If we're not using SamplingFilter::GOOD, we shouldn't high-quality scale or
   // downscale during decode.
   uint32_t flags = aSamplingFilter == SamplingFilter::GOOD
                  ? aFlags
                  : aFlags & ~FLAG_HIGH_QUALITY_SCALING;
+
+  if (RasterDebug(this)) {
+    printf_stderr("[AO][%p] Draw -- want size %dx%d\n", this, aSize.width, aSize.height);
+    if (aSize != mSize && (flags & FLAG_HIGH_QUALITY_SCALING) != 0 && (flags & FLAG_SYNC_DECODE) == 0) {
+      printf_stderr("[AO][%p] Draw -- force sync decode of native size start\n", this);
+      LookupResult result = LookupFrame(mSize, FLAG_SYNC_DECODE | FLAG_ASYNC_NOTIFY, ToPlaybackType(aWhichFrame));
+      printf_stderr("[AO][%p] Draw -- force sync decode of native size end\n", this);
+    }
+  }
 
   LookupResult result =
     LookupFrame(aSize, flags, ToPlaybackType(aWhichFrame));
@@ -1649,6 +1699,10 @@ RasterImage::NotifyProgress(Progress aProgress,
                               /* = DefaultSurfaceFlags() */)
 {
   MOZ_ASSERT(NS_IsMainThread());
+  if (RasterDebug(this)) {
+    printf_stderr("[AO][%p] NotifyProgress -- invalid %dx%d, surface flags %u, decoder flags %u, progress %u\n",
+      this, aInvalidRect.width, aInvalidRect.height, uint32_t(aSurfaceFlags), uint32_t(aDecoderFlags), aProgress);
+  }
 
   // Ensure that we stay alive long enough to finish notifying.
   RefPtr<RasterImage> image = this;
@@ -1689,6 +1743,10 @@ RasterImage::NotifyDecodeComplete(const DecoderFinalStatus& aStatus,
                                   SurfaceFlags aSurfaceFlags)
 {
   MOZ_ASSERT(NS_IsMainThread());
+  if (RasterDebug(this)) {
+    printf_stderr("[AO][%p] NotifyDecodeComplete -- invalid %dx%d, surface flags %u, decoder flags %u, progress %u\n",
+      this, aInvalidRect.width, aInvalidRect.height, uint32_t(aSurfaceFlags), uint32_t(aDecoderFlags), aProgress);
+  }
 
   // If the decoder detected an error, log it to the error console.
   if (aStatus.mShouldReportError) {

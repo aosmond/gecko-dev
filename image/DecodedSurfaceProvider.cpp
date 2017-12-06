@@ -5,6 +5,7 @@
 
 #include "DecodedSurfaceProvider.h"
 
+#include <unistd.h>
 #include "gfxPrefs.h"
 #include "nsProxyRelease.h"
 
@@ -133,6 +134,19 @@ DecodedSurfaceProvider::Run()
   if (!mDecoder || !mImage) {
     MOZ_ASSERT_UNREACHABLE("Running after decoding finished?");
     return;
+  }
+
+  ImageURL* url = mImage->GetURI();
+  if (url && strcmp(url->Spec(), "http://web-platform.test:8000/css/css-backgrounds/support/100x100-blue-and-orange.png") == 0) {
+    IntSize s = GetSurfaceKey().Size();
+    if (s.width == 50 && s.height == 50) {
+      if (NS_IsMainThread()) {
+        printf_stderr("[AO][%p] delay decode, but cannot\n", mImage.get());
+      } else {
+        printf_stderr("[AO][%p] delay decode, but will not\n", mImage.get());
+        //sleep(3);
+      }
+    }
   }
 
   // Run the decoder.

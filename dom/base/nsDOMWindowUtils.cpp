@@ -387,11 +387,14 @@ nsDOMWindowUtils::UpdateLayerTree()
     RefPtr<nsViewManager> vm = presShell->GetViewManager();
     nsView* view = vm->GetRootView();
     if (view) {
+      printf_stderr("[AO] UpdateLayerTree -- paint\n");
       presShell->Paint(view, view->GetBounds(),
           nsIPresShell::PAINT_LAYERS | nsIPresShell::PAINT_SYNC_DECODE_IMAGES);
+      printf_stderr("[AO] UpdateLayerTree -- wait\n");
       presShell->GetLayerManager()->WaitOnTransactionProcessed();
     }
   }
+  printf_stderr("[AO] UpdateLayerTree -- exit\n");
   return NS_OK;
 }
 
