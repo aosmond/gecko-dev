@@ -564,7 +564,10 @@ imgRequestProxy::StartDecodingWithResult(uint32_t aFlags)
 
   RefPtr<Image> image = GetImage();
   if (image) {
-    return image->StartDecodingWithResult(aFlags);
+    // Even if we have a complete frame at this moment, do not claim so if we
+    // are still validating. We may end up discarding the cache while the
+    // caller assumes that any future Draw calls will succeed.
+    return image->StartDecodingWithResult(aFlags) && !GetValidator();
   }
 
   if (GetOwner()) {
@@ -717,8 +720,16 @@ imgRequestProxy::GetImage(imgIContainer** aImage)
 NS_IMETHODIMP
 imgRequestProxy::GetImageStatus(uint32_t* aStatus)
 {
-  RefPtr<ProgressTracker> progressTracker = GetProgressTracker();
-  *aStatus = progressTracker->GetImageStatus();
+  if (GetValidator()) {
+    // We are currently validating the image, and so our status could revert if
+    // we discard the cache. We should also be deferring notifications, such
+    // that the caller will be notified when validation completes. Rather than
+    // risk misleading the caller, return nothing.
+    *aStatus = imgIRequest::STATUS_NONE;
+  } else {
+    RefPtr<ProgressTracker> progressTracker = GetProgressTracker();
+    *aStatus = progressTracker->GetImageStatus();
+  }
 
   return NS_OK;
 }
@@ -859,7 +870,8 @@ imgRequestProxy::PerformClone(imgINotificationObserver* aObserver,
   // surprised.
   NS_ADDREF(*aClone = clone);
 
-  if (GetOwner() && GetOwner()->GetValidator()) {
+  imgCacheValidator* validator = GetValidator();
+  if (validator) {
     // Note that if we have a validator, we don't want to issue notifications at
     // here because we want to defer until that completes. AddProxy will add us
     // to the load group; we cannot avoid that in this case, because we don't
@@ -867,7 +879,7 @@ imgRequestProxy::PerformClone(imgINotificationObserver* aObserver,
     // discard our cached state anyways. We are probably already blocked by the
     // original LoadImage(WithChannel) request in any event.
     clone->SetNotificationsDeferred(true);
-    GetOwner()->GetValidator()->AddProxy(clone);
+    validator->AddProxy(clone);
   } else {
     // We only want to add the request to the load group of the owning document
     // if it is still in progress. Some callers cannot handle a supurious load
@@ -1268,6 +1280,16 @@ imgRequest*
 imgRequestProxy::GetOwner() const
 {
   return mBehaviour->GetOwner();
+}
+
+imgCacheValidator*
+imgRequestProxy::GetValidator() const
+{
+  imgRequest* owner = GetOwner();
+  if (!owner) {
+    return nullptr;
+  }
+  return owner->GetValidator();
 }
 
 ////////////////// imgRequestProxyStatic methods

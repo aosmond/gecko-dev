@@ -30,6 +30,7 @@
     {0x8f, 0x65, 0x9c, 0x46, 0x2e, 0xe2, 0xbc, 0x95} \
 }
 
+class imgCacheValidator;
 class imgINotificationObserver;
 class imgStatusNotifyRunnable;
 class ProxyBehaviour;
@@ -194,6 +195,7 @@ protected:
   already_AddRefed<Image> GetImage() const;
   bool HasImage() const;
   imgRequest* GetOwner() const;
+  imgCacheValidator* GetValidator() const;
 
   nsresult PerformClone(imgINotificationObserver* aObserver,
                         nsIDocument* aLoadingDocument,
