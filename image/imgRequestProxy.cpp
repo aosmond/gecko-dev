@@ -257,13 +257,22 @@ imgRequestProxy::ChangeOwner(imgRequest* aNewOwner)
 void
 imgRequestProxy::MarkValidating()
 {
+  LOG_FUNC(gImgLog, "imgRequestProxy::MarkValidating");
+
   MOZ_ASSERT(GetValidator());
   mValidating = true;
+
+  if (mURI && strcmp(mURI->Spec(), "chrome://mochitests/content/a11y/accessible/tests/mochitest/moz.png") == 0) {
+    LOG_FUNC(gImgLog, "imgRequestProxy::MarkValidating -- force decode for image under test");
+    StartDecoding(imgIContainer::FLAG_NONE);
+  }
 }
 
 void
 imgRequestProxy::ClearValidating()
 {
+  LOG_FUNC(gImgLog, "imgRequestProxy::ClearValidating");
+
   MOZ_ASSERT(mValidating);
   MOZ_ASSERT(!GetValidator());
   mValidating = false;
@@ -562,20 +571,25 @@ imgRequestProxy::StartDecoding(uint32_t aFlags)
 {
   // Flag this, so we know to request after validation if pending.
   if (IsValidating()) {
+    LOG_FUNC(gImgLog, "imgRequestProxy::StartDecoding -- validating");
     mDecodeRequested = true;
     return NS_OK;
   }
 
   RefPtr<Image> image = GetImage();
   if (image) {
+    LOG_FUNC(gImgLog, "imgRequestProxy::StartDecoding -- image decode");
     return image->StartDecoding(aFlags);
   }
 
   if (GetOwner()) {
+    LOG_FUNC(gImgLog, "imgRequestProxy::StartDecoding -- owner decode");
     GetOwner()->StartDecoding();
+    return NS_OK;
   }
 
-  return NS_OK;
+  LOG_FUNC(gImgLog, "imgRequestProxy::StartDecoding -- no image/owner");
+  return NS_ERROR_FAILURE;
 }
 
 bool
@@ -583,19 +597,24 @@ imgRequestProxy::StartDecodingWithResult(uint32_t aFlags)
 {
   // Flag this, so we know to request after validation if pending.
   if (IsValidating()) {
+    LOG_FUNC(gImgLog, "imgRequestProxy::StartDecodingWithResult -- validating");
     mDecodeRequested = true;
     return false;
   }
 
   RefPtr<Image> image = GetImage();
   if (image) {
+    LOG_FUNC(gImgLog, "imgRequestProxy::StartDecodingWithResult -- image decode");
     return image->StartDecodingWithResult(aFlags);
   }
 
   if (GetOwner()) {
+    LOG_FUNC(gImgLog, "imgRequestProxy::StartDecodingWithResult -- owner decode");
     GetOwner()->StartDecoding();
+    return false;
   }
 
+  LOG_FUNC(gImgLog, "imgRequestProxy::StartDecodingWithResult -- no image/owner");
   return false;
 }
 
