@@ -772,6 +772,8 @@ imgRequestProxy::GetImageStatus(uint32_t* aStatus)
     *aStatus = progressTracker->GetImageStatus();
   }
 
+  LOG_FUNC_WITH_PARAM(gImgLog, "imgRequestProxy::GetImageStatus", "status",
+                      *aStatus);
   return NS_OK;
 }
 
