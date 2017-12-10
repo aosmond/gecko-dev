@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>HTML a11y spec tests</title>
+  <link id="link" rel="stylesheet" type="text/css"
+        href="chrome://mochikit/content/tests/SimpleTest/test.css" />
+
+  <script type="application/javascript"
+          src="chrome://mochikit/content/tests/SimpleTest/SimpleTest.js"></script>
+
+  <script type="application/javascript"
+          src="../common.js"></script>
+  <script type="application/javascript"
+          src="../actions.js"></script>
+  <script type="application/javascript"
+          src="../role.js"></script>
+  <script type="application/javascript"
+          src="../states.js"></script>
+  <script type="application/javascript"
+          src="../attributes.js"></script>
+  <script type="application/javascript"
+          src="../relations.js"></script>
+  <script type="application/javascript"
+          src="../name.js"></script>
+
+  <script type="application/javascript">
+    function doTest() {
+      // ////////////////////////////////////////////////////////////////////////
+      // HTML:figure and HTML:figcaption
+
+      obj = {
+        role: ROLE_FIGURE,
+        attributes: { "xml-roles": "figure" },
+        relations: {
+          RELATION_LABELLED_BY: "figcaption"
+        },
+        children: [
+          { role: ROLE_GRAPHIC },
+          {
+            role: ROLE_CAPTION,
+            relations: {
+              RELATION_LABEL_FOR: "figure"
+            },
+            interfaces: [ nsIAccessibleText, nsIAccessibleHyperText ]
+          }
+        ]
+      };
+      testElm("figure", obj);
+
+      SimpleTest.finish();
+    }
+
+    SimpleTest.waitForExplicitFinish();
+    addA11yLoadEvent(doTest);
+    setTestPluginEnabledState(SpecialPowers.Ci.nsIPluginTag.STATE_ENABLED);
+
+    </script>
+</head>
+<body>
+
+  <map name="atoz_map">
+    <area id="area_href"
+          href="http://www.bbc.co.uk/radio4/atoz/index.shtml#b"
+          coords="17,0,30,14" alt="b" shape="rect">
+    <area id="area_nohref"
+          coords="0,0,13,14" alt="a" shape="rect">
+  </map>
+  <img id="imgmap" width="447" height="15"
+       usemap="#atoz_map"
+       src="../letters.gif">
+
+  <figure id="figure">
+    <img src="../moz.png" alt="An awesome picture">
+    <figcaption id="figcaption">Caption for the awesome picture</figcaption>
+  </figure>
+
+  <img id="img" src="../moz.png">
+
+</video>
+</body>
+</html>

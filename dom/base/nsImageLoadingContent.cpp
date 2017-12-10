@@ -1028,6 +1028,8 @@ nsImageLoadingContent::LoadImage(nsIURI* aNewURI,
     // already done.  In that situation we have to synchronously switch that
     // request to being the current request, because websites depend on that
     // behavior.
+    printf_stderr("[AO] nsImageLoadingContent::LoadImage -- req %p pending %p current %p\n",
+      req.get(), mPendingRequest.get(), mCurrentRequest.get());
     if (req == mPendingRequest) {
       uint32_t pendingLoadStatus;
       rv = req->GetImageStatus(&pendingLoadStatus);

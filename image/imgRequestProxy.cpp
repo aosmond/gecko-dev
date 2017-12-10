@@ -261,11 +261,6 @@ imgRequestProxy::MarkValidating()
 
   MOZ_ASSERT(GetValidator());
   mValidating = true;
-
-  if (mURI && strcmp(mURI->Spec(), "chrome://mochitests/content/a11y/accessible/tests/mochitest/moz.png") == 0) {
-    LOG_FUNC(gImgLog, "imgRequestProxy::MarkValidating -- force decode for image under test");
-    StartDecoding(imgIContainer::FLAG_NONE);
-  }
 }
 
 void
@@ -761,13 +756,16 @@ imgRequestProxy::GetImage(imgIContainer** aImage)
 NS_IMETHODIMP
 imgRequestProxy::GetImageStatus(uint32_t* aStatus)
 {
+#if 0
   if (IsValidating()) {
     // We are currently validating the image, and so our status could revert if
     // we discard the cache. We should also be deferring notifications, such
     // that the caller will be notified when validation completes. Rather than
     // risk misleading the caller, return nothing.
     *aStatus = imgIRequest::STATUS_NONE;
-  } else {
+  } else
+#endif
+  {
     RefPtr<ProgressTracker> progressTracker = GetProgressTracker();
     *aStatus = progressTracker->GetImageStatus();
   }

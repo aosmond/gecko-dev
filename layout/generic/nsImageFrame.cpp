@@ -1038,6 +1038,8 @@ nsImageFrame::Reflow(nsPresContext*          aPresContext,
     if (currentRequest) {
       currentRequest->GetImageStatus(&loadStatus);
     }
+    printf_stderr("[AO] nsImageFrame::Reflow -- current request %p status %u\n",
+      static_cast<imgRequestProxy*>(currentRequest.get()), loadStatus);
   }
   if (aPresContext->IsPaginated() &&
       ((loadStatus & imgIRequest::STATUS_SIZE_AVAILABLE) || (mState & IMAGE_SIZECONSTRAINED)) &&
