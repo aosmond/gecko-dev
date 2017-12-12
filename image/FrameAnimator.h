@@ -9,6 +9,7 @@
 
 #include "mozilla/Maybe.h"
 #include "mozilla/MemoryReporting.h"
+#include "mozilla/Telemetry.h"
 #include "mozilla/TimeStamp.h"
 #include "gfxTypes.h"
 #include "imgFrame.h"
@@ -39,6 +40,7 @@ public:
     , mCompositedFrameInvalid(false)
     , mCompositedFrameRequested(false)
     , mDiscarded(false)
+    , mHasLooped(false)
   { }
 
   /**
@@ -187,6 +189,9 @@ private:
   //! the time that the animation advanced to the current frame
   TimeStamp mCurrentAnimationFrameTime;
 
+  //! the time that the animation spent blending on the first loop.
+  TimeDuration mBlendTime;
+
   //! The number of frames of animation this image has.
   uint32_t mFrameCount;
 
@@ -233,18 +238,18 @@ private:
    */
 
   //! Whether this image has been decoded at least once.
-  bool mHasBeenDecoded;
+  bool mHasBeenDecoded : 1;
 
   //! Whether this image has ever requested a decode.
-  bool mHasRequestedDecode;
+  bool mHasRequestedDecode : 1;
 
   //! Whether this image is currently fully decoded.
-  bool mIsCurrentlyDecoded;
+  bool mIsCurrentlyDecoded : 1;
 
   //! Whether the composited frame is valid to draw to the screen, note that
   //! the composited frame can exist and be filled with image data but not
   //! valid to draw to the screen.
-  bool mCompositedFrameInvalid;
+  bool mCompositedFrameInvalid : 1;
 
   //! Whether the composited frame was requested from the animator since the
   //! last time we advanced the animation.
@@ -252,7 +257,10 @@ private:
 
   //! Whether this image is currently discarded. Only set to true after the
   //! image has been decoded at least once.
-  bool mDiscarded;
+  bool mDiscarded : 1;
+
+  //! Whether the image has completed a loop of the animation at least once.
+  bool mHasLooped : 1;
 };
 
 /**
