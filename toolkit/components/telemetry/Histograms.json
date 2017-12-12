@@ -1406,11 +1406,22 @@
     "n_buckets": 100,
     "description": "Time spent decoding an image (us)"
   },
+  "IMAGE_ANIMATED_BLEND_TIME": {
+    "record_in_processes": ["main", "content"],
+    "alert_emails": ["gfx-telemetry-alerts@mozilla.com"],
+    "bug_numbers": [1337111],
+    "expires_in_version": "63",
+    "kind": "exponential",
+    "low": 50,
+    "high": 50000000,
+    "n_buckets": 100,
+    "description": "Time spent blending an animated image frame (us)"
+  },
   "IMAGE_ANIMATED_DECODE_TIME": {
     "record_in_processes": ["main", "content"],
     "alert_emails": ["gfx-telemetry-alerts@mozilla.com"],
-    "bug_numbers": [1347302],
-    "expires_in_version": "57",
+    "bug_numbers": [1347302, 1337111],
+    "expires_in_version": "63",
     "kind": "exponential",
     "low": 50,
     "high": 50000000,

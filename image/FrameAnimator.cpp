@@ -118,6 +118,7 @@ void
 AnimationState::ResetAnimation()
 {
   mCurrentAnimationFrameIndex = 0;
+  mBlendTime = TimeDuration();
 }
 
 void
@@ -318,10 +319,28 @@ FrameAnimator::AdvanceFrame(AnimationState& aState,
   if (nextFrameIndex == 0) {
     MOZ_ASSERT(nextFrame->IsFullFrame());
     ret.mDirtyRect = aState.FirstFrameRefreshArea();
+    if (!aState.mHasLooped) {
+      Telemetry::Accumulate(Telemetry::IMAGE_ANIMATED_BLEND_TIME,
+                            int32_t(aState.mBlendTime.ToMicroseconds()));
+      aState.mHasLooped = true;
+    }
   } else if (!nextFrame->IsFullFrame()) {
     MOZ_ASSERT(nextFrameIndex == currentFrameIndex + 1);
+
+    TimeStamp startTime;
+    if (!aState.mHasLooped) {
+      startTime = TimeStamp::Now();
+    }
+
     // Change frame
-    if (!DoBlend(aFrames, &ret.mDirtyRect, currentFrameIndex, nextFrameIndex)) {
+    bool success = DoBlend(aFrames, &ret.mDirtyRect,
+                           currentFrameIndex, nextFrameIndex);
+
+    if (!aState.mHasLooped) {
+      aState.mBlendTime += TimeStamp::Now() - startTime;
+    }
+
+    if (!success) {
       // something went wrong, move on to next
       NS_WARNING("FrameAnimator::AdvanceFrame(): Compositing of frame failed");
       nextFrame->SetCompositingFailed(true);
