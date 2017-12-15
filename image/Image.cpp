@@ -59,12 +59,7 @@ ImageResource::SetCurrentImage(ImageContainer* aContainer,
 {
   MOZ_ASSERT(NS_IsMainThread());
   MOZ_ASSERT(aContainer);
-
-  if (!aSurface) {
-    // The OS threw out some or all of our buffer. We'll need to wait for the
-    // redecode (which was automatically triggered by GetFrame) to complete.
-    return;
-  }
+  MOZ_ASSERT(aSurface);
 
   // |image| holds a reference to a SourceSurface which in turn holds a lock on
   // the current frame's data buffer, ensuring that it doesn't get freed as
@@ -215,20 +210,32 @@ ImageResource::GetImageContainerImpl(LayerManager* aManager,
     }
   }
 
-  if (!container) {
-    // We need a new ImageContainer, so create one.
-    container = LayerManager::CreateImageContainer();
+  // We only want to create a new entry/container if we actually got a surface
+  // to insert into the container. The OS may have thrown out some or all of
+  // our buffer. We'll need to wait for the redecode (which was automatically
+  // triggered by GetFrameInternal) to complete. Leave the container untouched.
+  if (surface) {
+    if (!container) {
+      // We need a new ImageContainer, so create one.
+      container = LayerManager::CreateImageContainer();
 
-    if (i >= 0) {
-      entry->mContainer = container;
-    } else {
-      entry = mImageContainers.AppendElement(
-        ImageContainerEntry(bestSize, aSVGContext, container.get(), flags));
+      if (i >= 0) {
+        entry->mContainer = container;
+      } else {
+        entry = mImageContainers.AppendElement(
+          ImageContainerEntry(bestSize, aSVGContext, container.get(), flags));
+      }
     }
+
+    SetCurrentImage(container, surface, true);
   }
 
-  SetCurrentImage(container, surface, true);
-  entry->mLastDrawResult = drawResult;
+  if (entry) {
+    MOZ_ASSERT(surface || (drawResult != DrawResult::SUCCESS &&
+                           drawResult != DrawResult::INCOMPLETE));
+    entry->mLastDrawResult = drawResult;
+  }
+
   return container.forget();
 }
 
@@ -251,7 +258,9 @@ ImageResource::UpdateImageContainer()
       // managed to convert the weak reference into a strong reference, that
       // means that an imagelib user still is holding onto the container. thus
       // we cannot consolidate and must keep updating the duplicate container.
-      SetCurrentImage(container, surface, false);
+      if (surface) {
+        SetCurrentImage(container, surface, false);
+      }
     } else {
       // Stop tracking if our weak pointer to the image container was freed.
       mImageContainers.RemoveElementAt(i);
