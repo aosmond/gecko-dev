@@ -3,6 +3,7 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #include "gtest/gtest.h"
+#include "gtest/MozGTestBench.h"
 
 #include "Common.h"
 #include "AnimationSurfaceProvider.h"
@@ -91,38 +92,90 @@ CheckDecoderResults(const ImageTestCase& aTestCase, Decoder* aDecoder)
                            aTestCase.mFlags & TEST_CASE_IS_FUZZY ? 1 : 0));
 }
 
+static already_AddRefed<Decoder>
+WithSourceBufferDecode(const ImageTestCase& aTestCase,
+                       const Maybe<IntSize>& aOutputSize,
+                       SourceBuffer* aSourceBuffer)
+{
+  // Create a decoder.
+  DecoderType decoderType =
+    DecoderFactory::GetDecoderType(aTestCase.mMimeType);
+  RefPtr<Decoder> decoder =
+    DecoderFactory::CreateAnonymousDecoder(decoderType,
+                                           WrapNotNull(aSourceBuffer),
+                                           aOutputSize,
+                                           DecoderFlags::FIRST_FRAME_ONLY,
+                                           DefaultSurfaceFlags());
+  ASSERT_TRUE_OR_RETURN(decoder != nullptr, nullptr);
+  RefPtr<IDecodingTask> task = new AnonymousDecodingTask(WrapNotNull(decoder));
+
+  // Run the full decoder synchronously.
+  task->Run();
+
+  return decoder.forget();
+}
+
+static void
+WithSourceBufferAnimationDecode(const ImageTestCase& aTestCase,
+                                SourceBuffer* aSourceBuffer)
+{
+  // Create an image.
+  RefPtr<Image> image =
+    ImageFactory::CreateAnonymousImage(nsDependentCString(aTestCase.mMimeType));
+  ASSERT_TRUE(!image->HasError());
+
+  NotNull<RefPtr<RasterImage>> rasterImage =
+    WrapNotNull(static_cast<RasterImage*>(image.get()));
+
+  // Create a metadata decoder first, because otherwise RasterImage will get
+  // unhappy about finding out the image is animated during a full decode.
+  DecoderType decoderType =
+    DecoderFactory::GetDecoderType(aTestCase.mMimeType);
+  RefPtr<IDecodingTask> task =
+    DecoderFactory::CreateMetadataDecoder(decoderType, rasterImage,
+                                          WrapNotNull(aSourceBuffer));
+  ASSERT_TRUE(task != nullptr);
+
+  // Run the metadata decoder synchronously.
+  task->Run();
+
+  // Create a decoder.
+  DecoderFlags decoderFlags = DecoderFlags::BLEND_ANIMATION;
+  SurfaceFlags surfaceFlags = DefaultSurfaceFlags();
+  RefPtr<Decoder> decoder =
+    DecoderFactory::CreateAnonymousDecoder(decoderType,
+		                           WrapNotNull(aSourceBuffer),
+		                           Nothing(), decoderFlags,
+					   surfaceFlags);
+  ASSERT_TRUE(decoder != nullptr);
+
+  // Create an AnimationSurfaceProvider which will manage the decoding process
+  // and make this decoder's output available in the surface cache.
+  SurfaceKey surfaceKey =
+    RasterSurfaceKey(aTestCase.mOutputSize, surfaceFlags, PlaybackType::eAnimated);
+  RefPtr<AnimationSurfaceProvider> provider =
+    new AnimationSurfaceProvider(rasterImage,
+                                 surfaceKey,
+                                 WrapNotNull(decoder),
+                                 /* aCurrentFrame */ 0,
+				 /* aThreshold */ SIZE_MAX,
+				 /* aBatch */ SIZE_MAX);
+
+  // Run the full decoder synchronously.
+  provider->Run();
+}
+
 template <typename Func>
 void WithSingleChunkDecode(const ImageTestCase& aTestCase,
                            const Maybe<IntSize>& aOutputSize,
                            Func aResultChecker)
 {
-  nsCOMPtr<nsIInputStream> inputStream = LoadFile(aTestCase.mPath);
-  ASSERT_TRUE(inputStream != nullptr);
+  RefPtr<SourceBuffer> sourceBuffer = CreateCompleteSourceBuffer(aTestCase);
+  ASSERT_TRUE(sourceBuffer != nullptr);
 
-  // Figure out how much data we have.
-  uint64_t length;
-  nsresult rv = inputStream->Available(&length);
-  ASSERT_TRUE(NS_SUCCEEDED(rv));
-
-  // Write the data into a SourceBuffer.
-  auto sourceBuffer = MakeNotNull<RefPtr<SourceBuffer>>();
-  sourceBuffer->ExpectLength(length);
-  rv = sourceBuffer->AppendFromInputStream(inputStream, length);
-  ASSERT_TRUE(NS_SUCCEEDED(rv));
-  sourceBuffer->Complete(NS_OK);
-
-  // Create a decoder.
-  DecoderType decoderType =
-    DecoderFactory::GetDecoderType(aTestCase.mMimeType);
-  RefPtr<Decoder> decoder =
-    DecoderFactory::CreateAnonymousDecoder(decoderType, sourceBuffer, aOutputSize,
-                                           DecoderFlags::FIRST_FRAME_ONLY,
-                                           DefaultSurfaceFlags());
+  RefPtr<Decoder> decoder = WithSourceBufferDecode(aTestCase, aOutputSize,
+                                                   sourceBuffer);
   ASSERT_TRUE(decoder != nullptr);
-  RefPtr<IDecodingTask> task = new AnonymousDecodingTask(WrapNotNull(decoder));
-
-  // Run the full decoder synchronously.
-  task->Run();
 
   // Call the lambda to verify the expected results.
   aResultChecker(decoder);
@@ -912,3 +965,43 @@ TEST_F(ImageDecoders, MultipleSizesICOSingleChunk)
     EXPECT_EQ(expectedSizes[i], nativeSizes[i]);
   }
 }
+
+static void
+WithSingleChunkAnimationBenchDecode(const ImageTestCase& aTestCase)
+{
+  RefPtr<SourceBuffer> sourceBuffer = CreateCompleteSourceBuffer(aTestCase);
+  ASSERT_TRUE(sourceBuffer != nullptr);
+
+  for (uint32_t i = 0; i < 500; ++i) {
+    WithSourceBufferAnimationDecode(aTestCase, sourceBuffer);
+  }
+}
+
+static void
+WithSingleChunkBenchDecode(const ImageTestCase& aTestCase)
+{
+  RefPtr<SourceBuffer> sourceBuffer = CreateCompleteSourceBuffer(aTestCase);
+  ASSERT_TRUE(sourceBuffer != nullptr);
+
+  for (uint32_t i = 0; i < 500; ++i) {
+    RefPtr<Decoder> decoder = WithSourceBufferDecode(aTestCase, Nothing(),
+                                                     sourceBuffer);
+    ASSERT_TRUE(decoder != nullptr);
+  }
+}
+
+MOZ_GTEST_BENCH_F(ImageDecoders, GIFRainbowSingleChunkPerf, [] {
+  WithSingleChunkBenchDecode(GreenFirstFrameAnimatedGIFTestCase());
+});
+
+MOZ_GTEST_BENCH_F(ImageDecoders, JPGSingleChunkPerf, [] {
+  WithSingleChunkBenchDecode(GreenJPGTestCase());
+});
+
+MOZ_GTEST_BENCH_F(ImageDecoders, PNGSingleChunkPerf, [] {
+  WithSingleChunkBenchDecode(GreenPNGTestCase());
+});
+
+MOZ_GTEST_BENCH_F(ImageDecoders, GIFSingleChunkPerf, [] {
+  WithSingleChunkBenchDecode(GreenGIFTestCase());
+});

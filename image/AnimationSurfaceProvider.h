@@ -33,6 +33,13 @@ public:
   AnimationSurfaceProvider(NotNull<RasterImage*> aImage,
                            const SurfaceKey& aSurfaceKey,
                            NotNull<Decoder*> aDecoder,
+                           size_t aCurrentFrame,
+                           size_t aThreshold,
+                           size_t aBatch);
+
+  AnimationSurfaceProvider(NotNull<RasterImage*> aImage,
+                           const SurfaceKey& aSurfaceKey,
+                           NotNull<Decoder*> aDecoder,
                            size_t aCurrentFrame);
 
 

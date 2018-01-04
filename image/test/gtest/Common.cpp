@@ -65,38 +65,6 @@ AutoInitializeImageLib::AutoInitializeImageLib()
 // General Helpers
 ///////////////////////////////////////////////////////////////////////////////
 
-// These macros work like gtest's ASSERT_* macros, except that they can be used
-// in functions that return values.
-#define ASSERT_TRUE_OR_RETURN(e, rv) \
-  EXPECT_TRUE(e);                    \
-  if (!(e)) {                        \
-    return rv;                       \
-  }
-
-#define ASSERT_EQ_OR_RETURN(a, b, rv) \
-  EXPECT_EQ(a, b);                    \
-  if ((a) != (b)) {                   \
-    return rv;                        \
-  }
-
-#define ASSERT_GE_OR_RETURN(a, b, rv) \
-  EXPECT_GE(a, b);                    \
-  if (!((a) >= (b))) {                \
-    return rv;                        \
-  }
-
-#define ASSERT_LE_OR_RETURN(a, b, rv) \
-  EXPECT_LE(a, b);                    \
-  if (!((a) <= (b))) {                \
-    return rv;                        \
-  }
-
-#define ASSERT_LT_OR_RETURN(a, b, rv) \
-  EXPECT_LT(a, b);                    \
-  if (!((a) < (b))) {                 \
-    return rv;                        \
-  }
-
 already_AddRefed<nsIInputStream>
 LoadFile(const char* aRelativePath)
 {
@@ -131,6 +99,27 @@ LoadFile(const char* aRelativePath)
   }
 
   return inputStream.forget();
+}
+
+already_AddRefed<SourceBuffer>
+CreateCompleteSourceBuffer(const ImageTestCase& aTestCase)
+{
+  nsCOMPtr<nsIInputStream> inputStream = LoadFile(aTestCase.mPath);
+  ASSERT_TRUE_OR_RETURN(inputStream != nullptr, nullptr);
+
+  // Figure out how much data we have.
+  uint64_t length;
+  nsresult rv = inputStream->Available(&length);
+  ASSERT_TRUE_OR_RETURN(NS_SUCCEEDED(rv), nullptr);
+
+  // Write the data into a SourceBuffer.
+  auto sourceBuffer = MakeRefPtr<SourceBuffer>();
+  sourceBuffer->ExpectLength(length);
+  rv = sourceBuffer->AppendFromInputStream(inputStream, length);
+  ASSERT_TRUE_OR_RETURN(NS_SUCCEEDED(rv), nullptr);
+  sourceBuffer->Complete(NS_OK);
+
+  return sourceBuffer.forget();
 }
 
 bool

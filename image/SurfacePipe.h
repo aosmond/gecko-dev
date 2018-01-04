@@ -627,6 +627,13 @@ public:
     return mHead->WriteEmptyRow();
   }
 
+  template <typename PixelType, typename Func>
+  WriteState WriteUnsafeComputedRow(Func aFunc)
+  {
+    MOZ_ASSERT(mHead, "Use before configured!");
+    return mHead->WriteUnsafeComputedRow<PixelType>(Forward<Func>(aFunc));
+  }
+
   /// @return true if we've finished writing to the surface.
   bool IsSurfaceFinished() const { return mHead->IsSurfaceFinished(); }
 

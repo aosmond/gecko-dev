@@ -920,9 +920,18 @@ nsPNGDecoder::WriteRow(uint8_t* aRow)
       });
     }
   } else {
+#if 1
     result = mPipe.WritePixelsToRow<uint32_t>([&]{
       return PackRGBPixelAndAdvance(rowToWrite);
     });
+#else
+    result = mPipe.WriteUnsafeComputedRow<uint32_t>([&] (uint32_t* aOutputRow, int32_t aRowLength) {
+      while (--aRowLength >= 0) {
+        *aOutputRow++ = gfxPackedPixel(0xFF, rowToWrite[0], rowToWrite[1], rowToWrite[2]);
+        rowToWrite += 3;
+      }
+    });
+#endif
   }
 
   MOZ_ASSERT(WriteState(result) != WriteState::FAILURE);

@@ -19,6 +19,27 @@ namespace image {
 AnimationSurfaceProvider::AnimationSurfaceProvider(NotNull<RasterImage*> aImage,
                                                    const SurfaceKey& aSurfaceKey,
                                                    NotNull<Decoder*> aDecoder,
+                                                   size_t aCurrentFrame,
+                                                   size_t aThreshold,
+                                                   size_t aBatch)
+  : ISurfaceProvider(ImageKey(aImage.get()), aSurfaceKey,
+                     AvailabilityState::StartAsPlaceholder())
+  , mImage(aImage.get())
+  , mDecodingMutex("AnimationSurfaceProvider::mDecoder")
+  , mDecoder(aDecoder.get())
+  , mFramesMutex("AnimationSurfaceProvider::mFrames")
+{
+  MOZ_ASSERT(!mDecoder->IsMetadataDecode(),
+             "Use MetadataDecodingTask for metadata decodes");
+  MOZ_ASSERT(!mDecoder->IsFirstFrameDecode(),
+             "Use DecodedSurfaceProvider for single-frame image decodes");
+
+  mFrames.Initialize(aThreshold, aBatch, aCurrentFrame);
+}
+
+AnimationSurfaceProvider::AnimationSurfaceProvider(NotNull<RasterImage*> aImage,
+                                                   const SurfaceKey& aSurfaceKey,
+                                                   NotNull<Decoder*> aDecoder,
                                                    size_t aCurrentFrame)
   : ISurfaceProvider(ImageKey(aImage.get()), aSurfaceKey,
                      AvailabilityState::StartAsPlaceholder())
