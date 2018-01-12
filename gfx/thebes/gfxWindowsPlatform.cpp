@@ -452,6 +452,8 @@ gfxWindowsPlatform::UpdateBackendPrefs()
     canvasMask |= BackendTypeBit(BackendType::DIRECT2D1_1);
     defaultBackend = BackendType::DIRECT2D1_1;
   }
+  printf_stderr("[AO] default backend %08X D2D enabled %d has D2D1 device %d WR enabled %d\n",
+    defaultBackend, gfxConfig::IsEnabled(Feature::DIRECT2D), Factory::HasD2D1Device(), gfxVars::UseWebRender());
   InitBackendPrefs(canvasMask, defaultBackend, contentMask, defaultBackend);
 }
 
