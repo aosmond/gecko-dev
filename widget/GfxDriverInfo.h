@@ -108,6 +108,7 @@ enum DeviceVendor {
   VendorATI,
   VendorMicrosoft,
   VendorParallels,
+  VendorVMWare,
   DeviceVendorMax
 };
 
