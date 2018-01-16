@@ -39,6 +39,14 @@ using namespace mozilla::layers;
 namespace mozilla {
 namespace layers {
 
+class TestSurfaceAllocator final : public ISurfaceAllocator
+{
+public:
+  TestSurfaceAllocator() { }
+
+  bool IsSameProcess() const override { return true; }
+};
+
 // fills the surface with values betwee 0 and 100.
 void SetupSurface(gfxImageSurface* surface) {
   int bpp = gfxASurface::BytePerPixelFromFormat(surface->Format());
@@ -146,8 +154,11 @@ void TestTextureClientSurface(TextureClient* texture, gfxImageSurface* surface) 
 
   ASSERT_NE(descriptor.type(), SurfaceDescriptor::Tnull_t);
 
+  // fake allocator
+  RefPtr<TestSurfaceAllocator> testAllocator = new TestSurfaceAllocator();
+
   // host deserialization
-  RefPtr<TextureHost> host = CreateBackendIndependentTextureHost(descriptor, nullptr,
+  RefPtr<TextureHost> host = CreateBackendIndependentTextureHost(descriptor, testAllocator,
                                                                  LayersBackend::LAYERS_NONE,
                                                                  texture->GetFlags());
 
@@ -192,8 +203,11 @@ void TestTextureClientYCbCr(TextureClient* client, PlanarYCbCrData& ycbcrData) {
   ASSERT_EQ(ycbcrDesc.cbCrSize(), ycbcrData.mCbCrSize);
   ASSERT_EQ(ycbcrDesc.stereoMode(), ycbcrData.mStereoMode);
 
+  // fake allocator
+  RefPtr<TestSurfaceAllocator> testAllocator = new TestSurfaceAllocator();
+
   // host deserialization
-  RefPtr<TextureHost> textureHost = CreateBackendIndependentTextureHost(descriptor, nullptr,
+  RefPtr<TextureHost> textureHost = CreateBackendIndependentTextureHost(descriptor, testAllocator,
                                                                         LayersBackend::LAYERS_NONE,
                                                                         client->GetFlags());
 

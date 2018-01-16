@@ -294,7 +294,7 @@ CreateBackendIndependentTextureHost(const SurfaceDescriptor& aDesc,
           break;
         }
         case MemoryOrShmem::Tuintptr_t: {
-          if (aDeallocator && !aDeallocator->IsSameProcess()) {
+          if (!aDeallocator->IsSameProcess()) {
             NS_ERROR("A client process is trying to peek at our address space using a MemoryTexture!");
             return nullptr;
           }
@@ -316,7 +316,7 @@ CreateBackendIndependentTextureHost(const SurfaceDescriptor& aDesc,
     }
 #ifdef XP_WIN
     case SurfaceDescriptor::TSurfaceDescriptorDIB: {
-      if (aDeallocator && !aDeallocator->IsSameProcess()) {
+      if (!aDeallocator->IsSameProcess()) {
         NS_ERROR("A client process is trying to peek at our address space using a DIBTexture!");
         return nullptr;
       }
