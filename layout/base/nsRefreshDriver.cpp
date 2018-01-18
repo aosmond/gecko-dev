@@ -1306,6 +1306,9 @@ nsRefreshDriver::AddImageRequest(imgIRequest* aRequest)
 {
   uint32_t delay = GetFirstFrameDelay(aRequest);
   if (delay == 0) {
+    if (!mRequests.Contains(aRequest)) {
+      printf_stderr("[AO] [%p] nsRefreshDriver::AddImageRequest       -- add %p, total %lu\n", this, aRequest, mRequests.Count() + 1);
+    }
     mRequests.PutEntry(aRequest);
   } else {
     ImageStartData* start = mStartTable.LookupForAdd(delay).OrInsert(
@@ -1323,6 +1326,9 @@ nsRefreshDriver::RemoveImageRequest(imgIRequest* aRequest)
 {
   // Try to remove from both places, just in case, because we can't tell
   // whether RemoveEntry() succeeds.
+  if (mRequests.Contains(aRequest)) {
+    printf_stderr("[AO] [%p] nsRefreshDriver::RemoveImageRequest -- remove %p, total %lu\n", this, aRequest, mRequests.Count() - 1);
+  }
   mRequests.RemoveEntry(aRequest);
   uint32_t delay = GetFirstFrameDelay(aRequest);
   if (delay != 0) {
@@ -1998,6 +2004,7 @@ nsRefreshDriver::Tick(int64_t aNowEpoch, TimeStamp aNowTime)
   }
 
   if (mRequests.Count()) {
+    printf_stderr("[AO] [%p] nsRefreshDriver::Tick               -- total %lu\n", this, mRequests.Count());
     // RequestRefresh may run scripts, so it's not safe to directly call it
     // while using a hashtable enumerator to enumerate mRequests in case
     // script modifies the hashtable. Instead, we build a (local) array of
@@ -2097,6 +2104,9 @@ nsRefreshDriver::BeginRefreshingImages(RequestTable& aEntries,
     auto req = static_cast<imgIRequest*>(iter.Get()->GetKey());
     MOZ_ASSERT(req, "Unable to retrieve the image request");
 
+    if (!mRequests.Contains(req)) {
+      printf_stderr("[AO] [%p] nsRefreshDriver::BeginRefreshingImages -- add %p, total %lu\n", this, req, mRequests.Count() + 1);
+    }
     mRequests.PutEntry(req);
 
     nsCOMPtr<imgIContainer> image;
@@ -2151,6 +2161,8 @@ nsRefreshDriver::FinishedWaitingForTransaction()
       !IsInRefresh() &&
       (ObserverCount() || ImageRequestCount())) {
     AUTO_PROFILER_TRACING("Paint", "RefreshDriverTick");
+    printf_stderr("[AO] [%p] nsRefreshDriver::FinishedWaitingForTransaction -- observers %u images %u\n",
+      this, ObserverCount(), ImageRequestCount());
     DoRefresh();
   }
   mSkippedPaints = false;
