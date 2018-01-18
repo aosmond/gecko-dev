@@ -475,6 +475,28 @@ public:
       : mSurface(aSurface)
       , mIsMapped(aSurface->Map(aType, &mMap)) {}
 
+    ScopedMap(ScopedMap&& aOther)
+      : mSurface(Move(aOther.mSurface))
+      , mMap(aOther.mMap)
+      , mIsMapped(aOther.mIsMapped)
+    {
+      aOther.mMap.mData = nullptr;
+      aOther.mIsMapped = false;
+    }
+
+    ScopedMap& operator=(ScopedMap&& aOther)
+    {
+      if (mIsMapped) {
+        mSurface->Unmap();
+      }
+      mSurface = Move(aOther.mSurface);
+      mMap = aOther.mMap;
+      mIsMapped = aOther.mIsMapped;
+      aOther.mMap.mData = nullptr;
+      aOther.mIsMapped = false;
+      return *this;
+    }
+
     virtual ~ScopedMap()
     {
       if (mIsMapped) {

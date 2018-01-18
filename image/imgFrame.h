@@ -387,11 +387,11 @@ public:
     // in that case, we should be using RawAccessFrameRef exclusively instead.
     // See FrameAnimator::GetRawFrame for an example of this behaviour.
     if (aFrame->mRawSurface) {
-      mRef = new DataSourceSurface::ScopedMap(aFrame->mRawSurface,
-                                              DataSourceSurface::READ_WRITE);
+      mRef.emplace(DataSourceSurface::ScopedMap(aFrame->mRawSurface,
+                                                DataSourceSurface::READ_WRITE));
       if (!mRef->IsMapped()) {
         mFrame = nullptr;
-        mRef = nullptr;
+        mRef.reset();
       }
     } else {
       MOZ_ASSERT(aFrame->mOptSurface || aFrame->GetIsPaletted());
@@ -431,14 +431,14 @@ public:
   void reset()
   {
     mFrame = nullptr;
-    mRef = nullptr;
+    mRef.reset();
   }
 
 private:
   DrawableFrameRef(const DrawableFrameRef& aOther) = delete;
 
   RefPtr<imgFrame> mFrame;
-  nsAutoPtr<DataSourceSurface::ScopedMap> mRef;
+  Maybe<DataSourceSurface::ScopedMap> mRef;
 };
 
 /**
