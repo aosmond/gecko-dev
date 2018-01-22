@@ -8,6 +8,7 @@
 #define mozilla_image_ProgressTracker_h
 
 #include "CopyOnWrite.h"
+#include "mozilla/Atomics.h"
 #include "mozilla/NotNull.h"
 #include "mozilla/Mutex.h"
 #include "mozilla/RefPtr.h"
@@ -104,7 +105,7 @@ private:
  * argument, and the notifications will be replayed to the observer
  * asynchronously.
  */
-class ProgressTracker : public mozilla::SupportsWeakPtr<ProgressTracker>
+class ProgressTracker final : public mozilla::SupportsWeakPtr<ProgressTracker>
 {
   virtual ~ProgressTracker() { }
 
@@ -114,11 +115,15 @@ public:
 
   ProgressTracker();
 
-  bool HasImage() const { MutexAutoLock lock(mMutex); return mImage; }
+  bool HasImage() const { return !!mImage; }
   already_AddRefed<Image> GetImage() const
   {
-    MutexAutoLock lock(mMutex);
-    RefPtr<Image> image = mImage;
+    // Since mImage is a weak pointer, there is a risk where we add a reference
+    // when we are destructing the objected pointed to. However since GetImage
+    // is only called on the main thread, and we also guarantee the Image
+    // objects are freed on the main thread, there is no conflict in practice.
+    MOZ_ASSERT(NS_IsMainThread());
+    RefPtr<Image> image = (Image*)mImage;
     return image.forget();
   }
 
@@ -216,12 +221,12 @@ private:
   // The runnable, if any, that we've scheduled to deliver async notifications.
   nsCOMPtr<nsIRunnable> mRunnable;
 
-  // mMutex protects access to mImage and mEventTarget.
-  mutable Mutex mMutex;
-
   // mImage is a weak ref; it should be set to null when the image goes out of
   // scope.
-  Image* mImage;
+  Atomic<Image*> mImage;
+
+  // mMutex protects access to mEventTarget.
+  mutable Mutex mMutex;
 
   // mEventTarget is the current, best effort event target to dispatch
   // notifications to from the decoder threads. It will change as observers are

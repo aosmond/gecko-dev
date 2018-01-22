@@ -15,6 +15,7 @@
 #include "nsIObserverService.h"
 
 #include "mozilla/Assertions.h"
+#include "mozilla/DebugOnly.h"
 #include "mozilla/Services.h"
 #include "mozilla/SystemGroup.h"
 
@@ -76,18 +77,16 @@ ProgressTracker::ProgressTracker()
 void
 ProgressTracker::SetImage(Image* aImage)
 {
-  MutexAutoLock lock(mMutex);
   MOZ_ASSERT(aImage, "Setting null image");
-  MOZ_ASSERT(!mImage, "Setting image when we already have one");
-  mImage = aImage;
+  DebugOnly<Image*> prevImage = mImage.exchange(aImage);
+  MOZ_ASSERT(!prevImage, "Setting image when we already have one");
 }
 
 void
 ProgressTracker::ResetImage()
 {
-  MutexAutoLock lock(mMutex);
-  MOZ_ASSERT(mImage, "Resetting image when it's already null!");
-  mImage = nullptr;
+  DebugOnly<Image*> prevImage = mImage.exchange(nullptr);
+  MOZ_ASSERT(prevImage, "Resetting image when it's already null!");
 }
 
 uint32_t
