@@ -62,10 +62,10 @@ public:
 
   MOZ_DECLARE_REFCOUNTED_TYPENAME(imgRequestProxy)
   NS_DECL_ISUPPORTS
-  NS_DECL_IMGIREQUEST
-  NS_DECL_NSIREQUEST
-  NS_DECL_NSISUPPORTSPRIORITY
-  NS_DECL_NSISECURITYINFOPROVIDER
+  NS_DECL_FINAL_IMGIREQUEST
+  NS_DECL_FINAL_NSIREQUEST
+  NS_DECL_FINAL_NSISUPPORTSPRIORITY
+  NS_DECL_FINAL_NSISECURITYINFOPROVIDER
   // nsITimedChannel declared below
 
   imgRequestProxy();
@@ -103,26 +103,26 @@ public:
   void SyncNotifyListener();
 
   // imgINotificationObserver methods:
-  virtual void Notify(int32_t aType,
-                      const mozilla::gfx::IntRect* aRect = nullptr) override;
-  virtual void OnLoadComplete(bool aLastPart) override;
+  void Notify(int32_t aType,
+              const mozilla::gfx::IntRect* aRect = nullptr) final;
+  void OnLoadComplete(bool aLastPart) final;
 
   // Other, internal-only methods:
-  virtual void SetHasImage() override;
+  void SetHasImage() final;
 
   // Whether we want notifications from ProgressTracker to be deferred until
   // an event it has scheduled has been fired.
-  virtual bool NotificationsDeferred() const override
+  bool NotificationsDeferred() const final
   {
     return mDeferNotifications;
   }
-  virtual void SetNotificationsDeferred(bool aDeferNotifications) override
+  void SetNotificationsDeferred(bool aDeferNotifications) final
   {
     mDeferNotifications = aDeferNotifications;
   }
 
   bool IsOnEventTarget() const;
-  already_AddRefed<nsIEventTarget> GetEventTarget() const override;
+  already_AddRefed<nsIEventTarget> GetEventTarget() const final;
 
   // Removes all animation consumers that were created with
   // IncrementAnimationConsumers. This is necessary since we need
@@ -148,7 +148,7 @@ protected:
   class imgCancelRunnable;
   friend class imgCancelRunnable;
 
-  class imgCancelRunnable : public mozilla::Runnable
+  class imgCancelRunnable final : public mozilla::Runnable
   {
     public:
       imgCancelRunnable(imgRequestProxy* owner, nsresult status)
@@ -202,6 +202,8 @@ protected:
 
   virtual imgRequestProxy* NewClonedProxy();
 
+  virtual nsresult GetImagePrincipalInternal(nsIPrincipal** aPrincipal);
+
 public:
   NS_FORWARD_SAFE_NSITIMEDCHANNEL(TimedChannel())
 
@@ -248,16 +250,16 @@ private:
 
 // Used for static image proxies for which no requests are available, so
 // certain behaviours must be overridden to compensate.
-class imgRequestProxyStatic : public imgRequestProxy
+class imgRequestProxyStatic final : public imgRequestProxy
 {
 
 public:
   imgRequestProxyStatic(Image* aImage, nsIPrincipal* aPrincipal);
 
-  NS_IMETHOD GetImagePrincipal(nsIPrincipal** aPrincipal) override;
-
 protected:
   imgRequestProxy* NewClonedProxy() override;
+
+  nsresult GetImagePrincipalInternal(nsIPrincipal** aPrincipal) override;
 
   // Our principal. We have to cache it, rather than accessing the underlying
   // request on-demand, because static proxies don't have an underlying request.

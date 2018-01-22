@@ -37,7 +37,7 @@ class ProxyBehaviour
   virtual void SetOwner(imgRequest* aOwner) = 0;
 };
 
-class RequestBehaviour : public ProxyBehaviour
+class RequestBehaviour final : public ProxyBehaviour
 {
  public:
   RequestBehaviour() : mOwner(nullptr), mOwnerHasImage(false) {}
@@ -904,8 +904,8 @@ imgRequestProxy::PerformClone(imgINotificationObserver* aObserver,
   return NS_OK;
 }
 
-NS_IMETHODIMP
-imgRequestProxy::GetImagePrincipal(nsIPrincipal** aPrincipal)
+nsresult
+imgRequestProxy::GetImagePrincipalInternal(nsIPrincipal** aPrincipal)
 {
   if (!GetOwner()) {
     return NS_ERROR_FAILURE;
@@ -914,6 +914,12 @@ imgRequestProxy::GetImagePrincipal(nsIPrincipal** aPrincipal)
   nsCOMPtr<nsIPrincipal> principal = GetOwner()->GetPrincipal();
   principal.forget(aPrincipal);
   return NS_OK;
+}
+
+NS_IMETHODIMP
+imgRequestProxy::GetImagePrincipal(nsIPrincipal** aPrincipal)
+{
+  return GetImagePrincipalInternal(aPrincipal);
 }
 
 NS_IMETHODIMP
@@ -1170,7 +1176,7 @@ imgRequestProxy::GetStaticRequest(nsIDocument* aLoadingDocument,
 
   // Create a static imgRequestProxy with our new extracted frame.
   nsCOMPtr<nsIPrincipal> currentPrincipal;
-  GetImagePrincipal(getter_AddRefs(currentPrincipal));
+  GetImagePrincipalInternal(getter_AddRefs(currentPrincipal));
   RefPtr<imgRequestProxy> req = new imgRequestProxyStatic(frozenImage,
                                                             currentPrincipal);
   req->Init(nullptr, nullptr, aLoadingDocument, mURI, nullptr);
@@ -1272,7 +1278,7 @@ imgRequestProxy::GetOwner() const
 
 ////////////////// imgRequestProxyStatic methods
 
-class StaticBehaviour : public ProxyBehaviour
+class StaticBehaviour final : public ProxyBehaviour
 {
 public:
   explicit StaticBehaviour(mozilla::image::Image* aImage) : mImage(aImage) {}
@@ -1314,8 +1320,8 @@ imgRequestProxyStatic::imgRequestProxyStatic(mozilla::image::Image* aImage,
   mBehaviour = mozilla::MakeUnique<StaticBehaviour>(aImage);
 }
 
-NS_IMETHODIMP
-imgRequestProxyStatic::GetImagePrincipal(nsIPrincipal** aPrincipal)
+nsresult
+imgRequestProxyStatic::GetImagePrincipalInternal(nsIPrincipal** aPrincipal)
 {
   if (!mPrincipal) {
     return NS_ERROR_FAILURE;
@@ -1329,7 +1335,7 @@ imgRequestProxyStatic::GetImagePrincipal(nsIPrincipal** aPrincipal)
 imgRequestProxy* imgRequestProxyStatic::NewClonedProxy()
 {
   nsCOMPtr<nsIPrincipal> currentPrincipal;
-  GetImagePrincipal(getter_AddRefs(currentPrincipal));
+  GetImagePrincipalInternal(getter_AddRefs(currentPrincipal));
   RefPtr<mozilla::image::Image> image = GetImage();
   return new imgRequestProxyStatic(image, currentPrincipal);
 }
