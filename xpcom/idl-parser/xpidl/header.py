@@ -276,6 +276,12 @@ iface_epilog = """};
 /* Use this macro when declaring classes that implement this interface. */
 #define NS_DECL_%(macroname)s """
 
+iface_final = """
+
+/* Use this macro when declaring classes that implement this interface, which
+   provide the final implementation of this interface, but may be subclassed. */
+#define NS_DECL_FINAL_%(macroname)s """
+
 iface_nonvirtual = """
 
 /* Use this macro when declaring the members of this interface when the
@@ -412,9 +418,9 @@ def write_interface(iface, fd):
 
     fd.write(iface_epilog % names)
 
-    def writeDeclaration(fd, iface, virtual):
-        declType = "NS_IMETHOD" if virtual else "nsresult"
-        suffix = " override" if virtual else ""
+    def writeDeclaration(fd, iface, suffix):
+        declType = "NS_IMETHOD" if suffix else "nsresult"
+        suffix = " " + suffix if suffix else ""
         for member in iface.members:
             if isinstance(member, xpidl.Attribute):
                 if member.infallible:
@@ -429,9 +435,11 @@ def write_interface(iface, fd):
         elif not member.kind in ('attribute', 'method'):
             fd.write('\\')
 
-    writeDeclaration(fd, iface, True);
+    writeDeclaration(fd, iface, "override");
+    fd.write(iface_final % names)
+    writeDeclaration(fd, iface, "final");
     fd.write(iface_nonvirtual % names)
-    writeDeclaration(fd, iface, False);
+    writeDeclaration(fd, iface, None);
     fd.write(iface_forward % names)
 
     def emitTemplate(forward_infallible, tmpl, tmpl_notxpcom=None):
