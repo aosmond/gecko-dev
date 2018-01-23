@@ -119,6 +119,26 @@ static bool HaveSpecifiedSize(const nsStylePosition* aStylePosition)
          aStylePosition->mHeight.IsCoordPercentCalcUnit();
 }
 
+static bool LogAO(imgIRequest* aRequest)
+{
+  if (!aRequest) {
+    return false;
+  }
+
+  nsCString uriString;
+  nsCOMPtr<nsIURI> uri;
+  aRequest->GetFinalURI(getter_AddRefs(uri));
+  if (uri) {
+    uri->GetSpec(uriString);
+  }
+
+  bool rv = uriString.EqualsLiteral("https://www.newyorker.com/images/loaders/eustace.gif");
+  if (rv) {
+    printf_stderr("[AO] logging on!\n");
+  }
+  return rv;
+}
+
 // Decide whether we can optimize away reflows that result from the
 // image's intrinsic size changing.
 inline bool HaveFixedSize(const ReflowInput& aReflowInput)
@@ -143,6 +163,7 @@ nsImageFrame::nsImageFrame(nsStyleContext* aContext, ClassID aID)
   : nsAtomicContainerFrame(aContext, aID)
   , mComputedSize(0, 0)
   , mIntrinsicRatio(0, 0)
+  , mDebugLog(false)
   , mDisplayingIcon(false)
   , mFirstFrameComplete(false)
   , mReflowCallbackPosted(false)
@@ -551,6 +572,7 @@ nsresult
 nsImageFrame::OnSizeAvailable(imgIRequest* aRequest, imgIContainer* aImage)
 {
   if (!aImage) return NS_ERROR_INVALID_ARG;
+  mDebugLog = LogAO(aRequest);
 
   /* Get requested animation policy from the pres context:
    *   normal = 0
@@ -1818,7 +1840,12 @@ void
 nsImageFrame::BuildDisplayList(nsDisplayListBuilder*   aBuilder,
                                const nsDisplayListSet& aLists)
 {
-  if (!IsVisibleForPainting(aBuilder))
+  bool visible = IsVisibleForPainting(aBuilder);
+  if (mDebugLog) {
+    printf_stderr("[AO] nsImageFrame::BuildDisplayList -- %d\n", visible);
+  }
+
+  if (!visible)
     return;
 
   DisplayBorderBackgroundOutline(aBuilder, aLists);

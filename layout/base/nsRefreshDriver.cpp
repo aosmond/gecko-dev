@@ -1307,7 +1307,14 @@ nsRefreshDriver::AddImageRequest(imgIRequest* aRequest)
   uint32_t delay = GetFirstFrameDelay(aRequest);
   if (delay == 0) {
     if (!mRequests.Contains(aRequest)) {
+      nsCString uriString;
+      nsCOMPtr<nsIURI> uri;
+      aRequest->GetFinalURI(getter_AddRefs(uri));
+      if (uri) {
+        uri->GetSpec(uriString);
+      }
       printf_stderr("[AO] [%p] nsRefreshDriver::AddImageRequest       -- add %p, total %lu\n", this, aRequest, mRequests.Count() + 1);
+      printf_stderr("[AO] [%p]   %s\n", this, uriString.Data());
     }
     mRequests.PutEntry(aRequest);
   } else {
@@ -2105,7 +2112,14 @@ nsRefreshDriver::BeginRefreshingImages(RequestTable& aEntries,
     MOZ_ASSERT(req, "Unable to retrieve the image request");
 
     if (!mRequests.Contains(req)) {
+      nsCString uriString;
+      nsCOMPtr<nsIURI> uri;
+      req->GetFinalURI(getter_AddRefs(uri));
+      if (uri) {
+        uri->GetSpec(uriString);
+      }
       printf_stderr("[AO] [%p] nsRefreshDriver::BeginRefreshingImages -- add %p, total %lu\n", this, req, mRequests.Count() + 1);
+      printf_stderr("[AO] [%p]   %s\n", this, uriString.Data());
     }
     mRequests.PutEntry(req);
 

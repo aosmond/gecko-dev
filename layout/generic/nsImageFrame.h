@@ -336,6 +336,7 @@ private:
   mozilla::IntrinsicSize mIntrinsicSize;
   nsSize mIntrinsicRatio;
 
+  bool mDebugLog;
   bool mDisplayingIcon;
   bool mFirstFrameComplete;
   bool mReflowCallbackPosted;

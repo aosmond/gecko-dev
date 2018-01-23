@@ -1430,6 +1430,10 @@ RasterImage::Draw(gfxContext* aContext,
                   uint32_t aFlags,
                   float aOpacity)
 {
+  if (mURI && mURI->Spec() && strcmp(mURI->Spec(), "https://www.newyorker.com/images/loaders/eustace.gif") == 0) {
+    printf_stderr("[AO] drawing eustace\n");
+  }
+
   if (aWhichFrame > FRAME_MAX_VALUE) {
     return ImgDrawResult::BAD_ARGS;
   }
