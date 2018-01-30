@@ -99,7 +99,7 @@ GPUChild::EnsureGPUReady()
   }
 
   GPUDeviceData data;
-  if (!SendGetDeviceStatus(&data)) {
+  if (SendGetDeviceStatus(&data)) {
     return false;
   }
 
@@ -112,6 +112,7 @@ GPUChild::EnsureGPUReady()
 mozilla::ipc::IPCResult
 GPUChild::RecvInitComplete(const GPUDeviceData& aData)
 {
+#if 0
   // We synchronously requested GPU parameters before this arrived.
   if (mGPUReady) {
     return IPC_OK();
@@ -120,6 +121,7 @@ GPUChild::RecvInitComplete(const GPUDeviceData& aData)
   gfxPlatform::GetPlatform()->ImportGPUDeviceData(aData);
   Telemetry::AccumulateTimeDelta(Telemetry::GPU_PROCESS_LAUNCH_TIME_MS_2, mHost->GetLaunchTime());
   mGPUReady = true;
+#endif
   return IPC_OK();
 }
 
