@@ -619,7 +619,7 @@ nsImageRenderer::BuildWebRenderDisplayItems(nsPresContext* aPresContext,
 
       gfx::IntSize size;
       Maybe<wr::ImageKey> key = aManager->CommandBuilder().CreateImageKey(aItem, container, aBuilder,
-                                                                          aResources, aSc, size, Nothing());
+                                                                          aResources, aSc, size, destRect);
 
       if (key.isNothing()) {
         return ImgDrawResult::NOT_READY;

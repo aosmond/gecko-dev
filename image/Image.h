@@ -318,6 +318,11 @@ protected:
   virtual nsresult StartAnimation() = 0;
   virtual nsresult StopAnimation() = 0;
 
+  virtual layers::ImageContainer::Mode GetContainerMode() const
+  {
+    return layers::ImageContainer::SYNCHRONOUS;
+  }
+
   void SendOnUnlockedDraw(uint32_t aFlags);
 
 #ifdef DEBUG

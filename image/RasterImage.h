@@ -127,7 +127,6 @@ class nsIRequest;
 namespace mozilla {
 
 namespace layers {
-class ImageContainer;
 class Image;
 class LayersManager;
 } // namespace layers
@@ -163,6 +162,7 @@ public:
   size_t GetNativeSizesLength() const override;
   virtual nsresult StartAnimation() override;
   virtual nsresult StopAnimation() override;
+  layers::ImageContainer::Mode GetContainerMode() const override;
 
   // Methods inherited from Image
   virtual void OnSurfaceDiscarded(const SurfaceKey& aSurfaceKey) override;

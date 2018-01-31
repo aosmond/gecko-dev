@@ -5586,7 +5586,7 @@ nsDisplayBorder::CreateBorderImageWebRenderCommands(mozilla::wr::DisplayListBuil
 
       gfx::IntSize size;
       Maybe<wr::ImageKey> key = aManager->CommandBuilder().CreateImageKey(this, container, aBuilder,
-                                                                          aResources, aSc, size, Nothing());
+                                                                          aResources, aSc, size, destRect);
       if (key.isNothing()) {
         return;
       }

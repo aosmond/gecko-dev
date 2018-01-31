@@ -1352,19 +1352,18 @@ WebRenderCommandBuilder::CreateImageKey(nsDisplayItem* aItem,
                                         mozilla::wr::IpcResourceUpdateQueue& aResources,
                                         const StackingContextHelper& aSc,
                                         gfx::IntSize& aSize,
-                                        const Maybe<LayoutDeviceRect>& aAsyncImageBounds)
+                                        const LayoutDeviceRect& aAsyncImageBounds)
 {
   RefPtr<WebRenderImageData> imageData = CreateOrRecycleWebRenderUserData<WebRenderImageData>(aItem);
   MOZ_ASSERT(imageData);
 
   if (aContainer->IsAsync()) {
-    MOZ_ASSERT(aAsyncImageBounds);
-
-    LayoutDeviceRect rect = aAsyncImageBounds.value();
-    LayoutDeviceRect scBounds(LayoutDevicePoint(0, 0), rect.Size());
+    LayoutDeviceRect scBounds(LayoutDevicePoint(0, 0), aAsyncImageBounds.Size());
     gfx::MaybeIntSize scaleToSize;
     if (!aContainer->GetScaleHint().IsEmpty()) {
       scaleToSize = Some(aContainer->GetScaleHint());
+    } else {
+      scaleToSize = Some(RoundedToInt(aAsyncImageBounds.Size()).ToUnknownSize());
     }
     // TODO!
     // We appear to be using the image bridge for a lot (most/all?) of
@@ -1372,7 +1371,7 @@ WebRenderCommandBuilder::CreateImageKey(nsDisplayItem* aItem,
     imageData->CreateAsyncImageWebRenderCommands(aBuilder,
                                                  aContainer,
                                                  aSc,
-                                                 rect,
+                                                 aAsyncImageBounds,
                                                  scBounds,
                                                  gfx::Matrix4x4(),
                                                  scaleToSize,
@@ -1403,7 +1402,7 @@ WebRenderCommandBuilder::PushImage(nsDisplayItem* aItem,
   gfx::IntSize size;
   Maybe<wr::ImageKey> key = CreateImageKey(aItem, aContainer,
                                            aBuilder, aResources,
-                                           aSc, size, Some(aRect));
+                                           aSc, size, aRect);
   if (aContainer->IsAsync()) {
     // Async ImageContainer does not create ImageKey, instead it uses Pipeline.
     MOZ_ASSERT(key.isNothing());

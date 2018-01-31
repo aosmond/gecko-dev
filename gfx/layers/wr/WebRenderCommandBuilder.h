@@ -61,7 +61,7 @@ public:
                                      mozilla::wr::IpcResourceUpdateQueue& aResources,
                                      const StackingContextHelper& aSc,
                                      gfx::IntSize& aSize,
-                                     const Maybe<LayoutDeviceRect>& aAsyncImageBounds);
+                                     const LayoutDeviceRect& aAsyncImageBounds);
 
   WebRenderUserDataRefTable* GetWebRenderUserDataTable() { return &mWebRenderUserDatas; }
 

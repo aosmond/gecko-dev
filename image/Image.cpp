@@ -218,7 +218,7 @@ ImageResource::GetImageContainerImpl(LayerManager* aManager,
 
   if (!container) {
     // We need a new ImageContainer, so create one.
-    container = LayerManager::CreateImageContainer();
+    container = LayerManager::CreateImageContainer(GetContainerMode());
 
     if (i >= 0) {
       entry->mContainer = container;
@@ -228,7 +228,7 @@ ImageResource::GetImageContainerImpl(LayerManager* aManager,
     }
   }
 
-  SetCurrentImage(container, surface, true);
+  SetCurrentImage(container, surface, !container->IsAsync());
   entry->mLastDrawResult = drawResult;
   return container.forget();
 }

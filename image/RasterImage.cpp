@@ -848,6 +848,15 @@ RasterImage::StopAnimation()
   return rv;
 }
 
+ImageContainer::Mode
+RasterImage::GetContainerMode() const
+{
+  if (mAnimationState && gfxPrefs::ImageAnimatedGenerateFullFrames()) {
+    return ImageContainer::ASYNCHRONOUS;
+  }
+  return ImageContainer::SYNCHRONOUS;
+}
+
 //******************************************************************************
 NS_IMETHODIMP
 RasterImage::ResetAnimation()

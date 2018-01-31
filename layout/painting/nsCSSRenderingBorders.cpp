@@ -3731,7 +3731,7 @@ nsCSSBorderImageRenderer::CreateWebRenderCommands(nsDisplayItem* aItem,
 
       gfx::IntSize size;
       Maybe<wr::ImageKey> key = aManager->CommandBuilder().CreateImageKey(aItem, container, aBuilder,
-                                                                          aResources, aSc, size, Nothing());
+                                                                          aResources, aSc, size, destRect);
       if (key.isNothing()) {
         return;
       }

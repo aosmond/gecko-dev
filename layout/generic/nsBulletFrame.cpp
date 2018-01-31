@@ -520,7 +520,7 @@ BulletRenderer::CreateWebRenderCommandsForImage(nsDisplayItem* aItem,
 
   gfx::IntSize size;
   Maybe<wr::ImageKey> key = aManager->CommandBuilder().CreateImageKey(aItem, container, aBuilder, aResources,
-                                                                      aSc, size, Nothing());
+                                                                      aSc, size, destRect);
   if (key.isNothing()) {
     return true;  // Nothing to do
   }
