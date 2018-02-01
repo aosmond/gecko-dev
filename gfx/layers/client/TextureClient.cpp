@@ -25,6 +25,7 @@
 #include "mozilla/gfx/2D.h"
 #include "mozilla/gfx/Logging.h"        // for gfxDebug
 #include "mozilla/layers/TextureClientOGL.h"
+#include "mozilla/layers/TextureClientSharedDataSurface.h"
 #include "mozilla/layers/PTextureChild.h"
 #include "mozilla/gfx/DataSurfaceHelpers.h" // for CreateDataSourceSurfaceByCloning
 #include "nsPrintfCString.h"            // for nsPrintfCString
@@ -1198,6 +1199,10 @@ TextureClient::CreateFromSurface(KnowsCompositor* aAllocator,
     data = D3D11TextureData::Create(aSurface, aAllocFlags);
   }
 #endif
+
+  if (!data) {
+    data = SharedDataSurfaceTextureData::Create(aSurface);
+  }
 
   if (data) {
     return MakeAndAddRef<TextureClient>(data, aTextureFlags, aAllocator->GetTextureForwarder());

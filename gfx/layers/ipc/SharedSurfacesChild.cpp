@@ -188,7 +188,6 @@ SharedSurfacesChild::DestroySharedUserData(void* aClosure)
 SharedSurfacesChild::ShareInternal(SourceSurfaceSharedData* aSurface,
                                    SharedUserData** aUserData)
 {
-  MOZ_ASSERT(NS_IsMainThread());
   MOZ_ASSERT(aSurface);
   MOZ_ASSERT(aUserData);
 
@@ -331,6 +330,21 @@ SharedSurfacesChild::Share(SourceSurfaceSharedData* aSurface,
     aKey = data->UpdateKey(aManager, aResources, invalidations);
   }
 
+  return rv;
+}
+
+/* static */ nsresult
+SharedSurfacesChild::Share(SourceSurfaceSharedData* aSurface,
+                           wr::ExternalImageId& aExtId)
+{
+  MOZ_ASSERT(NS_IsMainThread());
+  MOZ_ASSERT(aSurface);
+
+  SharedUserData* data = nullptr;
+  nsresult rv = ShareInternal(aSurface, &data);
+  if (NS_SUCCEEDED(rv)) {
+    aExtId = data->Id();
+  }
   return rv;
 }
 

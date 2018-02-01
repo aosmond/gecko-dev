@@ -47,9 +47,7 @@ public:
    * This must be called from the main thread.
    */
   static nsresult Share(gfx::SourceSurfaceSharedData* aSurface,
-                        WebRenderLayerManager* aManager,
-                        wr::IpcResourceUpdateQueue& aResources,
-                        wr::ImageKey& aKey);
+                        wr::ExternalImageId& aExtId);
 
   /**
    * Request that the first surface in the image container's current images be
@@ -73,7 +71,9 @@ private:
   static nsresult ShareInternal(gfx::SourceSurfaceSharedData* aSurface,
                                 SharedUserData** aUserData);
 
-  static void Unshare(const wr::ExternalImageId& aId, nsTArray<ImageKeyData>& aKeys);
+  static void Unshare(const wr::ExternalImageId& aId,
+                      nsTArray<ImageKeyData>& aKeys);
+
   static void DestroySharedUserData(void* aClosure);
 };
 

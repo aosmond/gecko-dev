@@ -139,6 +139,11 @@ struct SurfaceDescriptorShared
   Handle handle;
 };
 
+struct SurfaceDescriptorSharedTexture
+{
+  uint64_t handle;
+};
+
 union SurfaceDescriptor {
   SurfaceDescriptorBuffer;
   SurfaceDescriptorDIB;
@@ -152,6 +157,7 @@ union SurfaceDescriptor {
   SurfaceDescriptorSharedGLTexture;
   SurfaceDescriptorGPUVideo;
   SurfaceDescriptorShared;
+  SurfaceDescriptorSharedTexture;
   null_t;
 };
 
