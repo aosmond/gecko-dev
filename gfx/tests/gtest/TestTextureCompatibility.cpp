@@ -27,12 +27,22 @@ using mozilla::layers::TextureHost;
 using mozilla::widget::CompositorWidget;
 using mozilla::widget::InProcessCompositorWidget;
 
+class TestSurfaceAllocator final : public ISurfaceAllocator
+{
+public:
+  TestSurfaceAllocator() {}
+  ~TestSurfaceAllocator() override {}
+
+  bool IsSameProcess() const override { return true; }
+};
+
 /**
  * This function will create the possible TextureClient and TextureHost pairs
  * according to the given backend.
  */
-void
+static void
 CreateTextureWithBackend(LayersBackend& aLayersBackend,
+                         ISurfaceAllocator* aDeallocator,
                          nsTArray<RefPtr<TextureClient>>& aTextureClients,
                          nsTArray<RefPtr<TextureHost>>& aTextureHosts)
 {
@@ -43,7 +53,8 @@ CreateTextureWithBackend(LayersBackend& aLayersBackend,
 
   for (uint32_t i = 0; i < aTextureClients.Length(); i++) {
     aTextureHosts.AppendElement(
-      CreateTextureHostWithBackend(aTextureClients[i], aLayersBackend));
+      CreateTextureHostWithBackend(aTextureClients[i], aDeallocator,
+                                   aLayersBackend));
   }
 }
 
@@ -115,13 +126,15 @@ CheckCompatibilityWithBasicCompositor(LayersBackend aBackends,
 TEST(Gfx, TestTextureCompatibility)
 {
   nsTArray<LayersBackend> backendHints;
+  RefPtr<TestSurfaceAllocator> deallocator = new TestSurfaceAllocator();
 
   GetPlatformBackends(backendHints);
   for (uint32_t i = 0; i < backendHints.Length(); i++) {
     nsTArray<RefPtr<TextureClient>> textureClients;
     nsTArray<RefPtr<TextureHost>> textureHosts;
 
-    CreateTextureWithBackend(backendHints[i], textureClients, textureHosts);
+    CreateTextureWithBackend(backendHints[i], deallocator,
+                             textureClients, textureHosts);
     CheckCompatibilityWithBasicCompositor(backendHints[i], textureHosts);
   }
 }
