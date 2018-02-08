@@ -2345,7 +2345,7 @@ APZCTreeManager::GetAPZCAtPointWR(const ScreenPoint& aHitTestPoint,
   result = node ? node->GetApzc() : nullptr;
   if (!result) {
     // It falls back to the root
-    MOZ_ASSERT(scrollId == FrameMetrics::NULL_SCROLL_ID);
+    //MOZ_ASSERT(scrollId == FrameMetrics::NULL_SCROLL_ID);
     result = FindRootApzcForLayersId(layersId);
     MOZ_ASSERT(result);
   }
