@@ -6,6 +6,7 @@
 #include "DecodePool.h"
 
 #include <algorithm>
+#include <queue>
 
 #include "mozilla/ClearOnShutdown.h"
 #include "mozilla/DebugOnly.h"
@@ -138,15 +139,15 @@ public:
     }
 
     if (task->Priority() == TaskPriority::eHigh) {
-      mHighPriorityQueue.AppendElement(std::move(task));
+      mHighPriorityQueue.push(std::move(task));
     } else {
-      mLowPriorityQueue.AppendElement(std::move(task));
+      mLowPriorityQueue.push(std::move(task));
     }
 
     // If there are pending tasks, create more workers if and only if we have
     // not exceeded the capacity, and any previously created workers are ready.
     if (mAvailableThreads) {
-      size_t pending = mHighPriorityQueue.Length() + mLowPriorityQueue.Length();
+      size_t pending = mHighPriorityQueue.size() + mLowPriorityQueue.size();
       if (pending > mIdleThreads) {
         CreateThread();
       }
@@ -181,11 +182,11 @@ private:
 
     TimeDuration timeout = mIdleTimeout;
     do {
-      if (!mHighPriorityQueue.IsEmpty()) {
+      if (!mHighPriorityQueue.empty()) {
         return PopWorkFromQueue(mHighPriorityQueue);
       }
 
-      if (!mLowPriorityQueue.IsEmpty()) {
+      if (!mLowPriorityQueue.empty()) {
         return PopWorkFromQueue(mLowPriorityQueue);
       }
 
@@ -230,12 +231,12 @@ private:
 
   bool CreateThread();
 
-  Work PopWorkFromQueue(nsTArray<RefPtr<IDecodingTask>>& aQueue)
+  Work PopWorkFromQueue(std::queue<RefPtr<IDecodingTask>>& aQueue)
   {
     Work work;
     work.mType = Work::Type::TASK;
-    work.mTask = aQueue.PopLastElement();
-
+    work.mTask = aQueue.front().forget();
+    aQueue.pop();
     return work;
   }
 
@@ -250,8 +251,8 @@ private:
 
   // mMonitor guards everything below.
   mutable Monitor mMonitor;
-  nsTArray<RefPtr<IDecodingTask>> mHighPriorityQueue;
-  nsTArray<RefPtr<IDecodingTask>> mLowPriorityQueue;
+  std::queue<RefPtr<IDecodingTask>> mHighPriorityQueue;
+  std::queue<RefPtr<IDecodingTask>> mLowPriorityQueue;
   nsTArray<nsCOMPtr<nsIThread>> mThreads;
   TimeDuration mIdleTimeout;
   uint8_t mMaxIdleThreads;   // Maximum number of workers when idle.
