@@ -80,6 +80,11 @@ public:
 
   mozilla::dom::Element* FindImageMap();
 
+  /**
+   * Toggle whether or not to synchronously decode an image on draw.
+   */
+  void SetSyncDecodingHint(bool aHint);
+
 protected:
   enum ImageLoadType {
     // Most normal image loads
@@ -444,6 +449,16 @@ private:
   void MakePendingScriptedRequestsCurrent();
 
   /**
+   * Depending on the configured decoding hint, and/or how recently we updated
+   * the image request, force or stop the frame from decoding the image
+   * synchronously.
+   * @param aPrepareNextRequest True if this is when updating the image request.
+   * @param aFrame The frame to configure, uses primary frame if unset.
+   */
+  void MaybeForceSyncDecoding(bool aPrepareNextRequest,
+                              nsIFrame* aFrame = nullptr);
+
+  /**
    * Typically we will have only one observer (our frame in the screen
    * prescontext), so we want to only make space for one and to
    * heap-allocate anything past that (saves memory and malloc churn
@@ -522,6 +537,9 @@ private:
   //
   // Also we use this variable to check if some evil code is reentering LoadImage.
   bool mIsStartingImageLoad;
+
+  // If true, force frames to synchronously decode images on draw.
+  bool mSyncDecodingHint;
 };
 
 #endif // nsImageLoadingContent_h__
