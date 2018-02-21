@@ -309,6 +309,16 @@ RasterImage::LookupFrameInternal(const IntSize& aSize,
     return mFrameAnimator->GetCompositedFrame(*mAnimationState);
   }
 
+  if (aFlags & FLAG_SYNC_DECODE) {
+    nsAutoCString spec;
+    if (mURI) {
+      mURI->GetSpec(spec);
+    } else {
+      spec.AssignLiteral("<none>");
+    }
+    printf_stderr("[AO] RasterImage::LookupFrameInternal -- sync %s\n", spec.Data());
+  }
+
   SurfaceFlags surfaceFlags = ToSurfaceFlags(aFlags);
 
   // We don't want any substitution for sync decodes, and substitution would be
