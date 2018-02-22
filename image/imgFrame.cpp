@@ -7,6 +7,7 @@
 #include "imgFrame.h"
 #include "ImageRegion.h"
 #include "ShutdownTracker.h"
+#include "SurfaceCache.h"
 
 #include "prenv.h"
 
@@ -94,8 +95,7 @@ ShouldUseHeap(const IntSize& aSize,
     return true;
   }
 
-  // Lets us avoid too many small images consuming all of the handles. The
-  // actual allocation checks for overflow.
+  // Lets us avoid too many small images consuming all of the handles.
   int32_t bufferSize = (aStride * aSize.width) / 1024;
   if (bufferSize < gfxPrefs::ImageMemVolatileMinThresholdKB()) {
     return true;
@@ -105,13 +105,12 @@ ShouldUseHeap(const IntSize& aSize,
 }
 
 static already_AddRefed<DataSourceSurface>
-AllocateBufferForImage(const IntSize& size,
-                       SurfaceFormat format,
-                       bool aIsAnimated = false)
+AllocateBufferForImageInternal(int32_t aStride,
+                               const IntSize& aSize,
+                               SurfaceFormat aFormat,
+                               bool aIsAnimated)
 {
-  int32_t stride = VolatileSurfaceStride(size, format);
-
-  if (ShouldUseHeap(size, stride, aIsAnimated)) {
+  if (ShouldUseHeap(aSize, aStride, aIsAnimated)) {
     RefPtr<SourceSurfaceAlignedRawData> newSurf =
       new SourceSurfaceAlignedRawData();
     if (newSurf->Init(size, format, false, 0, stride)) {
@@ -122,15 +121,51 @@ AllocateBufferForImage(const IntSize& size,
   if (!aIsAnimated && gfxVars::GetUseWebRenderOrDefault()
                    && gfxPrefs::ImageMemShared()) {
     RefPtr<SourceSurfaceSharedData> newSurf = new SourceSurfaceSharedData();
-    if (newSurf->Init(size, stride, format)) {
+    if (newSurf->Init(aSize, aStride, aFormat)) {
       return newSurf.forget();
     }
   } else {
     RefPtr<SourceSurfaceVolatileData> newSurf= new SourceSurfaceVolatileData();
-    if (newSurf->Init(size, stride, format)) {
+    if (newSurf->Init(aSize, aStride, aFormat)) {
       return newSurf.forget();
     }
   }
+  return nullptr;
+}
+
+static already_AddRefed<DataSourceSurface>
+AllocateBufferForImage(const IntSize& aSize,
+                       SurfaceFormat aFormat,
+                       bool aIsAnimated = false)
+{
+  // We may fail the allocation due to resource exhaustion. We should try to
+  // evict some unlocked cache entries to satisfy the new request.
+  int32_t stride = VolatileSurfaceStride(aSize, aFormat);
+  int32_t remaining = gfxPrefs::ImageMemAllocDiscardAttempts();
+  do {
+    RefPtr<DataSourceSurface> surface =
+      AllocateBufferForImageInternal(stride, aSize, aFormat, aIsAnimated);
+    if (surface) {
+      return surface.forget();
+    }
+  } while (--remaining >= 0 && SurfaceCache::Discard(stride * aSize.height));
+
+  return nullptr;
+}
+
+static uint8_t*
+AllocatePalettedBufferForImage(size_t aSize)
+{
+  // We may fail the allocation due to resource exhaustion. We should try to
+  // evict some unlocked cache entries to satisfy the new request.
+  int32_t remaining = gfxPrefs::ImageMemAllocDiscardAttempts();
+  do {
+    uint8_t* buffer = static_cast<uint8_t*>(calloc(aSize, sizeof(uint8_t)));
+    if (buffer) {
+      return buffer;
+    }
+  } while (--remaining >= 0 && SurfaceCache::Discard(aSize));
+
   return nullptr;
 }
 
@@ -275,11 +310,10 @@ imgFrame::InitForDecoder(const nsIntSize& aImageSize,
     // Use the fallible allocator here. Paletted images always use 1 byte per
     // pixel, so calculating the amount of memory we need is straightforward.
     size_t dataSize = PaletteDataLength() + mFrameRect.Area();
-    mPalettedImageData = static_cast<uint8_t*>(calloc(dataSize, sizeof(uint8_t)));
-    if (!mPalettedImageData) {
-      NS_WARNING("Call to calloc for paletted image data should succeed");
+    mPalettedImageData = AllocatePalettedBufferForImage(dataSize);
+    if (NS_WARN_IF(!mPalettedImageData)) {
+      return NS_ERROR_OUT_OF_MEMORY;
     }
-    NS_ENSURE_TRUE(mPalettedImageData, NS_ERROR_OUT_OF_MEMORY);
   } else {
     MOZ_ASSERT(!mLockedSurface, "Called imgFrame::InitForDecoder() twice?");
 

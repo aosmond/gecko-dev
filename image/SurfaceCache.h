@@ -415,6 +415,14 @@ struct SurfaceCache
   static void PruneImage(const ImageKey aImageKey);
 
   /**
+   * Attempts to evicts cache entries up to at least the given cost.
+   *
+   * @param aCost   The cost to discard.
+   * @return True if any entries were discarded, even if less than aCost.
+   */
+  static bool Discard(size_t aCost);
+
+  /**
    * Evicts all evictable entries from the cache.
    *
    * All entries are evictable except for entries associated with locked images.

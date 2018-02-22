@@ -1091,6 +1091,32 @@ public:
     MaybeRemoveEmptyCache(aImageKey, cache);
   }
 
+  void Discard(Cost aCost, const StaticMutexAutoLock& aAutoLock)
+  {
+    if (mCosts.IsEmpty()) {
+      return;
+    }
+
+    // If the largest evictable entry has a cost greater than what we need,
+    // then let's find the smallest entry which could satisfy our needs and
+    // evict that instead.
+    if (mCosts.LastElement().GetCost() > aCost) {
+      auto i = mCosts.rbegin();
+      while (++i != mCosts.rend() && (*i).GetCost() >= aCost) { }
+      --i;
+      Remove((*i).Surface(), /* aStopTracking */ true, aAutoLock);
+      return;
+    }
+
+    // The largest evictable entry is the same as or smaller than what we need;
+    // discard until we meet the target.
+    Cost discarded = 0;
+    do {
+      discarded += mCosts.LastElement().GetCost();
+      Remove(mCosts.LastElement().Surface(), /* aStopTracking */ true, aAutoLock);
+    } while (!mCosts.IsEmpty() && discarded < aCost);
+  }
+
   void DiscardAll(const StaticMutexAutoLock& aAutoLock)
   {
     // Remove in order of cost because mCosts is an array and the other data
@@ -1587,6 +1613,22 @@ SurfaceCache::PruneImage(const ImageKey aImageKey)
       sInstance->TakeDiscard(discard, lock);
     }
   }
+}
+
+/* static */ bool
+SurfaceCache::Discard(size_t aCost)
+{
+  nsTArray<RefPtr<CachedSurface>> discard;
+  {
+    StaticMutexAutoLock lock(sInstanceMutex);
+    if (sInstance) {
+      sInstance->Discard(aCost, lock);
+      sInstance->TakeDiscard(discard, lock);
+    }
+  }
+
+  // We succeed if we managed to discard anything.
+  return !discard.IsEmpty();
 }
 
 /* static */ void

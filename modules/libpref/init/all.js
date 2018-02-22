@@ -4730,6 +4730,10 @@ pref("image.layout_network_priority", true);
 // Image memory management prefs
 //
 
+// If the initial image frame allocation fails, how many times should we attempt
+// to discard cache entries and retry the allocation before giving up.
+pref("image.mem.alloc_discard_attempts", 4);
+
 // Discards inactive image frames and re-decodes them on demand from
 // compressed data.
 pref("image.mem.discardable", true);
