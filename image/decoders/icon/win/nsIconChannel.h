@@ -41,6 +41,8 @@ public:
   nsresult Init(nsIURI* uri);
 
 protected:
+  friend class IconDecodingTask;
+
   nsCOMPtr<nsIURI> mUrl;
   nsCOMPtr<nsIURI> mOriginalURI;
   nsCOMPtr<nsILoadGroup> mLoadGroup;
@@ -56,11 +58,21 @@ protected:
                                   nsCString& aContentType,
                                   nsCString& aFileExtension);
   nsresult GetHIconFromFile(HICON* hIcon);
-  nsresult MakeInputStream(nsIInputStream** _retval, bool nonBlocking);
+  nsresult GetHIconFromFile(nsIFile* aLocalFile,
+                            uint32_t aDesiredImageSize,
+                            const nsCString& aContentType,
+                            const nsCString& aFileExtension,
+                            HICON* hIcon);
+  nsresult MakeInputStream(bool nonBlocking, nsIInputStream** _retval);
+  nsresult MakeInputStream(HICON hIcon, bool aNonBlocking,
+                           nsIOutputStream* aOutStream,
+                           nsIInputStream** _retval);
 
   // Functions specific to Vista and above
 protected:
   nsresult GetStockHIcon(nsIMozIconURI* aIconURI, HICON* hIcon);
+  nsresult GetStockHIcon(const nsCString& aStockIcon,
+                         uint32_t aDesiredImageSize, HICON* hIcon);
 };
 
 #endif // mozilla_image_encoders_icon_win_nsIconChannel_h
