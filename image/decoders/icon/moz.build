@@ -17,7 +17,7 @@ include('/ipc/chromium/chromium-config.mozbuild')
 platform = None
 
 if 'gtk' in CONFIG['MOZ_WIDGET_TOOLKIT']:
-    platform = 'gtk'
+    platform = 'win'
 
 if CONFIG['OS_ARCH'] == 'WINNT':
     platform = 'win'

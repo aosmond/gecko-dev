@@ -21,9 +21,14 @@
 #include "nsIStreamListener.h"
 #include "nsIIconURI.h"
 
+#ifdef MOZ_WIDGET_GTK
+typedef uint32_t HICON;
+#else
 #include <windows.h>
+#endif
 
 class nsIFile;
+class nsIOutputStream;
 
 class nsIconChannel final : public nsIChannel, public nsIStreamListener
 {
@@ -41,7 +46,7 @@ public:
   nsresult Init(nsIURI* uri);
 
 protected:
-  friend class IconDecodingTask;
+  class IconChannelDecodingTask;
 
   nsCOMPtr<nsIURI> mUrl;
   nsCOMPtr<nsIURI> mOriginalURI;
