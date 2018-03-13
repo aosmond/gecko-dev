@@ -10,6 +10,7 @@
 #include "gfxDrawable.h"
 #include "gfxPlatform.h"
 #include "gfxUtils.h"
+#include "mozilla/gfx/gfxVars.h"
 #include "imgFrame.h"
 #include "mozilla/AutoRestore.h"
 #include "mozilla/MemoryReporting.h"
@@ -948,6 +949,19 @@ VectorImage::MaybeRestrictSVGContext(Maybe<SVGImageContext>& aNewSVGContext,
     }
   }
 
+#if 0
+  if (mURI && strcmp(mURI->Spec(), "file:///moz/gecko-dev/image/test/reftest/downscaling/black-border-rect.svg") == 0) {
+    if (aNewSVGContext.isNothing()) {
+      aNewSVGContext = aSVGContext;
+    }
+    if (aNewSVGContext.isNothing()) {
+      aNewSVGContext.emplace(Some(CSSIntSize(72, 58)));
+    } else if (!aNewSVGContext->GetViewportSize()) {
+      aNewSVGContext->SetViewportSize(Some(CSSIntSize(72, 58)));
+    }
+  }
+#endif
+
   return haveContextPaint && !blockContextPaint;
 }
 
@@ -1101,6 +1115,29 @@ VectorImage::CreateSurface(const SVGDrawingParameters& aParams,
 
   mSVGDocumentWrapper->UpdateViewportBounds(aParams.viewportSize);
   mSVGDocumentWrapper->FlushImageTransformInvalidation();
+
+  if (mURI && strcmp(mURI->Spec(), "file:///moz/gecko-dev/layout/reftests/backgrounds/vector/nonpercent-width-nonpercent-height.svg") == 0) {
+    printf_stderr("[AO] [%p] VectorImage::CreateSurface -- %s\n", this, mURI ? mURI->Spec() : "<null>");
+    printf_stderr("[AO] [%p]   -- size %dx%d\n", this, aParams.size.width, aParams.size.height);
+    if (aParams.svgContext) {
+      const auto& viewportSize = aParams.svgContext->GetViewportSize();
+      if (viewportSize) {
+        printf_stderr("[AO] [%p]   -- viewport %dx%d\n", this, viewportSize->width, viewportSize->height);
+      }
+      const auto& aspectRatio = aParams.svgContext->GetPreserveAspectRatio();
+      if (aspectRatio) {
+        nsAutoString s;
+        aspectRatio->ToString(s);
+        printf_stderr("[AO] [%p]   -- par %s\n", this, NS_LossyConvertUTF16toASCII(s).get());
+      }
+    }
+
+    if (!gfxVars::UseWebRender() && aParams.context) {
+      aWillCache = false;
+      return nullptr;
+    }
+  }
+
 
   // Determine whether or not we should put the surface to be created into
   // the cache. If we fail, we need to reset this to false to let the caller
