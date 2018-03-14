@@ -568,6 +568,7 @@ public:
   NS_DECL_NSIASYNCVERIFYREDIRECTCALLBACK
 
 private:
+  void AbortRequest();
   void UpdateProxies();
   virtual ~imgCacheValidator();
 

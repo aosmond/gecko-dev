@@ -2924,9 +2924,21 @@ imgCacheValidator::imgCacheValidator(nsProgressNotificationProxy* progress,
 
 imgCacheValidator::~imgCacheValidator()
 {
-  if (mRequest) {
-    mRequest->SetValidator(nullptr);
+  AbortRequest();
+}
+
+void
+imgCacheValidator::AbortRequest()
+{
+  if (!mRequest) {
+    return;
   }
+
+  mRequest->ContinueCancel(NS_BINDING_ABORTED);
+  mRequest->SetValidator(nullptr);
+  mRequest = nullptr;
+  mNewRequest = nullptr;
+  UpdateProxies();
 }
 
 void
@@ -3054,11 +3066,6 @@ imgCacheValidator::OnStartRequest(nsIRequest* aRequest, nsISupports* ctxt)
   // Doom the old request's cache entry
   mRequest->RemoveFromCache();
 
-  // Clear the validator before updating the proxies. The notifications may
-  // clone an existing request, and its state could be inconsistent.
-  mRequest->SetValidator(nullptr);
-  mRequest = nullptr;
-
   // We use originalURI here to fulfil the imgIRequest contract on GetURI.
   nsCOMPtr<nsIURI> originalURI;
   channel->GetOriginalURI(getter_AddRefs(originalURI));
@@ -3066,8 +3073,14 @@ imgCacheValidator::OnStartRequest(nsIRequest* aRequest, nsISupports* ctxt)
     mNewRequest->Init(originalURI, uri, mHadInsecureRedirect, aRequest, channel,
                       mNewEntry, context, triggeringPrincipal, corsmode, refpol);
   if (NS_FAILED(rv)) {
+    AbortRequest();
     return rv;
   }
+
+  // Clear the validator before updating the proxies. The notifications may
+  // clone an existing request, and its state could be inconsistent.
+  mRequest->SetValidator(nullptr);
+  mRequest = nullptr;
 
   mDestListener = new ProxyListener(mNewRequest);
 
