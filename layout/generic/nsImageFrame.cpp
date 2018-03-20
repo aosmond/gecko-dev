@@ -1777,6 +1777,22 @@ nsDisplayImage::BuildLayer(nsDisplayListBuilder* aBuilder,
   return layer.forget();
 }
 
+void
+nsDisplayImage::UpdatePrevImage(imgIContainer* aPrevImage)
+{
+  // Most of the time, it should be the same and we can avoid the AddRef/Release
+  // cycling. We also need to update the frame itself, because if the display
+  // item is recreated, it will get its previous image from the frame.
+  if (mPrevImage == aPrevImage) {
+    return;
+  }
+
+  mPrevImage = aPrevImage;
+  if (mFrame->IsImageFrame()) {
+    static_cast<nsImageFrame*>(mFrame)->mPrevImage = aPrevImage;
+  }
+}
+
 bool
 nsDisplayImage::CreateWebRenderCommands(mozilla::wr::DisplayListBuilder& aBuilder,
                                         mozilla::wr::IpcResourceUpdateQueue& aResources,
@@ -1790,8 +1806,8 @@ nsDisplayImage::CreateWebRenderCommands(mozilla::wr::DisplayListBuilder& aBuilde
 
   if (mFrame->IsImageFrame()) {
     // Image layer doesn't support draw focus ring for image map.
-    nsImageFrame* f = static_cast<nsImageFrame*>(mFrame);
-    if (f->HasImageMap()) {
+    nsImageFrame* imageFrame = static_cast<nsImageFrame*>(mFrame);
+    if (imageFrame->HasImageMap()) {
       return false;
     }
   }
@@ -1804,23 +1820,68 @@ nsDisplayImage::CreateWebRenderCommands(mozilla::wr::DisplayListBuilder& aBuilde
     flags |= imgIContainer::FLAG_SYNC_DECODE;
   }
 
+  // The selected image we are displaying. We start with the current image.
+  imgIContainer* image = mImage;
+
+  // If we have an image we were previously displaying (e.g. due to an src
+  // change), demand that the current image be fully decoded before switching.
+  uint32_t extraFlags = 0;
+  if (mPrevImage && mPrevImage != image) {
+    extraFlags |= imgIContainer::FLAG_WANT_FULLY_DECODED;
+  }
+
   const int32_t factor = mFrame->PresContext()->AppUnitsPerDevPixel();
   const LayoutDeviceRect destRect(
     LayoutDeviceRect::FromAppUnits(GetDestRect(), factor));
   Maybe<SVGImageContext> svgContext;
   IntSize decodeSize =
-    nsLayoutUtils::ComputeImageContainerDrawingParameters(mImage, mFrame, destRect,
+    nsLayoutUtils::ComputeImageContainerDrawingParameters(image, mFrame, destRect,
                                                           aSc, flags, svgContext);
   RefPtr<ImageContainer> container =
-    mImage->GetImageContainerAtSize(aManager, decodeSize, svgContext, flags);
+    image->GetImageContainerAtSize(aManager, decodeSize,
+                                   svgContext, flags | extraFlags);
   if (!container) {
-    return false;
+    if (!image->IsImageContainerAvailableAtSize(aManager, decodeSize, flags)) {
+      // We might have failed because image containers simply aren't supported
+      // at all. This can happen with animated SVGs, and oriented/frozen/clipped
+      // images. The latter we should stop using with WebRender and switch to
+      // updating the stacking context.
+      return false;
+    }
+
+    if (extraFlags) {
+      // The current image isn't ready, let's try displaying the previous image.
+      MOZ_ASSERT(mPrevImage);
+      container = mPrevImage->GetImageContainerAtSize(aManager, decodeSize,
+                                                      svgContext, flags);
+      if (container && container->HasCurrentImage()) {
+        image = mPrevImage;
+      } else {
+        // It is also not ready; this is unlikely but not impossible. In that
+        // case we should just accept whatever the current image has.
+        UpdatePrevImage(nullptr);
+        container = image->GetImageContainerAtSize(aManager, decodeSize,
+                                                   svgContext, flags);
+        if (!container) {
+          return false;
+        }
+      }
+    } else {
+      // No container and no previous image.
+      return false;
+    }
   }
+
+  // If successful, that means we were able to get a frame and image key from
+  // the container. Thus we should ensure we update the previous image to
+  // whatever we just used. If we got nothing, any previous image was unused.
+  bool success = aManager->CommandBuilder().PushImage(this, container, aBuilder,
+                                                      aResources, aSc, destRect);
+  UpdatePrevImage(success ? image : nullptr);
 
   // If the image container is empty, we don't want to fallback. Any other
   // failure will be due to resource constraints and fallback is unlikely to
   // help us. Hence we can ignore the return value from PushImage.
-  aManager->CommandBuilder().PushImage(this, container, aBuilder, aResources, aSc, destRect);
   return true;
 }
 

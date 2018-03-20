@@ -513,6 +513,8 @@ public:
 
   NS_DISPLAY_DECL_NAME("Image", TYPE_IMAGE)
 private:
+  void UpdatePrevImage(imgIContainer* aPrevImage);
+
   nsCOMPtr<imgIContainer> mImage;
   nsCOMPtr<imgIContainer> mPrevImage;
 };
