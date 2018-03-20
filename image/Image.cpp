@@ -115,7 +115,8 @@ ImageResource::GetImageContainerImpl(LayerManager* aManager,
   MOZ_ASSERT((aFlags & ~(FLAG_SYNC_DECODE |
                          FLAG_SYNC_DECODE_IF_FAST |
                          FLAG_ASYNC_NOTIFY |
-                         FLAG_HIGH_QUALITY_SCALING))
+                         FLAG_HIGH_QUALITY_SCALING |
+                         FLAG_WANT_FULLY_DECODED))
                == FLAG_NONE,
              "Unsupported flag passed to GetImageContainer");
 
@@ -129,7 +130,8 @@ ImageResource::GetImageContainerImpl(LayerManager* aManager,
   }
 
   uint32_t flags = (aFlags & ~(FLAG_SYNC_DECODE |
-                               FLAG_SYNC_DECODE_IF_FAST)) | FLAG_ASYNC_NOTIFY;
+                               FLAG_SYNC_DECODE_IF_FAST |
+                               FLAG_WANT_FULLY_DECODED)) | FLAG_ASYNC_NOTIFY;
   RefPtr<layers::ImageContainer> container;
   ImageContainerEntry* entry = nullptr;
   int i = mImageContainers.Length() - 1;
@@ -221,13 +223,33 @@ ImageResource::GetImageContainerImpl(LayerManager* aManager,
               break;
            case ImgDrawResult::WRONG_SIZE:
               // Unused by GetFrameInternal
-            default:
+           default:
               MOZ_ASSERT_UNREACHABLE("Unhandled DrawResult type!");
               return container.forget();
           }
         }
         break;
       }
+    }
+  }
+
+  if (aFlags & FLAG_WANT_FULLY_DECODED) {
+    // The caller has indicated that it only wants an image container which has
+    // a fully decoded result. This is useful when it has fallback data to use
+    // and it does not want to switch to the new content until it is available.
+    switch (drawResult) {
+      case ImgDrawResult::NOT_READY:
+      case ImgDrawResult::INCOMPLETE:
+      case ImgDrawResult::TEMPORARY_ERROR:
+        if (container) {
+          // We went through the trouble of fetching the surface, we might as
+          // well update the container with the current state.
+          SetCurrentImage(container, surface, true);
+          entry->mLastDrawResult = drawResult;
+        }
+        return nullptr;
+      default:
+        break;
     }
   }
 

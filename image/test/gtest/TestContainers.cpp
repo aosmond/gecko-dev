@@ -26,34 +26,41 @@ protected:
   AutoInitializeImageLib mInit;
 };
 
-TEST_F(ImageContainers, RasterImageContainer)
+static already_AddRefed<Image>
+PrepareImage(const ImageTestCase& aTestCase)
 {
-  ImageTestCase testCase = GreenPNGTestCase();
-
   // Create an image.
   RefPtr<Image> image =
-    ImageFactory::CreateAnonymousImage(nsDependentCString(testCase.mMimeType));
-  ASSERT_TRUE(!image->HasError());
+    ImageFactory::CreateAnonymousImage(nsDependentCString(aTestCase.mMimeType));
+  ASSERT_TRUE_OR_RETURN(!image->HasError(), nullptr);
 
-  nsCOMPtr<nsIInputStream> inputStream = LoadFile(testCase.mPath);
-  ASSERT_TRUE(inputStream);
+  nsCOMPtr<nsIInputStream> inputStream = LoadFile(aTestCase.mPath);
+  ASSERT_TRUE_OR_RETURN(inputStream, nullptr);
 
   // Figure out how much data we have.
   uint64_t length;
   nsresult rv = inputStream->Available(&length);
-  ASSERT_TRUE(NS_SUCCEEDED(rv));
+  ASSERT_TRUE_OR_RETURN(NS_SUCCEEDED(rv), nullptr);
 
   // Write the data into the image.
   rv = image->OnImageDataAvailable(nullptr, nullptr, inputStream, 0,
                                    static_cast<uint32_t>(length));
-  ASSERT_TRUE(NS_SUCCEEDED(rv));
+  ASSERT_TRUE_OR_RETURN(NS_SUCCEEDED(rv), nullptr);
 
   // Let the image know we've sent all the data.
   rv = image->OnImageDataComplete(nullptr, nullptr, NS_OK, true);
-  ASSERT_TRUE(NS_SUCCEEDED(rv));
+  ASSERT_TRUE_OR_RETURN(NS_SUCCEEDED(rv), nullptr);
 
   RefPtr<ProgressTracker> tracker = image->GetProgressTracker();
   tracker->SyncNotifyProgress(FLAG_LOAD_COMPLETE);
+  return image.forget();
+}
+
+TEST_F(ImageContainers, RasterScaling)
+{
+  ImageTestCase testCase = GreenPNGTestCase();
+  RefPtr<Image> image = PrepareImage(testCase);
+  ASSERT_TRUE(image);
 
   RefPtr<layers::LayerManager> layerManager =
     new layers::BasicLayerManager(layers::BasicLayerManager::BLM_OFFSCREEN);
@@ -102,4 +109,49 @@ TEST_F(ImageContainers, RasterImageContainer)
                                    Nothing(),
                                    imgIContainer::FLAG_SYNC_DECODE);
   ASSERT_EQ(nativeContainer.get(), againContainer.get());
+}
+
+TEST_F(ImageContainers, RasterWantFullyDecoded)
+{
+  ImageTestCase testCase = GreenPNGTestCase();
+  RefPtr<Image> image = PrepareImage(testCase);
+  ASSERT_TRUE(image);
+
+  RefPtr<layers::LayerManager> layerManager =
+    new layers::BasicLayerManager(layers::BasicLayerManager::BLM_OFFSCREEN);
+
+  // Since decoding has not begun at any size yet, then we know that this should
+  // return nothing. It will have initiated a decode however, so subsequent
+  // calls will be racy.
+  RefPtr<layers::ImageContainer> flaggedContainer =
+    image->GetImageContainer(layerManager,
+                             imgIContainer::FLAG_WANT_FULLY_DECODED);
+  EXPECT_TRUE(!flaggedContainer);
+
+  // Force sync decoding. We will get a container for sure.
+  RefPtr<layers::ImageContainer> syncContainer =
+    image->GetImageContainer(layerManager,
+                             imgIContainer::FLAG_SYNC_DECODE);
+  ASSERT_TRUE(syncContainer != nullptr);
+  EXPECT_TRUE(syncContainer->HasCurrentImage());
+
+  // With us keeping the container alive from the sync decode, try again with
+  // the fully decoded flag.
+  flaggedContainer =
+    image->GetImageContainer(layerManager,
+                             imgIContainer::FLAG_WANT_FULLY_DECODED);
+  EXPECT_EQ(syncContainer.get(), flaggedContainer.get());
+  EXPECT_TRUE(syncContainer->HasCurrentImage());
+
+  // This clears the weak pointer to the container inside the image.
+  flaggedContainer = nullptr;
+  syncContainer = nullptr;
+
+  // We need to lookup again and recreate the container, but it should be
+  // otherwise as before.
+  flaggedContainer =
+    image->GetImageContainer(layerManager,
+                             imgIContainer::FLAG_WANT_FULLY_DECODED);
+  ASSERT_TRUE(flaggedContainer != nullptr);
+  EXPECT_TRUE(flaggedContainer->HasCurrentImage());
 }
