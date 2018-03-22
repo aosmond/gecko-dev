@@ -56,6 +56,7 @@ native nsIntRectByVal(nsIntRect);
 [ref] native nsIntSize(nsIntSize);
 native nsSize(nsSize);
 [ptr] native nsIFrame(nsIFrame);
+[ptr] native ImageContainer(mozilla::layers::ImageContainer);
 native TempRefImageContainer(already_AddRefed<mozilla::layers::ImageContainer>);
 [ref] native ImageRegion(mozilla::image::ImageRegion);
 [ptr] native LayerManager(mozilla::layers::LayerManager);
@@ -329,6 +330,12 @@ interface imgIContainer : nsISupports
                                                                      [const] in nsIntSize aSize,
                                                                      [const] in MaybeSVGImageContext aSVGContext,
                                                                      in uint32_t aFlags);
+
+  /**
+   * Get the DrawResult for the given ImageContainer. The ImageContainer must
+   * be owned by the image, obtained via getImageContainer(AtSize).
+   */
+  [noscript, notxpcom] ImgDrawResult getImageContainerDrawResult(in ImageContainer aContainer);
 
   /**
    * Draw the requested frame of this image onto the context specified.

@@ -232,6 +232,12 @@ ImageWrapper::GetImageContainerAtSize(LayerManager* aManager,
                                               aSVGContext, aFlags);
 }
 
+ImgDrawResult
+ImageWrapper::GetImageContainerDrawResult(layers::ImageContainer* aContainer)
+{
+  return mInnerImage->GetImageContainerDrawResult(aContainer);
+}
+
 NS_IMETHODIMP_(ImgDrawResult)
 ImageWrapper::Draw(gfxContext* aContext,
                    const nsIntSize& aSize,

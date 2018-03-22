@@ -365,6 +365,9 @@ protected:
                           const Maybe<SVGImageContext>& aSVGContext,
                           uint32_t aFlags);
 
+  ImgDrawResult
+    GetImageContainerDrawResultImpl(layers::ImageContainer* aContainer);
+
   void UpdateImageContainer();
 
   void ReleaseImageContainer();

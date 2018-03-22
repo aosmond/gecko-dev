@@ -243,6 +243,12 @@ DynamicImage::GetImageContainerAtSize(LayerManager* aManager,
   return nullptr;
 }
 
+ImgDrawResult
+DynamicImage::GetImageContainerDrawResult(layers::ImageContainer* aContainer)
+{
+  return ImgDrawResult::BAD_ARGS;
+}
+
 NS_IMETHODIMP_(ImgDrawResult)
 DynamicImage::Draw(gfxContext* aContext,
                    const nsIntSize& aSize,

@@ -908,6 +908,12 @@ VectorImage::GetImageContainerAtSize(LayerManager* aManager,
                                flags);
 }
 
+ImgDrawResult
+VectorImage::GetImageContainerDrawResult(layers::ImageContainer* aContainer)
+{
+  return GetImageContainerDrawResultImpl(aContainer);
+}
+
 bool
 VectorImage::MaybeRestrictSVGContext(Maybe<SVGImageContext>& aNewSVGContext,
                                      const Maybe<SVGImageContext>& aSVGContext,

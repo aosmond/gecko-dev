@@ -267,6 +267,21 @@ ImageResource::ReleaseImageContainer()
   mImageContainers.Clear();
 }
 
+ImgDrawResult
+ImageResource::GetImageContainerDrawResultImpl(layers::ImageContainer* aContainer)
+{
+  MOZ_ASSERT(aContainer);
+
+  for (int i = mImageContainers.Length() - 1; i >= 0; --i) {
+    ImageContainerEntry& entry = mImageContainers[i];
+    if (aContainer == entry.mContainer.get()) {
+      return entry.mLastDrawResult;
+    }
+  }
+
+  return ImgDrawResult::BAD_ARGS;
+}
+
 // Constructor
 ImageResource::ImageResource(ImageURL* aURI) :
   mURI(aURI),

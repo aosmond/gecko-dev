@@ -687,6 +687,12 @@ RasterImage::GetImageContainerAtSize(LayerManager* aManager,
   return GetImageContainerImpl(aManager, aSize, Nothing(), aFlags);
 }
 
+ImgDrawResult
+RasterImage::GetImageContainerDrawResult(layers::ImageContainer* aContainer)
+{
+  return GetImageContainerDrawResultImpl(aContainer);
+}
+
 size_t
 RasterImage::SizeOfSourceWithComputedFallback(SizeOfState& aState) const
 {
