@@ -2413,12 +2413,9 @@ NS_SecurityHashURI(nsIURI *aURI)
         nsIProtocolHandler::ORIGIN_IS_FULL_SPEC, &hasFlag)) ||
         hasFlag)
     {
-        nsAutoCString spec;
-        uint32_t specHash;
-        nsresult res = baseURI->GetSpec(spec);
-        if (NS_SUCCEEDED(res))
-            specHash = mozilla::HashString(spec);
-        else
+        uint32_t specHash = 0;
+        nsresult res = baseURI->GetSpecHash(/* aIncludeRef */ true, &specHash);
+        if (NS_FAILED(res))
             specHash = static_cast<uint32_t>(res);
         return specHash;
     }

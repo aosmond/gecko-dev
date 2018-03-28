@@ -41,15 +41,16 @@ public:
 
     static const nsIURI* KeyToPointer(nsIURI* aKey) { return aKey; }
     static PLDHashNumber HashKey(const nsIURI* aKey) {
-        if (!aKey) {
-            // If the key is null, return hash for empty string.
+        uint32_t specHash = 0;
+        nsIURI* key = const_cast<nsIURI*>(aKey);
+        if (!key || NS_FAILED(key->GetSpecHash(/* aIncludeRef */ true,
+                                               &specHash))) {
+            // If the key is null, or GetSpecHash() fails, ignoring the failure
+            // and returning the hash for empty string seems like the best thing
+            // to do.
             return mozilla::HashString(EmptyCString());
         }
-        nsAutoCString spec;
-        // If GetSpec() fails, ignoring the failure and proceeding with an
-        // empty |spec| seems like the best thing to do.
-        mozilla::Unused << const_cast<nsIURI*>(aKey)->GetSpec(spec);
-        return mozilla::HashString(spec);
+        return specHash;
     }
 
     enum { ALLOW_MEMMOVE = true };

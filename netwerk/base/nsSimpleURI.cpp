@@ -19,6 +19,7 @@
 #include "nsEscape.h"
 #include "nsError.h"
 #include "nsIIPCSerializableURI.h"
+#include "mozilla/HashFunctions.h"
 #include "mozilla/MemoryReporting.h"
 #include "mozilla/ipc/URIUtils.h"
 #include "nsIURIMutator.h"
@@ -240,6 +241,31 @@ nsSimpleURI::GetSpec(nsACString &result)
         MOZ_ASSERT(mRef.IsEmpty(), "mIsRefValid/mRef invariant broken");
     }
 
+    return NS_OK;
+}
+
+NS_IMETHODIMP
+nsSimpleURI::GetSpecHash(bool aIncludeRef, uint32_t* aHash)
+{
+    uint32_t h = AddToHash(HashString(mScheme),
+                           HashString(":"),
+                           HashString(mPath));
+    if (mIsQueryValid) {
+        h = AddToHash(h, HashString("?"),
+                         HashString(mQuery));
+    } else {
+        MOZ_ASSERT(mQuery.IsEmpty(), "mIsQueryValid/mQuery invariant broken");
+    }
+    if (aIncludeRef) {
+        if (mIsRefValid) {
+            h = AddToHash(h, HashString("#"),
+                             HashString(mRef));
+        } else {
+            MOZ_ASSERT(mRef.IsEmpty(), "mIsRefValid/mRef invariant broken");
+        }
+    }
+
+    *aHash = h;
     return NS_OK;
 }
 

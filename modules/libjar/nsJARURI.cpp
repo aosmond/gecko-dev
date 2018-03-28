@@ -20,6 +20,7 @@
 #include "nsIObjectInputStream.h"
 #include "nsIObjectOutputStream.h"
 #include "nsQueryObject.h"
+#include "mozilla/HashFunctions.h"
 #include "mozilla/ipc/URIUtils.h"
 
 using namespace mozilla::ipc;
@@ -215,6 +216,21 @@ nsJARURI::GetSpec(nsACString &aSpec)
     nsAutoCString entrySpec;
     mJAREntry->GetSpec(entrySpec);
     return FormatSpec(entrySpec, aSpec);
+}
+
+NS_IMETHODIMP
+nsJARURI::GetSpecHash(bool aIncludeRef, uint32_t* aHash)
+{
+    uint32_t entryHash = 0;
+    nsresult rv = mJAREntry->GetSpecHash(aIncludeRef, &entryHash);
+    NS_ENSURE_SUCCESS(rv, rv);
+    uint32_t fileHash = 0;
+    rv = mJARFile->GetSpecHash(/* aIncludeRef */ true, &fileHash);
+    NS_ENSURE_SUCCESS(rv, rv);
+    *aHash = AddToHash(entryHash, fileHash,
+                       HashString(NS_JAR_SCHEME),
+                       HashString(NS_JAR_DELIMITER));
+    return NS_OK;
 }
 
 NS_IMETHODIMP

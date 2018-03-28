@@ -64,10 +64,8 @@ ImageCacheKey::ImageCacheKey(nsIURI* aURI,
     NS_ENSURE_SUCCESS_VOID(aRv);
     mHash = HashGeneric(*mBlobSerial, HashString(mRef));
   } else {
-    nsAutoCString spec;
-    aRv = mURI->GetSpec(spec);
+    aRv = mURI->GetSpecHash(/* aIncludeRef */ true, &mHash);
     NS_ENSURE_SUCCESS_VOID(aRv);
-    mHash = HashString(spec);
   }
 
   mHash = AddToHash(mHash, HashString(suffix), HashString(ptr));

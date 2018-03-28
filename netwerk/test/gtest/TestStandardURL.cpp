@@ -10,7 +10,10 @@
 #include "nsComponentManagerUtils.h"
 #include "nsIURIMutator.h"
 #include "mozilla/ipc/URIUtils.h"
+#include "mozilla/HashFunctions.h"
 #include "mozilla/Unused.h"
+
+using mozilla::HashString;
 
 // In nsStandardURL.cpp
 extern nsresult Test_NormalizeIPv4(const nsACString& host, nsCString& result);
@@ -27,9 +30,13 @@ TEST(TestStandardURL, Simple) {
     ASSERT_EQ(NS_MutateURI(url).SetSpec(NS_LITERAL_CSTRING("http://example.com")).Finalize(url), NS_OK);
 
     nsAutoCString out;
+    uint32_t outHash = 0;
 
     ASSERT_EQ(url->GetSpec(out), NS_OK);
     ASSERT_TRUE(out == NS_LITERAL_CSTRING("http://example.com/"));
+
+    ASSERT_EQ(url->GetSpecHash(true, &outHash), NS_OK);
+    ASSERT_EQ(outHash, HashString("http://example.com/"));
 
     ASSERT_EQ(url->Resolve(NS_LITERAL_CSTRING("foo.html?q=45"), out), NS_OK);
     ASSERT_TRUE(out == NS_LITERAL_CSTRING("http://example.com/foo.html?q=45"));
@@ -250,6 +257,7 @@ MOZ_GTEST_BENCH(TestStandardURL, DISABLED_NormalizePerfFails, [] {
 TEST(TestStandardURL, Mutator)
 {
   nsAutoCString out;
+  uint32_t outHash = 0;
   nsCOMPtr<nsIURI> uri;
   nsresult rv = NS_MutateURI(NS_STANDARDURLMUTATOR_CONTRACTID)
                   .SetSpec(NS_LITERAL_CSTRING("http://example.com"))
@@ -258,6 +266,8 @@ TEST(TestStandardURL, Mutator)
 
   ASSERT_EQ(uri->GetSpec(out), NS_OK);
   ASSERT_TRUE(out == NS_LITERAL_CSTRING("http://example.com/"));
+  ASSERT_EQ(uri->GetSpecHash(true, &outHash), NS_OK);
+  ASSERT_EQ(outHash, HashString("http://example.com/"));
 
   rv = NS_MutateURI(uri)
          .SetScheme(NS_LITERAL_CSTRING("ftp"))
@@ -267,6 +277,10 @@ TEST(TestStandardURL, Mutator)
   ASSERT_EQ(rv, NS_OK);
   ASSERT_EQ(uri->GetSpec(out), NS_OK);
   ASSERT_TRUE(out == NS_LITERAL_CSTRING("ftp://mozilla.org/path?query#ref"));
+  ASSERT_EQ(uri->GetSpecHash(true, &outHash), NS_OK);
+  ASSERT_EQ(outHash, HashString("ftp://mozilla.org/path?query#ref"));
+  ASSERT_EQ(uri->GetSpecHash(false, &outHash), NS_OK);
+  ASSERT_EQ(outHash, HashString("ftp://mozilla.org/path?query"));
 
   nsCOMPtr<nsIURL> url;
   rv = NS_MutateURI(uri)
@@ -275,6 +289,10 @@ TEST(TestStandardURL, Mutator)
   ASSERT_EQ(rv, NS_OK);
   ASSERT_EQ(url->GetSpec(out), NS_OK);
   ASSERT_TRUE(out == NS_LITERAL_CSTRING("https://mozilla.org/path?query#ref"));
+  ASSERT_EQ(url->GetSpecHash(true, &outHash), NS_OK);
+  ASSERT_EQ(outHash, HashString("https://mozilla.org/path?query#ref"));
+  ASSERT_EQ(url->GetSpecHash(false, &outHash), NS_OK);
+  ASSERT_EQ(outHash, HashString("https://mozilla.org/path?query"));
 }
 
 TEST(TestStandardURL, Deserialize_Bug1392739)

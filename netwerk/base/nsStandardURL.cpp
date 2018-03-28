@@ -18,6 +18,7 @@
 #include "nsAutoPtr.h"
 #include "nsIURLParser.h"
 #include "nsNetCID.h"
+#include "mozilla/HashFunctions.h"
 #include "mozilla/MemoryReporting.h"
 #include "mozilla/ipc/URIUtils.h"
 #include "mozilla/TextUtils.h"
@@ -1217,6 +1218,28 @@ nsStandardURL::GetSpec(nsACString &result)
         result = mSpec;
     } else { // XXX: This code path may be slow
         rv = GetDisplaySpec(result);
+    }
+    return rv;
+}
+
+NS_IMETHODIMP
+nsStandardURL::GetSpecHash(bool aIncludeRef, uint32_t* aHash)
+{
+    nsresult rv = NS_OK;
+    if (gPunycodeHost || mDisplayHost.IsEmpty()) {
+        if (aIncludeRef || mRef.mLen < 0) {
+            *aHash = HashString(mSpec);
+        } else {
+            URLSegment noRef(0, mRef.mPos - 1);
+            *aHash = HashString(Segment(noRef));
+        }
+    } else { // XXX: This code path may be slow
+        nsAutoCString spec;
+        rv = aIncludeRef || mRef.mLen < 0 ? GetDisplaySpec(spec)
+                                          : GetSpecIgnoringRef(spec);
+        if (NS_SUCCEEDED(rv)) {
+            *aHash = HashString(spec);
+        }
     }
     return rv;
 }

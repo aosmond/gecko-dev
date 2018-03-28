@@ -7,6 +7,7 @@
 #include "NullPrincipalURI.h"
 
 #include "mozilla/DebugOnly.h"
+#include "mozilla/HashFunctions.h"
 #include "mozilla/MemoryReporting.h"
 
 #include "mozilla/ipc/URIParams.h"
@@ -234,6 +235,14 @@ NS_IMETHODIMP
 NullPrincipalURI::GetSpec(nsACString& _spec)
 {
   _spec = NS_LITERAL_CSTRING(NS_NULLPRINCIPAL_SCHEME ":") + mPath;
+  return NS_OK;
+}
+
+NS_IMETHODIMP
+NullPrincipalURI::GetSpecHash(bool aIncludeRef, uint32_t* aHash)
+{
+  *aHash = AddToHash(HashString(NS_NULLPRINCIPAL_SCHEME ":"),
+                     HashString(mPath));
   return NS_OK;
 }
 

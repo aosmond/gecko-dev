@@ -182,6 +182,14 @@ interface nsIURI : nsISupports
     boolean schemeIs(in string scheme);
 
     /**
+     * An optimization to calculate a hash of the spec without requiring the
+     * users of nsIURI to call GetSpec, thereby saving extra allocating and
+     * freeing. Note that this may not produce the same result as GetSpec and
+     * HashString.
+     */
+    uint32_t getSpecHash(in bool includeRef);
+
+    /**
      * Clones the current URI.
      */
     nsIURI clone();

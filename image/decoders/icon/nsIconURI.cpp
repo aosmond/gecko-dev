@@ -8,6 +8,7 @@
 #include "nsIconURI.h"
 
 #include "mozilla/ArrayUtils.h"
+#include "mozilla/HashFunctions.h"
 #include "mozilla/ipc/URIUtils.h"
 #include "mozilla/Sprintf.h"
 
@@ -117,6 +118,48 @@ nsMozIconURI::GetSpec(nsACString& aSpec)
     aSpec += mContentType.get();
   }
 
+  return NS_OK;
+}
+
+NS_IMETHODIMP
+nsMozIconURI::GetSpecHash(bool aIncludeRef, uint32_t* aHash)
+{
+  uint32_t h = HashString(MOZICON_SCHEME);
+
+  if (mIconURL) {
+    uint32_t fileIconSpecHash;
+    nsresult rv = mIconURL->GetSpecHash(/* aIncludeRef */ true,
+                                        &fileIconSpecHash);
+    NS_ENSURE_SUCCESS(rv, rv);
+    h = AddToHash(h, fileIconSpecHash);
+  } else if (!mStockIcon.IsEmpty()) {
+    h = AddToHash(h, HashString("//stock/"),
+                     HashString(mStockIcon));
+  } else {
+    h = AddToHash(h, HashString("//"),
+                     HashString(mFileName));
+  }
+
+  h = AddToHash(h, HashString("?size="));
+  if (mIconSize >= 0) {
+    h = AddToHash(h, HashString(kSizeStrings[mIconSize]));
+  } else {
+    char buf[20];
+    SprintfLiteral(buf, "%d", mSize);
+    h = AddToHash(h, HashString(buf));
+  }
+
+  if (mIconState >= 0) {
+    h = AddToHash(h, HashString("&state="),
+                     HashString(kStateStrings[mIconState]));
+  }
+
+  if (!mContentType.IsEmpty()) {
+    h = AddToHash(h, HashString("&contentType="),
+                     HashString(mContentType));
+  }
+
+  *aHash = h;
   return NS_OK;
 }
 
