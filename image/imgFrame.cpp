@@ -20,6 +20,7 @@
 #include "mozilla/CheckedInt.h"
 #include "mozilla/gfx/gfxVars.h"
 #include "mozilla/gfx/Tools.h"
+#include "mozilla/gfx/SourceSurfaceMappedData.h"
 #include "mozilla/gfx/SourceSurfaceRawData.h"
 #include "mozilla/layers/SourceSurfaceSharedData.h"
 #include "mozilla/layers/SourceSurfaceVolatileData.h"
@@ -34,12 +35,6 @@ using namespace gfx;
 
 namespace image {
 
-static void
-ScopedMapRelease(void* aMap)
-{
-  delete static_cast<DataSourceSurface::ScopedMap*>(aMap);
-}
-
 static int32_t
 VolatileSurfaceStride(const IntSize& size, SurfaceFormat format)
 {
@@ -48,9 +43,7 @@ VolatileSurfaceStride(const IntSize& size, SurfaceFormat format)
 }
 
 static already_AddRefed<DataSourceSurface>
-CreateLockedSurface(DataSourceSurface *aSurface,
-                    const IntSize& size,
-                    SurfaceFormat format)
+CreateLockedSurface(DataSourceSurface *aSurface)
 {
   // Shared memory is never released until the surface itself is released
   if (aSurface->GetType() == SurfaceType::DATA_SHARED) {
@@ -58,23 +51,17 @@ CreateLockedSurface(DataSourceSurface *aSurface,
     return surf.forget();
   }
 
-  DataSourceSurface::ScopedMap* smap =
-    new DataSourceSurface::ScopedMap(aSurface, DataSourceSurface::READ_WRITE);
-  if (smap->IsMapped()) {
-    // The ScopedMap is held by this DataSourceSurface.
-    RefPtr<DataSourceSurface> surf =
-      Factory::CreateWrappingDataSourceSurface(smap->GetData(),
-                                               aSurface->Stride(),
-                                               size,
-                                               format,
-                                               &ScopedMapRelease,
-                                               static_cast<void*>(smap));
-    if (surf) {
-      return surf.forget();
-    }
+  RefPtr<SourceSurfaceMappedData> surf =
+    new SourceSurfaceMappedData(aSurface, DataSourceSurface::READ_WRITE);
+  DataSourceSurface::MappedSurface mapping;
+
+  // Mapping should be very cheap, as we forced the underlying surface to be
+  // mapped in at construction. We still need to make sure that worked however.
+  if (surf->Map(DataSourceSurface::READ_WRITE, &mapping)) {
+    surf->Unmap();
+    return surf.forget();
   }
 
-  delete smap;
   return nullptr;
 }
 
@@ -290,7 +277,7 @@ imgFrame::InitForDecoder(const nsIntSize& aImageSize,
       return NS_ERROR_OUT_OF_MEMORY;
     }
 
-    mLockedSurface = CreateLockedSurface(mRawSurface, mFrameRect.Size(), mFormat);
+    mLockedSurface = CreateLockedSurface(mRawSurface);
     if (!mLockedSurface) {
       NS_WARNING("Failed to create LockedSurface");
       mAborted = true;
@@ -343,7 +330,7 @@ imgFrame::InitWithDrawable(gfxDrawable* aDrawable,
       return NS_ERROR_OUT_OF_MEMORY;
     }
 
-    mLockedSurface = CreateLockedSurface(mRawSurface, mFrameRect.Size(), mFormat);
+    mLockedSurface = CreateLockedSurface(mRawSurface);
     if (!mLockedSurface) {
       NS_WARNING("Failed to create LockedSurface");
       mAborted = true;
@@ -863,7 +850,7 @@ imgFrame::GetSourceSurfaceInternal()
     return nullptr;
   }
 
-  return CreateLockedSurface(mRawSurface, mFrameRect.Size(), mFormat);
+  return CreateLockedSurface(mRawSurface);
 }
 
 AnimationData
@@ -958,7 +945,7 @@ imgFrame::AddSizeOfExcludingThis(MallocSizeOf aMallocSizeOf,
   if (mPalettedImageData) {
     aHeapSizeOut += aMallocSizeOf(mPalettedImageData);
   }
-  if (mLockedSurface) {
+  if (mLockedSurface != mRawSurface) {
     aHeapSizeOut += aMallocSizeOf(mLockedSurface);
   }
   if (mOptSurface) {
