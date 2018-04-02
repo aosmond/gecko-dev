@@ -298,11 +298,14 @@ private:
         eEncoding_UTF8
     };
 
+    uint32_t mSpecHash;
+    uint32_t mSpecHashHits;
     uint32_t mURLType         : 2; // nsIStandardURL::URLTYPE_xxx
     uint32_t mSupportsFileURL : 1; // QI to nsIFileURL?
     uint32_t mCheckedIfHostA  : 1; // If set to true, it means either that
                                    // mDisplayHost has a been initialized, or
                                    // that the hostname is not punycode
+    uint32_t mHasSpecHash     : 1; // If set to true, mSpecHash is valid
 
     // global objects.  don't use COMPtr as its destructor will cause a
     // coredump if we leak it.

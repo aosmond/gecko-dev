@@ -170,9 +170,12 @@ nsStandardURL::nsStandardURL(bool aSupportsFileURL, bool aTrackURL)
     : mDefaultPort(-1)
     , mPort(-1)
     , mDisplayHost(nullptr)
+    , mSpecHash(0)
+    , mSpecHashHits(0)
     , mURLType(URLTYPE_STANDARD)
     , mSupportsFileURL(aSupportsFileURL)
     , mCheckedIfHostA(false)
+    , mHasSpecHash(false)
 {
     LOG(("Creating nsStandardURL @%p\n", this));
 
@@ -197,6 +200,15 @@ nsStandardURL::nsStandardURL(bool aSupportsFileURL, bool aTrackURL)
 
 nsStandardURL::~nsStandardURL()
 {
+    static Atomic<uint32_t> sTotal(0);
+    static Atomic<uint32_t> sHashed(0);
+    ++sTotal;
+    if (mHasSpecHash) {
+        ++sHashed;
+        if (mSpecHashHits) {
+            printf_stderr("[AO] hashed %u/%u (%u hits)\n\t[%s]\n", (uint32_t)sHashed, (uint32_t)sTotal, mSpecHashHits, mSpec.Data());
+        }
+    }
     LOG(("Destroying nsStandardURL @%p\n", this));
 
 #ifdef DEBUG_DUMP_URLS_AT_SHUTDOWN
@@ -1225,22 +1237,40 @@ nsStandardURL::GetSpec(nsACString &result)
 NS_IMETHODIMP
 nsStandardURL::GetSpecHash(bool aIncludeRef, uint32_t* aHash)
 {
+    static Atomic<uint32_t> sCacheMiss(0);
+    static Atomic<uint32_t> sCacheHit(0);
+
+    if (mHasSpecHash) {
+        *aHash = mSpecHash;
+        ++sCacheHit;
+        ++mSpecHashHits;
+        printf_stderr("[AO] hit %u\n\t[%s]\n", mSpecHashHits, mSpec.Data());
+        return NS_OK;
+    }
+
     nsresult rv = NS_OK;
     if (gPunycodeHost || mDisplayHost.IsEmpty()) {
         if (aIncludeRef || mRef.mLen < 0) {
-            *aHash = HashString(mSpec);
+            mSpecHash = HashString(mSpec);
         } else {
             URLSegment noRef(0, mRef.mPos - 1);
-            *aHash = HashString(Segment(noRef));
+            mSpecHash = HashString(Segment(noRef));
         }
     } else { // XXX: This code path may be slow
         nsAutoCString spec;
         rv = aIncludeRef || mRef.mLen < 0 ? GetDisplaySpec(spec)
                                           : GetSpecIgnoringRef(spec);
         if (NS_SUCCEEDED(rv)) {
-            *aHash = HashString(spec);
+            mSpecHash = HashString(spec);
         }
     }
+
+    if (NS_SUCCEEDED(rv)) {
+        *aHash = mSpecHash;
+        mHasSpecHash = true;
+    }
+
+    ++sCacheMiss;
     return rv;
 }
 
