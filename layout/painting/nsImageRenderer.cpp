@@ -612,39 +612,38 @@ nsImageRenderer::BuildWebRenderDisplayItems(nsPresContext* aPresContext,
       gfx::IntSize decodeSize =
         nsLayoutUtils::ComputeImageContainerDrawingParameters(mImageContainer, mForFrame, destRect,
                                                               aSc, containerFlags, svgContext);
-      RefPtr<layers::ImageContainer> container =
-        mImageContainer->GetImageContainerAtSize(aManager, decodeSize, svgContext, containerFlags);
-      if (!container) {
-        NS_WARNING("Failed to get image container");
+      if (!mImageContainer->CreateWebRenderCommands(aBuilder, aSc, aManager, decodeSize, svgContext, containerFlags,
+        [&](ImageContainer* aContainer) {
+          gfx::IntSize size;
+          Maybe<wr::ImageKey> key = aManager->CommandBuilder().CreateImageKey(aItem, aContainer, aBuilder,
+                                                                              aResources, aSc, size, Nothing());
+
+          if (key.isNothing()) {
+            return false;
+          }
+
+          nsPoint firstTilePos = nsLayoutUtils::GetBackgroundFirstTilePos(aDest.TopLeft(),
+                                                                          aFill.TopLeft(),
+                                                                          aRepeatSize);
+          LayoutDeviceRect fillRect = LayoutDeviceRect::FromAppUnits(
+              nsRect(firstTilePos.x, firstTilePos.y,
+                     aFill.XMost() - firstTilePos.x, aFill.YMost() - firstTilePos.y),
+              appUnitsPerDevPixel);
+          wr::LayoutRect fill = wr::ToRoundedLayoutRect(fillRect);
+          wr::LayoutRect clip = wr::ToRoundedLayoutRect(
+              LayoutDeviceRect::FromAppUnits(aFill, appUnitsPerDevPixel));
+
+          LayoutDeviceSize gapSize = LayoutDeviceSize::FromAppUnits(
+              aRepeatSize - aDest.Size(), appUnitsPerDevPixel);
+
+          SamplingFilter samplingFilter = nsLayoutUtils::GetSamplingFilterForFrame(mForFrame);
+          aBuilder.PushImage(fill, clip, !aItem->BackfaceIsHidden(),
+                             wr::ToLayoutSize(destRect.Size()), wr::ToLayoutSize(gapSize),
+                             wr::ToImageRendering(samplingFilter), key.value());
+          return true;
+        })) {
         return ImgDrawResult::NOT_READY;
       }
-
-      gfx::IntSize size;
-      Maybe<wr::ImageKey> key = aManager->CommandBuilder().CreateImageKey(aItem, container, aBuilder,
-                                                                          aResources, aSc, size, Nothing());
-
-      if (key.isNothing()) {
-        return ImgDrawResult::NOT_READY;
-      }
-
-      nsPoint firstTilePos = nsLayoutUtils::GetBackgroundFirstTilePos(aDest.TopLeft(),
-                                                                      aFill.TopLeft(),
-                                                                      aRepeatSize);
-      LayoutDeviceRect fillRect = LayoutDeviceRect::FromAppUnits(
-          nsRect(firstTilePos.x, firstTilePos.y,
-                 aFill.XMost() - firstTilePos.x, aFill.YMost() - firstTilePos.y),
-          appUnitsPerDevPixel);
-      wr::LayoutRect fill = wr::ToRoundedLayoutRect(fillRect);
-      wr::LayoutRect clip = wr::ToRoundedLayoutRect(
-          LayoutDeviceRect::FromAppUnits(aFill, appUnitsPerDevPixel));
-
-      LayoutDeviceSize gapSize = LayoutDeviceSize::FromAppUnits(
-          aRepeatSize - aDest.Size(), appUnitsPerDevPixel);
-
-      SamplingFilter samplingFilter = nsLayoutUtils::GetSamplingFilterForFrame(mForFrame);
-      aBuilder.PushImage(fill, clip, !aItem->BackfaceIsHidden(),
-                         wr::ToLayoutSize(destRect.Size()), wr::ToLayoutSize(gapSize),
-                         wr::ToImageRendering(samplingFilter), key.value());
       break;
     }
     default:

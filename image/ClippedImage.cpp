@@ -14,6 +14,8 @@
 #include "gfxPlatform.h"
 #include "gfxUtils.h"
 #include "mozilla/gfx/2D.h"
+#include "mozilla/layers/StackingContextHelper.h"
+#include "mozilla/webrender/WebRenderAPI.h"
 #include "mozilla/Move.h"
 #include "mozilla/RefPtr.h"
 #include "mozilla/Pair.h"
@@ -28,6 +30,7 @@ namespace mozilla {
 using namespace gfx;
 using layers::LayerManager;
 using layers::ImageContainer;
+using layers::StackingContextHelper;
 using std::make_pair;
 using std::max;
 using std::modf;
@@ -383,6 +386,18 @@ ClippedImage::GetImageContainerAtSize(LayerManager* aManager,
   }
 
   return nullptr;
+}
+
+bool
+ClippedImage::CreateWebRenderCommands(mozilla::wr::DisplayListBuilder& aBuilder,
+                                      const StackingContextHelper& aSc,
+                                      LayerManager* aManager,
+                                      const IntSize& aSize,
+                                      const Maybe<SVGImageContext>& aSVGContext,
+                                      uint32_t aFlags,
+                                      const std::function<bool(ImageContainer*)>& aCb)
+{
+  return false;
 }
 
 static bool

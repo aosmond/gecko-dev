@@ -15,6 +15,8 @@
 #include "mozilla/MemoryReporting.h"
 #include "mozilla/dom/SVGSVGElement.h"
 #include "mozilla/gfx/2D.h"
+#include "mozilla/layers/StackingContextHelper.h"
+#include "mozilla/webrender/WebRenderAPI.h"
 #include "mozilla/RefPtr.h"
 #include "mozilla/Tuple.h"
 #include "nsIDOMEvent.h"
@@ -906,6 +908,24 @@ VectorImage::GetImageContainerAtSize(LayerManager* aManager,
   return GetImageContainerImpl(aManager, aSize,
                                newSVGContext ? newSVGContext : aSVGContext,
                                flags);
+}
+
+bool
+VectorImage::CreateWebRenderCommands(mozilla::wr::DisplayListBuilder& aBuilder,
+                                     const StackingContextHelper& aSc,
+                                     LayerManager* aManager,
+                                     const IntSize& aSize,
+                                     const Maybe<SVGImageContext>& aSVGContext,
+                                     uint32_t aFlags,
+                                     const std::function<bool(ImageContainer*)>& aCb)
+{
+  RefPtr<ImageContainer> container =
+    GetImageContainerAtSize(aManager, aSize, aSVGContext, aFlags);
+  if (!container) {
+    return false;
+  }
+
+  return aCb(container.get());
 }
 
 bool

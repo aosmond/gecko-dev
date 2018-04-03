@@ -4,12 +4,15 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #include "FrozenImage.h"
+#include "mozilla/layers/StackingContextHelper.h"
+#include "mozilla/webrender/WebRenderAPI.h"
 
 namespace mozilla {
 
 using namespace gfx;
 using layers::ImageContainer;
 using layers::LayerManager;
+using layers::StackingContextHelper;
 
 namespace image {
 

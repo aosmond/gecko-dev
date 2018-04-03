@@ -3723,31 +3723,29 @@ nsCSSBorderImageRenderer::CreateWebRenderCommands(nsDisplayItem* aItem,
       gfx::IntSize decodeSize =
         nsLayoutUtils::ComputeImageContainerDrawingParameters(img, aForFrame, destRect,
                                                               aSc, flags, svgContext);
-      RefPtr<layers::ImageContainer> container =
-        img->GetImageContainerAtSize(aManager, decodeSize, svgContext, flags);
-      if (!container) {
-        return;
-      }
+      img->CreateWebRenderCommands(aBuilder, aSc, aManager, decodeSize, svgContext, flags,
+        [&](ImageContainer* aContainer) {
+          gfx::IntSize size;
+          Maybe<wr::ImageKey> key = aManager->CommandBuilder().CreateImageKey(aItem, aContainer, aBuilder,
+                                                                              aResources, aSc, size, Nothing());
+          if (key.isNothing()) {
+            return true;
+          }
 
-      gfx::IntSize size;
-      Maybe<wr::ImageKey> key = aManager->CommandBuilder().CreateImageKey(aItem, container, aBuilder,
-                                                                          aResources, aSc, size, Nothing());
-      if (key.isNothing()) {
-        return;
-      }
-
-      aBuilder.PushBorderImage(dest,
-                               clip,
-                               !aItem->BackfaceIsHidden(),
-                               wr::ToBorderWidths(widths[0], widths[1], widths[2], widths[3]),
-                               key.value(),
-                               wr::ToNinePatchDescriptor(
-                                 (float)(mImageSize.width) / appUnitsPerDevPixel,
-                                 (float)(mImageSize.height) / appUnitsPerDevPixel,
-                                 wr::ToSideOffsets2D_u32(slice[0], slice[1], slice[2], slice[3])),
-                               wr::ToSideOffsets2D_f32(outset[0], outset[1], outset[2], outset[3]),
-                               wr::ToRepeatMode(mRepeatModeHorizontal),
-                               wr::ToRepeatMode(mRepeatModeVertical));
+          aBuilder.PushBorderImage(dest,
+                                   clip,
+                                   !aItem->BackfaceIsHidden(),
+                                   wr::ToBorderWidths(widths[0], widths[1], widths[2], widths[3]),
+                                   key.value(),
+                                   wr::ToNinePatchDescriptor(
+                                     (float)(mImageSize.width) / appUnitsPerDevPixel,
+                                     (float)(mImageSize.height) / appUnitsPerDevPixel,
+                                     wr::ToSideOffsets2D_u32(slice[0], slice[1], slice[2], slice[3])),
+                                   wr::ToSideOffsets2D_f32(outset[0], outset[1], outset[2], outset[3]),
+                                   wr::ToRepeatMode(mRepeatModeHorizontal),
+                                   wr::ToRepeatMode(mRepeatModeVertical));
+          return true;
+        });
       break;
     }
     case eStyleImageType_Gradient:

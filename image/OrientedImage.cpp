@@ -12,6 +12,8 @@
 #include "gfxPlatform.h"
 #include "gfxUtils.h"
 #include "ImageRegion.h"
+#include "mozilla/layers/StackingContextHelper.h"
+#include "mozilla/webrender/WebRenderAPI.h"
 #include "SVGImageContext.h"
 
 using std::swap;
@@ -21,6 +23,7 @@ namespace mozilla {
 using namespace gfx;
 using layers::LayerManager;
 using layers::ImageContainer;
+using layers::StackingContextHelper;
 
 namespace image {
 
@@ -200,6 +203,18 @@ OrientedImage::GetImageContainerAtSize(LayerManager* aManager,
   }
 
   return nullptr;
+}
+
+bool
+OrientedImage::CreateWebRenderCommands(mozilla::wr::DisplayListBuilder& aBuilder,
+                                       const StackingContextHelper& aSc,
+                                       LayerManager* aManager,
+                                       const IntSize& aSize,
+                                       const Maybe<SVGImageContext>& aSVGContext,
+                                       uint32_t aFlags,
+                                       const std::function<bool(ImageContainer*)>& aCb)
+{
+  return false;
 }
 
 struct MatrixBuilder

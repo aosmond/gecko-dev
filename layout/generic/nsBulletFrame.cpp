@@ -512,28 +512,24 @@ BulletRenderer::CreateWebRenderCommandsForImage(nsDisplayItem* aItem,
   gfx::IntSize decodeSize =
     nsLayoutUtils::ComputeImageContainerDrawingParameters(mImage, aItem->Frame(), destRect,
                                                           aSc, flags, svgContext);
-  RefPtr<layers::ImageContainer> container =
-    mImage->GetImageContainerAtSize(aManager, decodeSize, svgContext, flags);
-  if (!container) {
-    return false;
-  }
+  return mImage->CreateWebRenderCommands(aBuilder, aSc, aManager, decodeSize, svgContext, flags,
+    [&](layers::ImageContainer* aContainer) {
+      gfx::IntSize size;
+      Maybe<wr::ImageKey> key = aManager->CommandBuilder().CreateImageKey(aItem, aContainer, aBuilder, aResources,
+                                                                          aSc, size, Nothing());
+      if (key.isNothing()) {
+        return true;  // Nothing to do
+      }
 
-  gfx::IntSize size;
-  Maybe<wr::ImageKey> key = aManager->CommandBuilder().CreateImageKey(aItem, container, aBuilder, aResources,
-                                                                      aSc, size, Nothing());
-  if (key.isNothing()) {
-    return true;  // Nothing to do
-  }
+      wr::LayoutRect dest = wr::ToRoundedLayoutRect(destRect);
 
-  wr::LayoutRect dest = wr::ToRoundedLayoutRect(destRect);
-
-  aBuilder.PushImage(dest,
-                     dest,
-                     !aItem->BackfaceIsHidden(),
-                     wr::ImageRendering::Auto,
-                     key.value());
-
-  return true;
+      aBuilder.PushImage(dest,
+                         dest,
+                         !aItem->BackfaceIsHidden(),
+                         wr::ImageRendering::Auto,
+                         key.value());
+      return true;
+    });
 }
 
 bool

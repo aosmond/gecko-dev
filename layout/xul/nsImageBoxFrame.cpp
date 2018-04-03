@@ -451,27 +451,26 @@ nsImageBoxFrame::CreateWebRenderCommands(mozilla::wr::DisplayListBuilder& aBuild
   gfx::IntSize decodeSize =
     nsLayoutUtils::ComputeImageContainerDrawingParameters(imgCon, aItem->Frame(), fillRect,
                                                           aSc, containerFlags, svgContext);
-  RefPtr<layers::ImageContainer> container =
-    imgCon->GetImageContainerAtSize(aManager, decodeSize, svgContext, containerFlags);
-  if (!container) {
-    NS_WARNING("Failed to get image container");
+  if (!imgCon->CreateWebRenderCommands(aBuilder, aSc, aManager, decodeSize, svgContext, containerFlags,
+    [&](ImageContainer* aContainer) {
+      gfx::IntSize size;
+      Maybe<wr::ImageKey> key = aManager->CommandBuilder().CreateImageKey(aItem, aContainer,
+                                                                          aBuilder, aResources,
+                                                                          aSc, size, Nothing());
+      if (key.isNothing()) {
+        return false;
+      }
+      wr::LayoutRect fill = wr::ToRoundedLayoutRect(fillRect);
+
+      LayoutDeviceSize gapSize(0, 0);
+      SamplingFilter sampleFilter = nsLayoutUtils::GetSamplingFilterForFrame(aItem->Frame());
+      aBuilder.PushImage(fill, fill, !BackfaceIsHidden(),
+                         wr::ToLayoutSize(fillRect.Size()), wr::ToLayoutSize(gapSize),
+                         wr::ToImageRendering(sampleFilter), key.value());
+      return true;
+    })) {
     return ImgDrawResult::NOT_READY;
   }
-
-  gfx::IntSize size;
-  Maybe<wr::ImageKey> key = aManager->CommandBuilder().CreateImageKey(aItem, container,
-                                                                      aBuilder, aResources,
-                                                                      aSc, size, Nothing());
-  if (key.isNothing()) {
-    return ImgDrawResult::NOT_READY;
-  }
-  wr::LayoutRect fill = wr::ToRoundedLayoutRect(fillRect);
-
-  LayoutDeviceSize gapSize(0, 0);
-  SamplingFilter sampleFilter = nsLayoutUtils::GetSamplingFilterForFrame(aItem->Frame());
-  aBuilder.PushImage(fill, fill, !BackfaceIsHidden(),
-                     wr::ToLayoutSize(fillRect.Size()), wr::ToLayoutSize(gapSize),
-                     wr::ToImageRendering(sampleFilter), key.value());
 
   return ImgDrawResult::SUCCESS;
 }
