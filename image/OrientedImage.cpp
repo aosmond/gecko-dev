@@ -214,7 +214,19 @@ OrientedImage::CreateWebRenderCommands(mozilla::wr::DisplayListBuilder& aBuilder
                                        uint32_t aFlags,
                                        const std::function<bool(ImageContainer*)>& aCb)
 {
+  if (mOrientation.IsIdentity()) {
+    return InnerImage()->CreateWebRenderCommands(aBuilder, aSc, aManager, aSize, aSVGContext, aFlags, aCb);
+  }
+
   return false;
+
+#if 0
+  gfx::Matrix4x4 transform;
+
+  nsTArray<mozilla::wr::WrFilterOp> filters;
+  StackingContextHelper sc(aSc, aBuilder, filters, LayoutDeviceRect(), nullptr, nullptr, nullptr, &transform);
+  return InnerImage()->CreateWebRenderCommands(aBuilder, sc, aManager, aSize, aSVGContext, aFlags, aCb);
+#endif
 }
 
 struct MatrixBuilder

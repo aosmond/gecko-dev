@@ -397,7 +397,24 @@ ClippedImage::CreateWebRenderCommands(mozilla::wr::DisplayListBuilder& aBuilder,
                                       uint32_t aFlags,
                                       const std::function<bool(ImageContainer*)>& aCb)
 {
+  if (!ShouldClip()) {
+    return InnerImage()->CreateWebRenderCommands(aBuilder, aSc, aManager, aSize, aSVGContext, aFlags, aCb);
+  }
   return false;
+#if 0
+  bool shouldClip = ShouldClip();
+  if (shouldClip) {
+    gfxMatrix clipRect;
+    // TODO: TransformBetweenRect(aSize, clipRect), apply transform to destRect = clipRect
+    auto clip = aBuilder.DefineClip(Nothing(), Nothing(), clipRect);
+    aBuilder.PushClip(clip);
+  }
+  bool rv = InnerImage()->CreateWebRenderCommands(aBuilder, aSc, aManager, aSize, aSVGContext, aFlags, aCb);
+  if (shouldClip) {
+    aBuilder.PopClip();
+  }
+  return rv;
+#endif
 }
 
 static bool
