@@ -214,11 +214,7 @@ OrientedImage::CreateWebRenderCommands(mozilla::wr::DisplayListBuilder& aBuilder
                                        uint32_t aFlags,
                                        const std::function<bool(ImageContainer*)>& aCb)
 {
-  if (mOrientation.IsIdentity()) {
-    return InnerImage()->CreateWebRenderCommands(aBuilder, aSc, aManager, aSize, aSVGContext, aFlags, aCb);
-  }
-
-  return false;
+  return InnerImage()->CreateWebRenderCommands(aBuilder, aSc, aManager, aSize, aSVGContext, aFlags, aCb);
 
 #if 0
   gfx::Matrix4x4 transform;
