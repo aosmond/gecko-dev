@@ -60,6 +60,7 @@ public:
     CreateWebRenderCommands(mozilla::wr::DisplayListBuilder& aBuilder,
                             const mozilla::layers::StackingContextHelper& aSc,
                             layers::LayerManager* aManager,
+                            const LayoutDeviceRect& aDestRect,
                             const IntSize& aSize,
                             const Maybe<SVGImageContext>& aSVGContext,
                             uint32_t aFlags,

@@ -17,6 +17,7 @@
 #include "nsRect.h"
 #include "nsSize.h"
 #include "limits.h"
+#include "Units.h"
 
 class nsIDocument;
 
@@ -74,6 +75,7 @@ native nsIntSizeByVal(nsIntSize);
 [ref] native WrDisplayListBuilder(mozilla::wr::DisplayListBuilder);
 [ref] native StackingContextHelper(mozilla::layers::StackingContextHelper);
 [ref] native ImageContainerCallback(mozilla::image::ImageContainerCallback);
+[ref] native LayoutDeviceRect(mozilla::LayoutDeviceRect);
 
 
 /**
@@ -341,6 +343,7 @@ interface imgIContainer : nsISupports
   [noscript, notxpcom] bool createWebRenderCommands(in WrDisplayListBuilder aBuilder,
                                                     [const] in StackingContextHelper aSc,
                                                     in LayerManager aManager,
+                                                    [const] in LayoutDeviceRect aDestRect,
                                                     [const] in nsIntSize aSize,
                                                     [const] in MaybeSVGImageContext aSVGContext,
                                                     in uint32_t aFlags,

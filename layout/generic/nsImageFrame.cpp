@@ -1730,7 +1730,7 @@ nsDisplayImage::CreateWebRenderCommands(mozilla::wr::DisplayListBuilder& aBuilde
   IntSize decodeSize =
     nsLayoutUtils::ComputeImageContainerDrawingParameters(mImage, mFrame, destRect,
                                                           aSc, flags, svgContext);
-  return mImage->CreateWebRenderCommands(aBuilder, aSc, aManager, decodeSize, svgContext, flags,
+  return mImage->CreateWebRenderCommands(aBuilder, aSc, aManager, destRect, decodeSize, svgContext, flags,
     [&](ImageContainer* aContainer) {
       // If the image container is empty, we don't want to fallback. Any other
       // failure will be due to resource constraints and fallback is unlikely to

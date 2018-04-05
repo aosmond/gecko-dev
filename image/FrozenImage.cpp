@@ -94,6 +94,19 @@ FrozenImage::GetImageContainerAtSize(layers::LayerManager* aManager,
   return nullptr;
 }
 
+bool
+FrozenImage::CreateWebRenderCommands(mozilla::wr::DisplayListBuilder& aBuilder,
+                                     const StackingContextHelper& aSc,
+                                     LayerManager* aManager,
+                                     const LayoutDeviceRect& aDestRect,
+                                     const IntSize& aSize,
+                                     const Maybe<SVGImageContext>& aSVGContext,
+                                     uint32_t aFlags,
+                                     const std::function<bool(ImageContainer*)>& aCb)
+{
+  return false;
+}
+
 NS_IMETHODIMP_(ImgDrawResult)
 FrozenImage::Draw(gfxContext* aContext,
                   const nsIntSize& aSize,

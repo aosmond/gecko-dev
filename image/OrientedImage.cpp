@@ -209,20 +209,56 @@ bool
 OrientedImage::CreateWebRenderCommands(mozilla::wr::DisplayListBuilder& aBuilder,
                                        const StackingContextHelper& aSc,
                                        LayerManager* aManager,
+                                       const LayoutDeviceRect& aDestRect,
                                        const IntSize& aSize,
                                        const Maybe<SVGImageContext>& aSVGContext,
                                        uint32_t aFlags,
                                        const std::function<bool(ImageContainer*)>& aCb)
 {
-  return InnerImage()->CreateWebRenderCommands(aBuilder, aSc, aManager, aSize, aSVGContext, aFlags, aCb);
+  if (mOrientation.IsIdentity()) {
+    return InnerImage()->CreateWebRenderCommands(aBuilder, aSc, aManager, aDestRect, aSize, aSVGContext, aFlags, aCb);
+  }
 
-#if 0
   gfx::Matrix4x4 transform;
+  switch (mOrientation.flip) {
+    case Flip::Unflipped:
+      break;
+    case Flip::Horizontal:
+      /*if (mOrientation.SwapsWidthAndHeight()) {
+        transform.PreTranslate(aDestRect.Height(), 0, 0);
+      } else {
+        transform.PreTranslate(aDestRect.Width(), 0, 0);
+      }*/
+      transform.PreScale(-1.0, 1.0, 1.0);
+      break;
+    default:
+      MOZ_ASSERT_UNREACHABLE("Invalid flip value");
+  }
+
+  // Apply rotation, if present. Again, a translation is used to place the
+  // image back in the first quadrant.
+  switch (mOrientation.rotation) {
+    case Angle::D0:
+      break;
+    case Angle::D90:
+      //transform.PreTranslate(aDestRect.Height(), 0, 0);
+      transform.RotateZ(-1.5 * M_PI);
+      break;
+    case Angle::D180:
+      //transform.PreTranslate(aDestRect.Width(), aDestRect.Height(), 0);
+      transform.RotateZ(-1.0 * M_PI);
+      break;
+    case Angle::D270:
+      //transform.PreTranslate(0, aDestRect.Height(), 0);
+      transform.RotateZ(-0.5 * M_PI);
+      break;
+    default:
+      MOZ_ASSERT_UNREACHABLE("Invalid rotation value");
+  }
 
   nsTArray<mozilla::wr::WrFilterOp> filters;
-  StackingContextHelper sc(aSc, aBuilder, filters, LayoutDeviceRect(), nullptr, nullptr, nullptr, &transform);
-  return InnerImage()->CreateWebRenderCommands(aBuilder, sc, aManager, aSize, aSVGContext, aFlags, aCb);
-#endif
+  StackingContextHelper sc(aSc, aBuilder, filters, LayoutDeviceRect(), nullptr, nullptr, nullptr, nullptr, &transform);
+  return InnerImage()->CreateWebRenderCommands(aBuilder, sc, aManager, aDestRect, aSize, aSVGContext, aFlags, aCb);
 }
 
 struct MatrixBuilder

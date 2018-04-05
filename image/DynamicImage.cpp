@@ -250,6 +250,7 @@ bool
 DynamicImage::CreateWebRenderCommands(mozilla::wr::DisplayListBuilder& aBuilder,
                                       const StackingContextHelper& aSc,
                                       LayerManager* aManager,
+                                      const LayoutDeviceRect& aDestRect,
                                       const IntSize& aSize,
                                       const Maybe<SVGImageContext>& aSVGContext,
                                       uint32_t aFlags,

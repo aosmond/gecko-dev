@@ -612,7 +612,7 @@ nsImageRenderer::BuildWebRenderDisplayItems(nsPresContext* aPresContext,
       gfx::IntSize decodeSize =
         nsLayoutUtils::ComputeImageContainerDrawingParameters(mImageContainer, mForFrame, destRect,
                                                               aSc, containerFlags, svgContext);
-      if (!mImageContainer->CreateWebRenderCommands(aBuilder, aSc, aManager, decodeSize, svgContext, containerFlags,
+      if (!mImageContainer->CreateWebRenderCommands(aBuilder, aSc, aManager, destRect, decodeSize, svgContext, containerFlags,
         [&](ImageContainer* aContainer) {
           gfx::IntSize size;
           Maybe<wr::ImageKey> key = aManager->CommandBuilder().CreateImageKey(aItem, aContainer, aBuilder,

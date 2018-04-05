@@ -229,12 +229,13 @@ bool
 ImageWrapper::CreateWebRenderCommands(mozilla::wr::DisplayListBuilder& aBuilder,
                                       const StackingContextHelper& aSc,
                                       LayerManager* aManager,
+                                      const LayoutDeviceRect& aDestRect,
                                       const IntSize& aSize,
                                       const Maybe<SVGImageContext>& aSVGContext,
                                       uint32_t aFlags,
                                       const std::function<bool(ImageContainer*)>& aCb)
 {
-  return mInnerImage->CreateWebRenderCommands(aBuilder, aSc, aManager, aSize, aSVGContext, aFlags, aCb);
+  return mInnerImage->CreateWebRenderCommands(aBuilder, aSc, aManager, aDestRect, aSize, aSVGContext, aFlags, aCb);
 }
 
 NS_IMETHODIMP_(already_AddRefed<ImageContainer>)

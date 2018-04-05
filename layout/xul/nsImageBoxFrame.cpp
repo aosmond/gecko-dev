@@ -451,7 +451,7 @@ nsImageBoxFrame::CreateWebRenderCommands(mozilla::wr::DisplayListBuilder& aBuild
   gfx::IntSize decodeSize =
     nsLayoutUtils::ComputeImageContainerDrawingParameters(imgCon, aItem->Frame(), fillRect,
                                                           aSc, containerFlags, svgContext);
-  if (!imgCon->CreateWebRenderCommands(aBuilder, aSc, aManager, decodeSize, svgContext, containerFlags,
+  if (!imgCon->CreateWebRenderCommands(aBuilder, aSc, aManager, fillRect, decodeSize, svgContext, containerFlags,
     [&](ImageContainer* aContainer) {
       gfx::IntSize size;
       Maybe<wr::ImageKey> key = aManager->CommandBuilder().CreateImageKey(aItem, aContainer,

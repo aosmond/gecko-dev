@@ -5578,7 +5578,7 @@ nsDisplayBorder::CreateBorderImageWebRenderCommands(mozilla::wr::DisplayListBuil
       gfx::IntSize decodeSize =
         nsLayoutUtils::ComputeImageContainerDrawingParameters(img, mFrame, destRect,
                                                               aSc, flags, svgContext);
-      img->CreateWebRenderCommands(aBuilder, aSc, aManager, decodeSize, svgContext, flags,
+      img->CreateWebRenderCommands(aBuilder, aSc, aManager, destRect, decodeSize, svgContext, flags,
         [&](ImageContainer* aContainer) {
           gfx::IntSize size;
           Maybe<wr::ImageKey> key = aManager->CommandBuilder().CreateImageKey(this, aContainer, aBuilder,

@@ -512,7 +512,7 @@ BulletRenderer::CreateWebRenderCommandsForImage(nsDisplayItem* aItem,
   gfx::IntSize decodeSize =
     nsLayoutUtils::ComputeImageContainerDrawingParameters(mImage, aItem->Frame(), destRect,
                                                           aSc, flags, svgContext);
-  return mImage->CreateWebRenderCommands(aBuilder, aSc, aManager, decodeSize, svgContext, flags,
+  return mImage->CreateWebRenderCommands(aBuilder, aSc, aManager, destRect, decodeSize, svgContext, flags,
     [&](layers::ImageContainer* aContainer) {
       gfx::IntSize size;
       Maybe<wr::ImageKey> key = aManager->CommandBuilder().CreateImageKey(aItem, aContainer, aBuilder, aResources,
