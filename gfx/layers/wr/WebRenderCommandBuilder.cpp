@@ -1600,18 +1600,14 @@ WebRenderCommandBuilder::GenerateFallbackData(nsDisplayItem* aItem,
   bool differentScale = gfx::FuzzyEqual(scale.width, oldScale.width, 1e-6f) &&
                         gfx::FuzzyEqual(scale.height, oldScale.height, 1e-6f);
 
-  // XXX not sure if paintSize should be in layer or layoutdevice pixels, it
+  // XXX not sure if dtSize should be in layer or layoutdevice pixels, it
   // has some sort of scaling applied.
-  LayerIntSize paintSize = RoundedToInt(LayerSize(bounds.Width() * scale.width, bounds.Height() * scale.height));
-  if (paintSize.width == 0 || paintSize.height == 0) {
-    return nullptr;
-  }
-
-  // Some display item may draw exceed the paintSize, we need prepare a larger
-  // draw target to contain the result.
   auto scaledBounds = bounds * LayoutDeviceToLayerScale(1);
   scaledBounds.Scale(scale.width, scale.height);
   LayerIntSize dtSize = RoundedToInt(scaledBounds).Size();
+  if (dtSize.width == 0 || dtSize.height == 0) {
+    return nullptr;
+  }
 
   // TODO Rounding a rect to integers and then taking the size gives a different behavior than
   // just rounding the size of the rect to integers. This can cause a crash, but fixing the
@@ -1623,7 +1619,7 @@ WebRenderCommandBuilder::GenerateFallbackData(nsDisplayItem* aItem,
   bool needPaint = true;
   LayoutDeviceIntPoint offset = RoundedToInt(bounds.TopLeft());
   aImageRect = LayoutDeviceRect(offset, LayoutDeviceSize(RoundedToInt(bounds).Size()));
-  LayerRect paintRect = LayerRect(LayerPoint(0, 0), LayerSize(paintSize));
+  LayerRect paintRect = LayerRect(LayerPoint(0, 0), LayerSize(dtSize));
   nsDisplayItemGeometry* geometry = fallbackData->GetGeometry();
 
   // nsDisplayFilter is rendered via BasicLayerManager which means the invalidate
@@ -1680,7 +1676,7 @@ WebRenderCommandBuilder::GenerateFallbackData(nsDisplayItem* aItem,
       }
       bool isInvalidated = PaintItemByDrawTarget(aItem, dt, paintRect, offset, aDisplayListBuilder,
                                                  fallbackData->mBasicLayerManager, scale, highlight);
-      recorder->FlushItem(IntRect(0, 0, paintSize.width, paintSize.height));
+      recorder->FlushItem(IntRect(0, 0, dtSize.width, dtSize.height));
       recorder->Finish();
 
       if (isInvalidated) {
