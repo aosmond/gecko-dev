@@ -262,18 +262,13 @@ AnimationSurfaceProvider::CheckForNewFrameAtYield()
   bool justGotFirstFrame = false;
   bool continueDecoding;
 
-  {
+  // Try to get the new frame from the decoder.
+  RawAccessFrameRef frame = mDecoder->GetCurrentFrameRef();
+  MOZ_ASSERT(mDecoder->HasFrameToTake());
+  mDecoder->ClearHasFrameToTake();
+
+  if (frame) {
     MutexAutoLock lock(mFramesMutex);
-
-    // Try to get the new frame from the decoder.
-    RawAccessFrameRef frame = mDecoder->GetCurrentFrameRef();
-    MOZ_ASSERT(mDecoder->HasFrameToTake());
-    mDecoder->ClearHasFrameToTake();
-
-    if (!frame) {
-      MOZ_ASSERT_UNREACHABLE("Decoder yielded but didn't produce a frame?");
-      return true;
-    }
 
     // We should've gotten a different frame than last time.
     MOZ_ASSERT_IF(!mFrames.Frames().IsEmpty(),
@@ -288,6 +283,9 @@ AnimationSurfaceProvider::CheckForNewFrameAtYield()
     if (frameCount == 1 && mImage) {
       justGotFirstFrame = true;
     }
+  } else {
+    MOZ_ASSERT_UNREACHABLE("Decoder yielded but didn't produce a frame?");
+    continueDecoding = true;
   }
 
   if (justGotFirstFrame) {
@@ -309,38 +307,35 @@ AnimationSurfaceProvider::CheckForNewFrameAtTerminalState()
   bool justGotFirstFrame = false;
   bool continueDecoding;
 
+  // The decoder may or may not have a new frame for us at this point. Avoid
+  // reinserting the same frame again.
+  RawAccessFrameRef frame = mDecoder->GetCurrentFrameRef();
+
+  // If the decoder didn't finish a new frame (ie if, after starting the
+  // frame, it got an error and aborted the frame and the rest of the decode)
+  // that means it won't be reporting it to the image or FrameAnimator so we
+  // should ignore it too, that's what HasFrameToTake tracks basically.
+  if (!mDecoder->HasFrameToTake()) {
+    frame = RawAccessFrameRef();
+  } else {
+    MOZ_ASSERT(frame);
+    mDecoder->ClearHasFrameToTake();
+  }
+
   {
     MutexAutoLock lock(mFramesMutex);
 
-    // The decoder may or may not have a new frame for us at this point. Avoid
-    // reinserting the same frame again.
-    RawAccessFrameRef frame = mDecoder->GetCurrentFrameRef();
+    if (frame && (mFrames.Frames().IsEmpty() ||
+                  mFrames.Frames().LastElement().get() != frame.get())) {
+      // Append the new frame to the list.
+      mFrames.Insert(Move(frame));
 
-    // If the decoder didn't finish a new frame (ie if, after starting the
-    // frame, it got an error and aborted the frame and the rest of the decode)
-    // that means it won't be reporting it to the image or FrameAnimator so we
-    // should ignore it too, that's what HasFrameToTake tracks basically.
-    if (!mDecoder->HasFrameToTake()) {
-      frame = RawAccessFrameRef();
-    } else {
-      MOZ_ASSERT(frame);
-      mDecoder->ClearHasFrameToTake();
+      // We only want to handle the first frame if it is the first pass for the
+      // animation decoder. The owning image will be cleared after that.
+      justGotFirstFrame = mFrames.Frames().Length() == 1 && mImage;
     }
 
-    if (!frame || (!mFrames.Frames().IsEmpty() &&
-                   mFrames.Frames().LastElement().get() == frame.get())) {
-      return mFrames.MarkComplete();
-    }
-
-    // Append the new frame to the list.
-    mFrames.Insert(Move(frame));
     continueDecoding = mFrames.MarkComplete();
-
-    // We only want to handle the first frame if it is the first pass for the
-    // animation decoder. The owning image will be cleared after that.
-    if (mFrames.Frames().Length() == 1 && mImage) {
-      justGotFirstFrame = true;
-    }
   }
 
   if (justGotFirstFrame) {
