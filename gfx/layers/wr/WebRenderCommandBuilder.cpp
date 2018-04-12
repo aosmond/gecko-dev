@@ -1569,7 +1569,7 @@ WebRenderCommandBuilder::PushImage(nsDisplayItem* aItem,
     return false;
   }
 
-  auto r = wr::ToRoundedLayoutRect(aRect);
+  auto r = wr::ToLayoutRect(aRect);
   aBuilder.PushImage(r, r, !aItem->BackfaceIsHidden(), rendering, key.value());
 
   return true;

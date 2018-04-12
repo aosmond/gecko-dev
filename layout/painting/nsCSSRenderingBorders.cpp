@@ -3829,7 +3829,8 @@ nsCSSBorderImageRenderer::CreateWebRenderCommands(
 
   LayoutDeviceRect destRect =
     LayoutDeviceRect::FromAppUnits(mArea, appUnitsPerDevPixel);
-  wr::LayoutRect dest = wr::ToRoundedLayoutRect(destRect);
+  destRect.Round();
+  wr::LayoutRect dest = wr::ToLayoutRect(destRect);
 
   wr::LayoutRect clip = dest;
   if (!mClip.IsEmpty()) {

@@ -1168,7 +1168,7 @@ fails-if(usesRepeatResampling) fails-if(webrender) == 446100-1a.html about:blank
 fails-if(Android) fails-if(usesRepeatResampling) fails-if(webrender) == 446100-1b.html about:blank
 fails-if(Android) fails-if(usesRepeatResampling) fails-if(webrender) == 446100-1c.html about:blank
 fails-if(usesRepeatResampling) fails-if(webrender) == 446100-1d.html about:blank
-fails-if(usesRepeatResampling) fails-if(webrender) == 446100-1e.html about:blank
+fails-if(usesRepeatResampling) == 446100-1e.html about:blank
 == 446100-1f.html about:blank
 fails-if(usesRepeatResampling) fails-if(Android) fails-if(webrender) == 446100-1g.html about:blank
 == 446100-1h.html about:blank

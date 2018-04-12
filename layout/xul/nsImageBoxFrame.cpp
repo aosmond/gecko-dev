@@ -467,7 +467,7 @@ nsImageBoxFrame::CreateWebRenderCommands(mozilla::wr::DisplayListBuilder& aBuild
   if (key.isNothing()) {
     return Some(ImgDrawResult::NOT_READY);
   }
-  wr::LayoutRect fill = wr::ToRoundedLayoutRect(fillRect);
+  wr::LayoutRect fill = wr::ToLayoutRect(fillRect);
 
   LayoutDeviceSize gapSize(0, 0);
   aBuilder.PushImage(fill,

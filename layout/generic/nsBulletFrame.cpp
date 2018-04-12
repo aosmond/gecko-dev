@@ -494,7 +494,7 @@ BulletRenderer::CreateWebRenderCommandsForImage(nsDisplayItem* aItem,
     return true;  // Nothing to do
   }
 
-  wr::LayoutRect dest = wr::ToRoundedLayoutRect(destRect);
+  wr::LayoutRect dest = wr::ToLayoutRect(destRect);
 
   aBuilder.PushImage(
     dest, dest, !aItem->BackfaceIsHidden(), rendering, key.value());
