@@ -11,6 +11,8 @@
 #include "mozilla/Likely.h"
 #include "nsIInputStream.h"
 #include "MainThreadUtils.h"
+#include "IDecodingTask.h"   // for CompactDecodingTask
+#include "DecodePool.h"      // for DecodePool::AsyncRun
 #include "SurfaceCache.h"
 
 using std::max;
@@ -189,7 +191,7 @@ SourceBuffer::CreateChunk(size_t aCapacity, bool aRoundUp /* = true */)
 }
 
 nsresult
-SourceBuffer::Compact()
+SourceBuffer::CompactLocked()
 {
   mMutex.AssertCurrentThreadOwns();
 
@@ -208,6 +210,12 @@ SourceBuffer::Compact()
 
   // If we have one chunk, then we can compact if it has excess capacity.
   if (mChunks.Length() == 1 && mChunks[0].Length() == mChunks[0].Capacity()) {
+    return NS_OK;
+  }
+
+  // We should avoid compacting on the main thread, as this could be expensive.
+  if (NS_IsMainThread()) {
+    DecodePool::Singleton()->AsyncRun(new CompactDecodingTask(this));
     return NS_OK;
   }
 
@@ -509,7 +517,7 @@ SourceBuffer::Complete(nsresult aStatus)
   }
 
   // Attempt to compact our buffer down to a single chunk.
-  Compact();
+  CompactLocked();
 }
 
 bool
@@ -517,6 +525,17 @@ SourceBuffer::IsComplete()
 {
   MutexAutoLock lock(mMutex);
   return bool(mStatus);
+}
+
+nsresult
+SourceBuffer::Compact()
+{
+  MutexAutoLock lock(mMutex);
+  if (MOZ_UNLIKELY(!mStatus)) {
+    MOZ_ASSERT_UNREACHABLE("Called Compact before Complete");
+    return NS_ERROR_FAILURE;
+  }
+  return CompactLocked();
 }
 
 size_t
@@ -567,7 +586,7 @@ SourceBuffer::OnIteratorRelease()
   }
 
   // Attempt to compact our buffer down to a single chunk.
-  Compact();
+  CompactLocked();
 }
 
 bool

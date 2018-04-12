@@ -127,6 +127,34 @@ private:
   NotNull<RefPtr<Decoder>> mDecoder;
 };
 
+/**
+ * An IDecodingTask implementation for compacting a SourceBuffer.
+ */
+class CompactDecodingTask final : public IDecodingTask
+{
+public:
+  NS_INLINE_DECL_THREADSAFE_REFCOUNTING(CompactDecodingTask, override)
+
+  explicit CompactDecodingTask(SourceBuffer* aSourceBuffer)
+    : mSourceBuffer(aSourceBuffer)
+  { }
+
+  void Run() override
+  {
+    mSourceBuffer->Compact();
+  }
+
+  bool ShouldPreferSyncRun() const override { return false; }
+  TaskPriority Priority() const override { return TaskPriority::eLow; }
+
+  void Resume() override { }
+
+private:
+  virtual ~CompactDecodingTask() { }
+
+  RefPtr<SourceBuffer> mSourceBuffer;
+};
+
 } // namespace image
 } // namespace mozilla
 

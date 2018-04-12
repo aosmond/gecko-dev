@@ -343,6 +343,9 @@ public:
   /// Returns true if the buffer is complete.
   bool IsComplete();
 
+  /// Attempt to compact the buffer. It should only be called after Complete.
+  nsresult Compact();
+
   /// Memory reporting.
   size_t SizeOfIncludingThisWithComputedFallback(MallocSizeOf) const;
 
@@ -455,7 +458,7 @@ private:
 
   nsresult AppendChunk(Maybe<Chunk>&& aChunk);
   Maybe<Chunk> CreateChunk(size_t aCapacity, bool aRoundUp = true);
-  nsresult Compact();
+  nsresult CompactLocked();
   static size_t RoundedUpCapacity(size_t aCapacity);
   size_t FibonacciCapacityWithMinimum(size_t aMinCapacity);
 
