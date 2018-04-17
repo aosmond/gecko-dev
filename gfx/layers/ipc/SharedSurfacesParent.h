@@ -42,7 +42,8 @@ public:
                   const SurfaceDescriptorShared& aDesc,
                   base::ProcessId aPid);
 
-  static void Remove(const wr::ExternalImageId& aId);
+  static void Remove(const wr::ExternalImageId& aId,
+                     base::ProcessId aPid);
 
   static void DestroyProcess(base::ProcessId aPid);
 

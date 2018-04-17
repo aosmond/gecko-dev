@@ -13,6 +13,7 @@
 #include "mozilla/layers/WebRenderMessages.h"
 #include "mozilla/layers/IpcResourceUpdateQueue.h"
 #include "mozilla/layers/SharedSurfacesChild.h"
+#include "mozilla/layers/SourceSurfaceSharedData.h"
 #include "nsDisplayListInvalidation.h"
 #include "nsIFrame.h"
 #include "WebRenderCanvasRenderer.h"
@@ -67,6 +68,20 @@ WebRenderImageData::WebRenderImageData(WebRenderLayerManager* aWRManager, nsDisp
 
 WebRenderImageData::~WebRenderImageData()
 {
+  if (mContainer) {
+    if (!mContainer->IsAsync()) {
+      AutoTArray<ImageContainer::OwningImage,4> images;
+      mContainer->GetCurrentImages(&images);
+      if (!images.IsEmpty()) {
+        RefPtr<gfx::SourceSurface> surface = images[0].mImage->GetAsSourceSurface();
+	if (surface && surface->GetType() == SurfaceType::DATA_SHARED) {
+          auto sharedSurface = static_cast<gfx::SourceSurfaceSharedData*>(surface.get());
+          printf_stderr("[AO] freeing container with surface %p (destructor)\n", sharedSurface);
+	}
+      }
+    }
+    mContainer = nullptr;
+  }
   DoClearCachedResources();
 }
 
@@ -94,6 +109,23 @@ void
 WebRenderImageData::DoClearCachedResources()
 {
   ClearImageKey();
+
+#if 1 
+  if (mContainer) {
+    if (!mContainer->IsAsync()) {
+      AutoTArray<ImageContainer::OwningImage,4> images;
+      mContainer->GetCurrentImages(&images);
+      if (!images.IsEmpty()) {
+        RefPtr<gfx::SourceSurface> surface = images[0].mImage->GetAsSourceSurface();
+	if (surface && surface->GetType() == SurfaceType::DATA_SHARED) {
+          auto sharedSurface = static_cast<gfx::SourceSurfaceSharedData*>(surface.get());
+          printf_stderr("[AO] container with surface %p (clear cache)\n", sharedSurface);
+	}
+      }
+    }
+    //mContainer = nullptr;
+  }
+#endif
 
   if (mExternalImageId) {
     WrBridge()->DeallocExternalImageId(mExternalImageId.ref());

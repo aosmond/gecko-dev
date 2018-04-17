@@ -284,7 +284,7 @@ CompositorManagerParent::RecvAddSharedSurface(const wr::ExternalImageId& aId,
 mozilla::ipc::IPCResult
 CompositorManagerParent::RecvRemoveSharedSurface(const wr::ExternalImageId& aId)
 {
-  SharedSurfacesParent::Remove(aId);
+  SharedSurfacesParent::Remove(aId, OtherPid());
   return IPC_OK();
 }
 

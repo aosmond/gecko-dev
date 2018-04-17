@@ -9,6 +9,7 @@
 #include "nsProxyRelease.h"
 
 #include "Decoder.h"
+#include "mozilla/layers/SourceSurfaceSharedData.h"
 
 using namespace mozilla::gfx;
 
@@ -183,6 +184,26 @@ DecodedSurfaceProvider::CheckForNewSurface()
   mSurface = mDecoder->GetCurrentFrameRef().get();
   if (!mSurface) {
     return;  // No surface yet.
+  }
+
+  RefPtr<SourceSurface> surf = mSurface->GetSourceSurface();
+  if (surf && surf->GetType() == SurfaceType::DATA_SHARED) {
+    auto sharedSurf = static_cast<gfx::SourceSurfaceSharedData*>(surf.get());
+    if (mImage) {
+      ImageURL* url = mImage->GetURI();
+      if (url) {
+        bool data = false;
+        if (NS_FAILED(url->SchemeIs("data", &data)) || !data) {
+          printf_stderr("[AO] surface %p owned by %s\n", sharedSurf, url->Spec());
+	} else {
+          printf_stderr("[AO] surface %p owned by data URL\n", sharedSurf);
+	}
+      } else {
+        printf_stderr("[AO] surface %p owned by no known owning URL\n", sharedSurf);
+      }
+    } else {
+      printf_stderr("[AO] surface %p owned by no known owning image\n", sharedSurf);
+    }
   }
 
   // We just got a surface for the first time; let the surface cache know.

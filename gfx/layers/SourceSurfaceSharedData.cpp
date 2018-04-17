@@ -36,6 +36,7 @@ SourceSurfaceSharedDataWrapper::Init(const IntSize& aSize,
   mFormat = aFormat;
   mCreatorPid = aCreatorPid;
 
+  printf_stderr("[AO] surface wrapper %p init handle %d\n", this, aHandle.fd);
   size_t len = GetAlignedDataLength();
   mBuf = MakeAndAddRef<SharedMemoryBasic>();
   if (NS_WARN_IF(!mBuf->SetHandle(aHandle, ipc::SharedMemory::RightsReadOnly)) ||
@@ -58,6 +59,7 @@ SourceSurfaceSharedDataWrapper::Init(SourceSurfaceSharedData* aSurface)
   mFormat = aSurface->mFormat;
   mCreatorPid = base::GetCurrentProcId();
   mBuf = aSurface->mBuf;
+  printf_stderr("[AO] surface wrapper %p init surface %p\n", this, aSurface);
 }
 
 bool
@@ -66,6 +68,7 @@ SourceSurfaceSharedData::Init(const IntSize &aSize,
                               SurfaceFormat aFormat,
                               bool aShare /* = true */)
 {
+  printf_stderr("[AO] surface %p init\n", this);
   mSize = aSize;
   mStride = aStride;
   mFormat = aFormat;
@@ -137,6 +140,7 @@ SourceSurfaceSharedData::ShareToProcess(base::ProcessId aPid,
     return NS_ERROR_FAILURE;
   }
 
+  printf_stderr("[AO] surface %p share handle %d\n", this, aHandle.fd);
   return NS_OK;
 }
 

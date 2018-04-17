@@ -233,6 +233,7 @@ SharedSurfacesChild::ShareInternal(SourceSurfaceSharedData* aSurface,
     SharedSurfacesParent::AddSameProcess(data->Id(), aSurface);
     data->MarkShared();
     *aUserData = data;
+    printf_stderr("[AO] surface %p shared with id %16lx (same process)\n", aSurface, data->Id().mHandle);
     return NS_OK;
   }
 
@@ -267,6 +268,7 @@ SharedSurfacesChild::ShareInternal(SourceSurfaceSharedData* aSurface,
                                 SurfaceDescriptorShared(aSurface->GetSize(),
                                                         aSurface->Stride(),
                                                         format, handle));
+  printf_stderr("[AO] surface %p shared with id %16lx\n", aSurface, data->Id().mHandle);
   *aUserData = data;
   return NS_OK;
 }
@@ -387,6 +389,7 @@ SharedSurfacesChild::Unshare(const wr::ExternalImageId& aId,
 
   CompositorManagerChild* manager = CompositorManagerChild::GetInstance();
   if (MOZ_UNLIKELY(!manager || !manager->CanSend())) {
+    printf_stderr("[AO] cannot release %16lx, no manager or manager down\n", aId.mHandle);
     return;
   }
 
@@ -398,6 +401,8 @@ SharedSurfacesChild::Unshare(const wr::ExternalImageId& aId,
     // job was moved into the parent process.
     if (manager->OwnsExternalImageId(aId)) {
       SharedSurfacesParent::RemoveSameProcess(aId);
+    } else {
+      printf_stderr("[AO] does not own %16lx, not releasing (same process)\n", aId.mHandle);
     }
   } else if (manager->OwnsExternalImageId(aId)) {
     // Only attempt to release current mappings in the GPU process. It is
@@ -405,6 +410,8 @@ SharedSurfacesChild::Unshare(const wr::ExternalImageId& aId,
     // crashed / was restarted, and then we freed the surface. In that case
     // we know the mapping has already been freed.
     manager->SendRemoveSharedSurface(aId);
+  } else {
+    printf_stderr("[AO] does not own %16lx, not releasing\n", aId.mHandle);
   }
 }
 

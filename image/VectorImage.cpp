@@ -15,6 +15,7 @@
 #include "mozilla/MemoryReporting.h"
 #include "mozilla/dom/SVGSVGElement.h"
 #include "mozilla/gfx/2D.h"
+#include "mozilla/layers/SourceSurfaceSharedData.h"
 #include "mozilla/RefPtr.h"
 #include "mozilla/Tuple.h"
 #include "nsIDOMEvent.h"
@@ -1157,6 +1158,20 @@ VectorImage::CreateSurface(const SVGDrawingParameters& aParams,
   if (!surface) {
     aWillCache = false;
     return nullptr;
+  }
+
+  if (surface->GetType() == SurfaceType::DATA_SHARED) {
+    auto sharedSurf = static_cast<gfx::SourceSurfaceSharedData*>(surface.get());
+    if (mURI) {
+      bool data = false;
+      if (NS_FAILED(mURI->SchemeIs("data", &data)) || !data) {
+        printf_stderr("[AO] surface %p owned by %s\n", sharedSurf, mURI->Spec());
+      } else {
+        printf_stderr("[AO] surface %p owned by data URL\n", sharedSurf);
+      }
+    } else {
+      printf_stderr("[AO] surface %p owned by no known owning URL\n", sharedSurf);
+    }
   }
 
   // We created the frame, but only because we had no context to draw to

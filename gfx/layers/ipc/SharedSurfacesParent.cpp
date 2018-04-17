@@ -55,7 +55,8 @@ SharedSurfacesParent::Get(const wr::ExternalImageId& aId)
 }
 
 /* static */ void
-SharedSurfacesParent::Remove(const wr::ExternalImageId& aId)
+SharedSurfacesParent::Remove(const wr::ExternalImageId& aId,
+                             base::ProcessId aPid)
 {
   //MOZ_ASSERT(CompositorThreadHolder::IsInCompositorThread());
   if (!sInstance) {
@@ -66,9 +67,17 @@ SharedSurfacesParent::Remove(const wr::ExternalImageId& aId)
   RefPtr<SourceSurfaceSharedDataWrapper> surface;
   sInstance->mSurfaces.Get(wr::AsUint64(aId), getter_AddRefs(surface));
   if (!surface) {
+    printf_stderr("[AO] [%16lx] remove -- not found\n", id);
     return;
   }
 
+  if (surface->GetCreatorPid() != aPid) {
+    printf_stderr("[AO] [%16lx] remove -- pid mismatch\n", id);
+    MOZ_ASSERT_UNREACHABLE("Removing surface owned by different process!");
+    return;
+  }
+
+  printf_stderr("[AO] [%16lx] remove -- pid %u success\n", id, aPid);
   sInstance->mSurfaces.Remove(id);
 }
 
@@ -102,6 +111,7 @@ SharedSurfacesParent::AddSameProcess(const wr::ExternalImageId& aId,
         new wr::RenderSharedSurfaceTextureHost(surface);
       wr::RenderThread::Get()->RegisterExternalImage(id, texture.forget());
 
+      printf_stderr("[AO] [%16lx] insert -- pid %u success (same process)\n", id, surface->GetCreatorPid());
       sInstance->mSurfaces.Put(id, surface);
     });
 
@@ -118,7 +128,7 @@ SharedSurfacesParent::RemoveSameProcess(const wr::ExternalImageId& aId)
   RefPtr<Runnable> task = NS_NewRunnableFunction(
     "layers::SharedSurfacesParent::RemoveSameProcess",
     [id]() -> void {
-      Remove(id);
+      Remove(id, base::GetCurrentProcId());
     });
 
   CompositorThreadHolder::Loop()->PostTask(task.forget());
@@ -135,6 +145,7 @@ SharedSurfacesParent::DestroyProcess(base::ProcessId aPid)
   // lot of surfaces still bound that require unmapping.
   for (auto i = sInstance->mSurfaces.Iter(); !i.Done(); i.Next()) {
     if (i.Data()->GetCreatorPid() == aPid) {
+      printf_stderr("[AO] [%16lx] remove -- pid %u success (destroy process)\n", i.Key(), aPid);
       wr::RenderThread::Get()->UnregisterExternalImage(i.Key());
       i.Remove();
     }
@@ -168,6 +179,7 @@ SharedSurfacesParent::Add(const wr::ExternalImageId& aId,
     new wr::RenderSharedSurfaceTextureHost(surface);
   wr::RenderThread::Get()->RegisterExternalImage(id, texture.forget());
 
+  printf_stderr("[AO] [%16lx] insert -- pid %u success\n", id, surface->GetCreatorPid());
   sInstance->mSurfaces.Put(id, surface.forget());
 }
 

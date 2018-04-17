@@ -83,6 +83,11 @@ public:
   { }
 
 private:
+  ~SourceSurfaceSharedDataWrapper() override
+  {
+    printf_stderr("[AO] destroy surface wrapper %p\n", this);
+  }
+
   size_t GetDataLength() const
   {
     return static_cast<size_t>(mStride) * mSize.height;
@@ -290,6 +295,7 @@ private:
 
   ~SourceSurfaceSharedData() override
   {
+    printf_stderr("[AO] destroy surface %p\n", this);
     MOZ_ASSERT(mMapCount == 0);
   }
 

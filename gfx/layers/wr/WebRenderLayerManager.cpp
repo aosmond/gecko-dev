@@ -47,6 +47,7 @@ WebRenderLayerManager::WebRenderLayerManager(nsIWidget* aWidget)
   , mWebRenderCommandBuilder(this)
   , mLastDisplayListSize(0)
 {
+  printf_stderr("[AO] [%p] [%u] WebRenderLayerManager -- created\n", this, base::GetCurrentProcId());
   MOZ_COUNT_CTOR(WebRenderLayerManager);
 }
 
@@ -104,6 +105,7 @@ WebRenderLayerManager::DoDestroy(bool aIsSync)
     return;
   }
 
+  printf_stderr("[AO] [%p] [%u] WebRenderLayerManager -- destroy\n", this, base::GetCurrentProcId());
   LayerManager::Destroy();
 
   if (WrBridge()) {
@@ -143,6 +145,7 @@ WebRenderLayerManager::DoDestroy(bool aIsSync)
 
 WebRenderLayerManager::~WebRenderLayerManager()
 {
+  printf_stderr("[AO] [%p] [%u] WebRenderLayerManager -- destructor\n", this, base::GetCurrentProcId());
   Destroy();
   MOZ_COUNT_DTOR(WebRenderLayerManager);
 }
@@ -508,6 +511,7 @@ WebRenderLayerManager::DidComposite(uint64_t aTransactionId,
 void
 WebRenderLayerManager::ClearCachedResources(Layer* aSubtree)
 {
+  printf_stderr("[AO] [%p] [%u] WebRenderLayerManager -- clear cached resources start\n", this, base::GetCurrentProcId());
   WrBridge()->BeginClearCachedResources();
   mWebRenderCommandBuilder.ClearCachedResources();
   DiscardImages();
@@ -517,6 +521,7 @@ WebRenderLayerManager::ClearCachedResources(Layer* aSubtree)
   mActiveCompositorAnimationIds.clear();
   mDiscardedCompositorAnimationsIds.Clear();
   WrBridge()->EndClearCachedResources();
+  printf_stderr("[AO] [%p] [%u] WebRenderLayerManager -- clear cached resources end\n", this, base::GetCurrentProcId());
 }
 
 void
