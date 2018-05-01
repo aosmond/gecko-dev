@@ -255,6 +255,7 @@ public:
     : mLocked(false)
     , mFactor2Mode(false)
     , mFactor2Pruned(false)
+    , mFactor2AspectRatio(0.0)
   { }
 
   MOZ_DECLARE_REFCOUNTED_TYPENAME(ImageSurfaceCache)
@@ -294,11 +295,11 @@ public:
         // We don't want to allow factor of 2 mode pruning to release surfaces
         // for which the callers will accept no substitute.
         surface->SetCannotSubstitute();
-      } else if (!mFactor2Mode) {
+      } else {
         // If no exact match is found, and this is for use rather than internal
         // accounting (i.e. insert and removal), we know this will trigger a
         // decode. Make sure we switch now to factor of 2 mode if necessary.
-        MaybeSetFactor2Mode();
+        MaybeSetFactor2Mode(aSurfaceKey.Size());
       }
     }
 
@@ -321,11 +322,11 @@ public:
       if (exactMatch->IsDecoded()) {
         return MakeTuple(exactMatch.forget(), MatchType::EXACT, IntSize());
       }
-    } else if (!mFactor2Mode) {
+    } else {
       // If no exact match is found, and we are not in factor of 2 mode, then
       // we know that we will trigger a decode because at best we will provide
       // a substitute. Make sure we switch now to factor of 2 mode if necessary.
-      MaybeSetFactor2Mode();
+      MaybeSetFactor2Mode(aIdealKey.Size());
     }
 
     // Try for a best match second, if using compact.
@@ -421,9 +422,17 @@ public:
     return MakeTuple(bestMatch.forget(), matchType, suggestedSize);
   }
 
-  void MaybeSetFactor2Mode()
+  void MaybeSetFactor2Mode(const IntSize& aNewSize)
   {
-    MOZ_ASSERT(!mFactor2Mode);
+    if (mFactor2Mode) {
+      if (mFactor2AspectRatio != 0.0 &&
+          !CalculateImpliedAspectRatio(aNewSize)) {
+        printf_stderr("[AO][%p] vector image, aspect ratio %dx%d doesn't match, exit factor 2 mode\n",
+          this, aNewSize.width, aNewSize.height);
+        mFactor2Mode = mFactor2Pruned = false;
+      }
+      return;
+    }
 
     // Typically an image cache will not have too many size-varying surfaces, so
     // if we exceed the given threshold, we should consider using a subset.
@@ -447,7 +456,9 @@ public:
     Image* image = static_cast<Image*>(current->GetImageKey());
     size_t nativeSizes = image->GetNativeSizesLength();
     if (nativeSizes == 0) {
-      return;
+      // This is a vector image, which by definition has no true native size.
+      // Just assume one extra surface is acceptable.
+      thresholdSurfaces += 1;
     }
 
     // Increase the threshold by the number of native sizes. This ensures that
@@ -464,9 +475,15 @@ public:
     // in that case because we need to know the width/height ratio to define a
     // candidate set.
     IntSize nativeSize;
-    if (NS_FAILED(image->GetWidth(&nativeSize.width)) ||
-        NS_FAILED(image->GetHeight(&nativeSize.height)) ||
-        nativeSize.IsEmpty()) {
+    if (nativeSizes == 0) {
+      if (!CalculateImpliedAspectRatio(aNewSize)) {
+        return;
+      }
+      printf_stderr("[AO][%p] vector image, entering factor of 2 mode with %dx%d\n",
+        this, aNewSize.width, aNewSize.height);
+    } else if (NS_FAILED(image->GetWidth(&nativeSize.width)) ||
+               NS_FAILED(image->GetHeight(&nativeSize.height)) ||
+               nativeSize.IsEmpty()) {
       return;
     }
 
@@ -536,6 +553,18 @@ public:
       return aSize;
     }
 
+    IntSize factorSize;
+    if (mFactor2AspectRatio != 0.0) {
+      IntSize factorSize(int32_t((mFactor2AspectRatio + 0.05) * 10), 10);
+      while (factorSize.width < aSize.width) {
+        factorSize.width *= 2;
+        factorSize.height *= 2;
+      }
+      printf_stderr("[AO][%p] vector image, requested %dx%d, rounded to %dx%d\n",
+        this, aSize.width, aSize.height, factorSize.width, factorSize.height);
+      return factorSize;
+    }
+
     // We cannot enter factor of 2 mode unless we have a minimum number of
     // surfaces, and we should have left it if the cache was emptied.
     if (MOZ_UNLIKELY(IsEmpty())) {
@@ -547,7 +576,6 @@ public:
     auto iter = ConstIter();
     NotNull<CachedSurface*> firstSurface = WrapNotNull(iter.UserData());
     Image* image = static_cast<Image*>(firstSurface->GetImageKey());
-    IntSize factorSize;
     if (NS_FAILED(image->GetWidth(&factorSize.width)) ||
         NS_FAILED(image->GetHeight(&factorSize.height)) ||
         factorSize.IsEmpty()) {
@@ -664,6 +692,25 @@ private:
     }
   }
 
+  bool CalculateImpliedAspectRatio(const IntSize& aNewSize)
+  {
+    mFactor2AspectRatio =
+      NS_roundf((float(aNewSize.width) / aNewSize.height) * 5.0) / 5.0;
+    for (auto iter = mSurfaces.Iter(); !iter.Done(); iter.Next()) {
+      NotNull<CachedSurface*> surface = WrapNotNull(iter.UserData());
+      const IntSize& size = surface->GetSurfaceKey().Size();
+      float aspectRatio =
+        NS_roundf((float(size.width) / size.height) * 5.0) / 5.0;
+      if (mFactor2AspectRatio != aspectRatio) {
+        printf_stderr("[AO][%p] vector image, aspect ratio for %dx%d doesn't match %dx%d, cannot use factor 2 mode\n",
+          this, aNewSize.width, aNewSize.height, size.width, size.height);
+        mFactor2AspectRatio = 0.0;
+        break;
+      }
+    }
+    return mFactor2AspectRatio != 0.0;
+  }
+
   SurfaceTable      mSurfaces;
 
   bool              mLocked;
@@ -674,6 +721,8 @@ private:
   // True if all non-factor of 2 surfaces have been removed from the cache. Note
   // that this excludes unsubstitutable sizes.
   bool              mFactor2Pruned;
+
+  float             mFactor2AspectRatio;
 };
 
 /**

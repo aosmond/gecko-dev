@@ -806,15 +806,21 @@ VectorImage::GetFrameInternal(const IntSize& aSize,
                      RefPtr<SourceSurface>());
   }
 
-  RefPtr<SourceSurface> sourceSurface =
+  RefPtr<SourceSurface> sourceSurface;
+  IntSize suggestedSize;
+  Tie(sourceSurface, suggestedSize) =
     LookupCachedSurface(aSize, aSVGContext, aFlags);
+  if (suggestedSize != aSize) {
+    printf_stderr("[AO][%p] GetFrameInternal suggested size %dx%d requested %dx%d\n",
+      this, suggestedSize.width, suggestedSize.height, aSize.width, aSize.height);
+  }
   if (sourceSurface) {
-    return MakeTuple(ImgDrawResult::SUCCESS, aSize, Move(sourceSurface));
+    return MakeTuple(ImgDrawResult::SUCCESS, suggestedSize, Move(sourceSurface));
   }
 
   if (mIsDrawing) {
     NS_WARNING("Refusing to make re-entrant call to VectorImage::Draw");
-    return MakeTuple(ImgDrawResult::TEMPORARY_ERROR, aSize,
+    return MakeTuple(ImgDrawResult::TEMPORARY_ERROR, suggestedSize,
                      RefPtr<SourceSurface>());
   }
 
@@ -835,16 +841,18 @@ VectorImage::GetFrameInternal(const IntSize& aSize,
                                   mIsDrawing, contextPaint);
 
   RefPtr<gfxDrawable> svgDrawable = CreateSVGDrawable(params);
+  params.size = suggestedSize;
   RefPtr<SourceSurface> surface =
     CreateSurface(params, svgDrawable, didCache);
+  params.size = aSize;
   if (!surface) {
     MOZ_ASSERT(!didCache);
-    return MakeTuple(ImgDrawResult::TEMPORARY_ERROR, aSize,
+    return MakeTuple(ImgDrawResult::TEMPORARY_ERROR, suggestedSize,
                      RefPtr<SourceSurface>());
   }
 
   SendFrameComplete(didCache, params.flags);
-  return MakeTuple(ImgDrawResult::SUCCESS, aSize, Move(surface));
+  return MakeTuple(ImgDrawResult::SUCCESS, suggestedSize, Move(surface));
 }
 
 //******************************************************************************
@@ -1011,8 +1019,14 @@ VectorImage::Draw(gfxContext* aContext,
 
   // If we have an prerasterized version of this image that matches the
   // drawing parameters, use that.
-  RefPtr<SourceSurface> sourceSurface =
+  RefPtr<SourceSurface> sourceSurface;
+  IntSize suggestedSize;
+  Tie(sourceSurface, suggestedSize) =
     LookupCachedSurface(aSize, params.svgContext, aFlags);
+  if (suggestedSize != aSize) {
+    printf_stderr("[AO][%p] Draw suggested size %dx%d requested %dx%d\n",
+      this, suggestedSize.width, suggestedSize.height, aSize.width, aSize.height);
+  }
   if (sourceSurface) {
     RefPtr<gfxDrawable> svgDrawable =
       new gfxSurfaceDrawable(sourceSurface, sourceSurface->GetSize());
@@ -1032,7 +1046,9 @@ VectorImage::Draw(gfxContext* aContext,
 
   bool didCache; // Was the surface put into the cache?
   RefPtr<gfxDrawable> svgDrawable = CreateSVGDrawable(params);
+  params.size = suggestedSize;
   sourceSurface = CreateSurface(params, svgDrawable, didCache);
+  params.size = aSize;
   if (!sourceSurface) {
     MOZ_ASSERT(!didCache);
     Show(svgDrawable, params);
@@ -1040,7 +1056,7 @@ VectorImage::Draw(gfxContext* aContext,
   }
 
   RefPtr<gfxDrawable> drawable =
-    new gfxSurfaceDrawable(sourceSurface, params.size);
+    new gfxSurfaceDrawable(sourceSurface, suggestedSize);
   Show(drawable, params);
   SendFrameComplete(didCache, params.flags);
   return ImgDrawResult::SUCCESS;
@@ -1060,29 +1076,32 @@ VectorImage::CreateSVGDrawable(const SVGDrawingParameters& aParams)
   return svgDrawable.forget();
 }
 
-already_AddRefed<SourceSurface>
+Tuple<RefPtr<SourceSurface>, IntSize>
 VectorImage::LookupCachedSurface(const IntSize& aSize,
                                  const Maybe<SVGImageContext>& aSVGContext,
                                  uint32_t aFlags)
 {
   // If we're not allowed to use a cached surface, don't attempt a lookup.
   if (aFlags & FLAG_BYPASS_SURFACE_CACHE) {
-    return nullptr;
+    return MakeTuple(RefPtr<SourceSurface>(), aSize);
   }
 
   // We don't do any caching if we have animation, so don't bother with a lookup
   // in this case either.
   if (mHaveAnimations) {
-    return nullptr;
+    return MakeTuple(RefPtr<SourceSurface>(), aSize);
   }
 
   LookupResult result =
-    SurfaceCache::Lookup(ImageKey(this),
-                         VectorSurfaceKey(aSize, aSVGContext));
+    SurfaceCache::LookupBestMatch(ImageKey(this),
+                                  VectorSurfaceKey(aSize, aSVGContext));
 
-  MOZ_ASSERT(result.SuggestedSize().IsEmpty(), "SVG should not substitute!");
-  if (!result) {
-    return nullptr;  // No matching surface, or the OS freed the volatile buffer.
+  IntSize suggestedSize = result.SuggestedSize().IsEmpty()
+	                ? aSize : result.SuggestedSize();
+  //MOZ_ASSERT(result.SuggestedSize().IsEmpty(), "SVG should not substitute!");
+  if (!result || result.Type() == MatchType::SUBSTITUTE_BECAUSE_PENDING || result.Type() == MatchType::SUBSTITUTE_BECAUSE_NOT_FOUND) {
+    // No matching surface, or the OS freed the volatile buffer.
+    return MakeTuple(RefPtr<SourceSurface>(), suggestedSize);
   }
 
   RefPtr<SourceSurface> sourceSurface = result.Surface()->GetSourceSurface();
@@ -1090,10 +1109,10 @@ VectorImage::LookupCachedSurface(const IntSize& aSize,
     // Something went wrong. (Probably a GPU driver crash or device reset.)
     // Attempt to recover.
     RecoverFromLossOfSurfaces();
-    return nullptr;
+    return MakeTuple(RefPtr<SourceSurface>(), suggestedSize);
   }
 
-  return sourceSurface.forget();
+  return MakeTuple(Move(sourceSurface), suggestedSize);
 }
 
 already_AddRefed<SourceSurface>
