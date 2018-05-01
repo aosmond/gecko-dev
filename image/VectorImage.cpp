@@ -807,20 +807,16 @@ VectorImage::GetFrameInternal(const IntSize& aSize,
   }
 
   RefPtr<SourceSurface> sourceSurface;
-  IntSize suggestedSize;
-  Tie(sourceSurface, suggestedSize) =
+  IntSize decodeSize;
+  Tie(sourceSurface, decodeSize) =
     LookupCachedSurface(aSize, aSVGContext, aFlags);
-  if (suggestedSize != aSize) {
-    printf_stderr("[AO][%p] GetFrameInternal suggested size %dx%d requested %dx%d\n",
-      this, suggestedSize.width, suggestedSize.height, aSize.width, aSize.height);
-  }
   if (sourceSurface) {
-    return MakeTuple(ImgDrawResult::SUCCESS, suggestedSize, Move(sourceSurface));
+    return MakeTuple(ImgDrawResult::SUCCESS, decodeSize, Move(sourceSurface));
   }
 
   if (mIsDrawing) {
     NS_WARNING("Refusing to make re-entrant call to VectorImage::Draw");
-    return MakeTuple(ImgDrawResult::TEMPORARY_ERROR, suggestedSize,
+    return MakeTuple(ImgDrawResult::TEMPORARY_ERROR, decodeSize,
                      RefPtr<SourceSurface>());
   }
 
@@ -829,7 +825,8 @@ VectorImage::GetFrameInternal(const IntSize& aSize,
   // flags, having an animation, etc). Otherwise CreateSurface will assume that
   // the caller is capable of drawing directly to its own draw target if we
   // cannot cache.
-  SVGDrawingParameters params(nullptr, aSize, ImageRegion::Create(aSize),
+  SVGDrawingParameters params(nullptr, decodeSize,
+                              ImageRegion::Create(decodeSize),
                               SamplingFilter::POINT, aSVGContext,
                               mSVGDocumentWrapper->GetCurrentTime(),
                               aFlags, 1.0);
@@ -841,18 +838,16 @@ VectorImage::GetFrameInternal(const IntSize& aSize,
                                   mIsDrawing, contextPaint);
 
   RefPtr<gfxDrawable> svgDrawable = CreateSVGDrawable(params);
-  params.size = suggestedSize;
   RefPtr<SourceSurface> surface =
     CreateSurface(params, svgDrawable, didCache);
-  params.size = aSize;
   if (!surface) {
     MOZ_ASSERT(!didCache);
-    return MakeTuple(ImgDrawResult::TEMPORARY_ERROR, suggestedSize,
+    return MakeTuple(ImgDrawResult::TEMPORARY_ERROR, decodeSize,
                      RefPtr<SourceSurface>());
   }
 
   SendFrameComplete(didCache, params.flags);
-  return MakeTuple(ImgDrawResult::SUCCESS, suggestedSize, Move(surface));
+  return MakeTuple(ImgDrawResult::SUCCESS, decodeSize, Move(surface));
 }
 
 //******************************************************************************
@@ -1020,16 +1015,11 @@ VectorImage::Draw(gfxContext* aContext,
   // If we have an prerasterized version of this image that matches the
   // drawing parameters, use that.
   RefPtr<SourceSurface> sourceSurface;
-  IntSize suggestedSize;
-  Tie(sourceSurface, suggestedSize) =
+  Tie(sourceSurface, params.decodeSize) =
     LookupCachedSurface(aSize, params.svgContext, aFlags);
-  if (suggestedSize != aSize) {
-    printf_stderr("[AO][%p] Draw suggested size %dx%d requested %dx%d\n",
-      this, suggestedSize.width, suggestedSize.height, aSize.width, aSize.height);
-  }
   if (sourceSurface) {
     RefPtr<gfxDrawable> svgDrawable =
-      new gfxSurfaceDrawable(sourceSurface, sourceSurface->GetSize());
+      new gfxSurfaceDrawable(sourceSurface, params.decodeSize);
     Show(svgDrawable, params);
     return ImgDrawResult::SUCCESS;
   }
@@ -1046,9 +1036,7 @@ VectorImage::Draw(gfxContext* aContext,
 
   bool didCache; // Was the surface put into the cache?
   RefPtr<gfxDrawable> svgDrawable = CreateSVGDrawable(params);
-  params.size = suggestedSize;
   sourceSurface = CreateSurface(params, svgDrawable, didCache);
-  params.size = aSize;
   if (!sourceSurface) {
     MOZ_ASSERT(!didCache);
     Show(svgDrawable, params);
@@ -1056,7 +1044,7 @@ VectorImage::Draw(gfxContext* aContext,
   }
 
   RefPtr<gfxDrawable> drawable =
-    new gfxSurfaceDrawable(sourceSurface, suggestedSize);
+    new gfxSurfaceDrawable(sourceSurface, params.decodeSize);
   Show(drawable, params);
   SendFrameComplete(didCache, params.flags);
   return ImgDrawResult::SUCCESS;
@@ -1068,11 +1056,11 @@ VectorImage::CreateSVGDrawable(const SVGDrawingParameters& aParams)
   RefPtr<gfxDrawingCallback> cb =
     new SVGDrawingCallback(mSVGDocumentWrapper,
                            aParams.viewportSize,
-                           aParams.size,
+                           aParams.decodeSize,
                            aParams.flags);
 
   RefPtr<gfxDrawable> svgDrawable =
-    new gfxCallbackDrawable(cb, aParams.size);
+    new gfxCallbackDrawable(cb, aParams.decodeSize);
   return svgDrawable.forget();
 }
 
@@ -1098,8 +1086,8 @@ VectorImage::LookupCachedSurface(const IntSize& aSize,
 
   IntSize suggestedSize = result.SuggestedSize().IsEmpty()
 	                ? aSize : result.SuggestedSize();
-  //MOZ_ASSERT(result.SuggestedSize().IsEmpty(), "SVG should not substitute!");
-  if (!result || result.Type() == MatchType::SUBSTITUTE_BECAUSE_PENDING || result.Type() == MatchType::SUBSTITUTE_BECAUSE_NOT_FOUND) {
+  if (!result || result.Type() == MatchType::SUBSTITUTE_BECAUSE_PENDING
+              || result.Type() == MatchType::SUBSTITUTE_BECAUSE_NOT_FOUND) {
     // No matching surface, or the OS freed the volatile buffer.
     return MakeTuple(RefPtr<SourceSurface>(), suggestedSize);
   }
@@ -1133,7 +1121,7 @@ VectorImage::CreateSurface(const SVGDrawingParameters& aParams,
                // XXX(seth): We may remove this restriction in bug 922893.
                !mHaveAnimations &&
                // The image is too big to fit in the cache:
-               SurfaceCache::CanHold(aParams.size);
+               SurfaceCache::CanHold(aParams.decodeSize);
 
   // If we weren't given a context, then we know we just want the rasterized
   // surface. We will create the frame below but only insert it into the cache
@@ -1161,7 +1149,7 @@ VectorImage::CreateSurface(const SVGDrawingParameters& aParams,
   // our gfxDrawable into it. (We use FILTER_NEAREST since we never scale here.)
   auto frame = MakeNotNull<RefPtr<imgFrame>>();
   nsresult rv =
-    frame->InitWithDrawable(aSVGDrawable, aParams.size,
+    frame->InitWithDrawable(aSVGDrawable, aParams.decodeSize,
                             SurfaceFormat::B8G8R8A8,
                             SamplingFilter::POINT, aParams.flags,
                             backend);
@@ -1189,7 +1177,8 @@ VectorImage::CreateSurface(const SVGDrawingParameters& aParams,
   }
 
   // Attempt to cache the frame.
-  SurfaceKey surfaceKey = VectorSurfaceKey(aParams.size, aParams.svgContext);
+  SurfaceKey surfaceKey =
+    VectorSurfaceKey(aParams.decodeSize, aParams.svgContext);
   NotNull<RefPtr<ISurfaceProvider>> provider =
     MakeNotNull<SimpleSurfaceProvider*>(ImageKey(this), surfaceKey, frame);
   SurfaceCache::Insert(provider);
@@ -1228,9 +1217,19 @@ void
 VectorImage::Show(gfxDrawable* aDrawable, const SVGDrawingParameters& aParams)
 {
   MOZ_ASSERT(aDrawable, "Should have a gfxDrawable by now");
+
+  gfxContextMatrixAutoSaveRestore saveMatrix(aParams.context);
+  gfxSize decodeSize = SizeDouble(aParams.decodeSize);
+  ImageRegion region = aParams.region;
+  if (aParams.decodeSize != aParams.size) {
+    gfx::Size scale(double(aParams.size.width) / decodeSize.width,
+                    double(aParams.size.height) / decodeSize.height);
+    aParams.context->Multiply(gfxMatrix::Scaling(scale.width, scale.height));
+    region.Scale(1.0 / scale.width, 1.0 / scale.height);
+  }
+
   gfxUtils::DrawPixelSnapped(aParams.context, aDrawable,
-                             SizeDouble(aParams.size),
-                             aParams.region,
+                             decodeSize, region,
                              SurfaceFormat::B8G8R8A8,
                              aParams.samplingFilter,
                              aParams.flags, aParams.opacity);
