@@ -556,6 +556,7 @@ nsInputStreamPump::OnStateTransfer()
     if (rv == NS_BASE_STREAM_CLOSED) {
         rv = NS_OK;
         avail = 0;
+        return STATE_STOP;
     }
     else if (NS_SUCCEEDED(rv) && avail) {
         // we used to limit avail to 16K - we were afraid some ODA handlers
@@ -631,7 +632,7 @@ nsInputStreamPump::OnStateTransfer()
     if (NS_SUCCEEDED(mStatus)) {
         if (NS_FAILED(rv))
             mStatus = rv;
-        else if (avail) {
+        else {
             // if stream is now closed, advance to STATE_STOP right away.
             // Available may return 0 bytes available at the moment; that
             // would not mean that we are done.
