@@ -161,13 +161,11 @@ SetSourceSizeHint(RasterImage* aImage, uint32_t aSize)
     return;
   }
 
-  // Bound by something reasonable
-  uint32_t sizeHint = std::min<uint32_t>(aSize, 20000000);
-  nsresult rv = aImage->SetSourceSizeHint(sizeHint);
+  nsresult rv = aImage->SetSourceSizeHint(aSize);
   if (NS_FAILED(rv)) {
     // Flush memory, try to get some back, and try again.
     rv = nsMemory::HeapMinimize(true);
-    nsresult rv2 = aImage->SetSourceSizeHint(sizeHint);
+    nsresult rv2 = aImage->SetSourceSizeHint(aSize);
     // If we've still failed at this point, things are going downhill.
     if (NS_FAILED(rv) || NS_FAILED(rv2)) {
       NS_WARNING("About to hit OOM in imagelib!");

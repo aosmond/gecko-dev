@@ -421,25 +421,6 @@ TEST_F(ImageSourceBuffer, ExpectLengthGrowsAboveMinCapacity)
   CheckIteratorIsComplete(iterator, 2, length + 1);
 }
 
-TEST_F(ImageSourceBuffer, HugeExpectLengthFails)
-{
-  SourceBufferIterator iterator = mSourceBuffer->Iterator();
-
-  // ExpectLength() should fail if the length is bigger than what the
-  // SurfaceCache can hold, so use the SurfaceCache's maximum capacity to
-  // calculate what a "massive amount of data" (see below) consists of on this
-  // platform.
-  ASSERT_LT(SurfaceCache::MaximumCapacity(), SIZE_MAX);
-  const size_t hugeSize = SurfaceCache::MaximumCapacity() + 1;
-
-  // Attempt to write a massive amount of data and verify that it fails. (We'd
-  // get a buffer overrun during the test if it succeeds, but if it succeeds
-  // that's the least of our problems.)
-  EXPECT_TRUE(NS_FAILED(mSourceBuffer->ExpectLength(hugeSize)));
-  EXPECT_TRUE(mSourceBuffer->IsComplete());
-  CheckIteratorIsComplete(iterator, 0, 0, NS_ERROR_OUT_OF_MEMORY);
-}
-
 TEST_F(ImageSourceBuffer, LargeAppendsAllocateOnlyOneChunk)
 {
   SourceBufferIterator iterator = mSourceBuffer->Iterator();
