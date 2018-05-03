@@ -143,6 +143,9 @@ nsPNGDecoder::~nsPNGDecoder()
       qcms_transform_release(mTransform);
     }
   }
+  if (mNumFrames > 0) {
+    printf_stderr("[AO][%p] nsPNGDecoder::~nsPNGDecoder -- total frames %u\n", this, mNumFrames);
+  }
 }
 
 nsPNGDecoder::TransparencyType
@@ -214,12 +217,16 @@ nsPNGDecoder::CreateFrame(const FrameInfo& aFrameInfo)
     pipeFlags |= SurfacePipeFlags::PROGRESSIVE_DISPLAY;
   }
 
+  if (mNumFrames > 0) {
+    printf_stderr("[AO][%p] nsPNGDecoder::CreateFrame -- frame %u\n", this, mNumFrames);
+  }
   Maybe<SurfacePipe> pipe =
     SurfacePipeFactory::CreateSurfacePipe(this, mNumFrames, Size(),
                                           OutputSize(), aFrameInfo.mFrameRect,
                                           mFormat, pipeFlags);
 
   if (!pipe) {
+    printf_stderr("[AO][%p] nsPNGDecoder::CreateFrame -- failed to create pipe\n", this);
     mPipe = SurfacePipe();
     return NS_ERROR_FAILURE;
   }

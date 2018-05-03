@@ -241,6 +241,7 @@ imgFrame::InitForDecoder(const nsIntSize& aImageSize,
   if (!AllowedImageAndFrameDimensions(aImageSize, aRect)) {
     NS_WARNING("Should have legal image size");
     mAborted = true;
+    printf_stderr("[AO][%p] imgFrame::InitForDecoder -- bad frame size\n", this);
     return NS_ERROR_FAILURE;
   }
 
@@ -257,6 +258,7 @@ imgFrame::InitForDecoder(const nsIntSize& aImageSize,
       !mFrameRect.IsEqualEdges(IntRect(IntPoint(), mImageSize))) {
     MOZ_ASSERT_UNREACHABLE("Creating a non-paletted imgFrame with a "
                            "non-trivial frame rect");
+    printf_stderr("[AO][%p] imgFrame::InitForDecoder -- bad frame rect\n", this);
     return NS_ERROR_FAILURE;
   }
 
@@ -287,6 +289,7 @@ imgFrame::InitForDecoder(const nsIntSize& aImageSize,
     mRawSurface = AllocateBufferForImage(mFrameRect.Size(), mFormat, aIsAnimated);
     if (!mRawSurface) {
       mAborted = true;
+      printf_stderr("[AO][%p] imgFrame::InitForDecoder -- cannot allocate buffer\n", this);
       return NS_ERROR_OUT_OF_MEMORY;
     }
 
@@ -294,12 +297,14 @@ imgFrame::InitForDecoder(const nsIntSize& aImageSize,
     if (!mLockedSurface) {
       NS_WARNING("Failed to create LockedSurface");
       mAborted = true;
+      printf_stderr("[AO][%p] imgFrame::InitForDecoder -- cannot lock buffer\n", this);
       return NS_ERROR_OUT_OF_MEMORY;
     }
 
     if (!ClearSurface(mRawSurface, mFrameRect.Size(), mFormat)) {
       NS_WARNING("Could not clear allocated buffer");
       mAborted = true;
+      printf_stderr("[AO][%p] imgFrame::InitForDecoder -- cannot clear buffer\n", this);
       return NS_ERROR_OUT_OF_MEMORY;
     }
   }
