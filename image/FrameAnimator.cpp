@@ -266,6 +266,7 @@ FrameAnimator::AdvanceFrame(AnimationState& aState,
 
     // If we're done, exit early.
     if (ret.mAnimationFinished) {
+      printf_stderr("[AO][%p] FrameAnimator::Advance -- finished, last loop\n", this);
       return ret;
     }
   }
@@ -282,6 +283,7 @@ FrameAnimator::AdvanceFrame(AnimationState& aState,
     // would then jump to a random point in the animation to try to catch up.
     // But we were never behind in the animation.
     aState.mCurrentAnimationFrameTime = aTime;
+    printf_stderr("[AO][%p] FrameAnimator::Advance -- frame not available\n", this);
     return ret;
   }
 
@@ -304,6 +306,7 @@ FrameAnimator::AdvanceFrame(AnimationState& aState,
     // through the animation. We will wait until the next refresh driver tick
     // and try again.
     aState.mCurrentAnimationFrameTime = aTime;
+    printf_stderr("[AO][%p] FrameAnimator::Advance -- frame not ready\n", this);
     return ret;
   }
 
@@ -312,6 +315,7 @@ FrameAnimator::AdvanceFrame(AnimationState& aState,
   // but we just got it above.
   MOZ_ASSERT(nextFrameTimeout.isSome());
   if (*nextFrameTimeout == FrameTimeout::Forever()) {
+    printf_stderr("[AO][%p] FrameAnimator::Advance -- finished, frame never times out\n", this);
     ret.mAnimationFinished = true;
   }
 
@@ -324,6 +328,7 @@ FrameAnimator::AdvanceFrame(AnimationState& aState,
     if (!DoBlend(aFrames, &ret.mDirtyRect, currentFrameIndex, nextFrameIndex)) {
       // something went wrong, move on to next
       NS_WARNING("FrameAnimator::AdvanceFrame(): Compositing of frame failed");
+      printf_stderr("[AO][%p] FrameAnimator::Advance -- blending failed\n", this);
       nextFrame->SetCompositingFailed(true);
       Maybe<TimeStamp> currentFrameEndTime = GetCurrentImgFrameEndTime(aState, aFrames);
       MOZ_ASSERT(currentFrameEndTime.isSome());
@@ -379,6 +384,7 @@ FrameAnimator::AdvanceFrame(AnimationState& aState,
 
   // If we're here, we successfully advanced the frame.
   ret.mFrameAdvanced = true;
+  printf_stderr("[AO][%p] FrameAnimator::Advance -- advanced to frame %u\n", this, nextFrameIndex);
 
   return ret;
 }
@@ -411,6 +417,7 @@ FrameAnimator::RequestRefresh(AnimationState& aState,
   RefreshResult ret;
 
   if (aState.IsDiscarded()) {
+    printf_stderr("[AO][%p] FrameAnimator::RequestRefresh -- discarded\n", this);
     return ret;
   }
 
@@ -429,6 +436,7 @@ FrameAnimator::RequestRefresh(AnimationState& aState,
     if (!ret.mDirtyRect.IsEmpty()) {
       ret.mFrameAdvanced = true;
     }
+    printf_stderr("[AO][%p] FrameAnimator::RequestRefresh -- discarded or not ready\n", this);
     return ret;
   }
 
@@ -442,6 +450,7 @@ FrameAnimator::RequestRefresh(AnimationState& aState,
     MOZ_ASSERT(aState.mCompositedFrameInvalid);
     // Nothing we can do but wait for our previous current frame to be decoded
     // again so we can determine what to do next.
+    printf_stderr("[AO][%p] FrameAnimator::RequestRefresh -- frame not ready\n", this);
     return ret;
   }
 

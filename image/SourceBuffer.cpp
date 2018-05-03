@@ -126,10 +126,12 @@ SourceBufferIterator::RemainingBytesIsNoMoreThan(size_t aBytes) const
 //////////////////////////////////////////////////////////////////////////////
 
 const size_t SourceBuffer::MIN_CHUNK_CAPACITY;
+const size_t SourceBuffer::MAX_CHUNK_CAPACITY;
 
 SourceBuffer::SourceBuffer()
   : mMutex("image::SourceBuffer")
   , mConsumerCount(0)
+  , mCompacted(false)
 { }
 
 SourceBuffer::~SourceBuffer()
@@ -165,7 +167,9 @@ SourceBuffer::AppendChunk(Maybe<Chunk>&& aChunk)
 }
 
 Maybe<SourceBuffer::Chunk>
-SourceBuffer::CreateChunk(size_t aCapacity, bool aRoundUp /* = true */)
+SourceBuffer::CreateChunk(size_t aCapacity,
+                          size_t aExistingCapacity,
+                          bool aRoundUp /* = true */)
 {
   if (MOZ_UNLIKELY(aCapacity == 0)) {
     MOZ_ASSERT_UNREACHABLE("Appending a chunk of zero size?");
@@ -180,7 +184,7 @@ SourceBuffer::CreateChunk(size_t aCapacity, bool aRoundUp /* = true */)
   // allocating huge buffers. Generally images do not get smaller when decoded,
   // so if we could store the source data in the SurfaceCache, we assume that
   // there's no way we'll be able to store the decoded version.
-  if (MOZ_UNLIKELY(!SurfaceCache::CanHold(finalCapacity))) {
+  if (MOZ_UNLIKELY(!SurfaceCache::CanHold(finalCapacity + aExistingCapacity))) {
     NS_WARNING("SourceBuffer refused to create chunk too large for SurfaceCache");
     return Nothing();
   }
@@ -197,6 +201,13 @@ SourceBuffer::Compact()
   MOZ_ASSERT(mWaitingConsumers.Length() == 0, "Shouldn't have waiters");
   MOZ_ASSERT(mStatus, "Should be complete here");
 
+  // If we've tried to compact once, don't attempt again.
+  if (mCompacted) {
+    return NS_OK;
+  }
+
+  mCompacted = true;
+
   // Compact our waiting consumers list, since we're complete and no future
   // consumer will ever have to wait.
   mWaitingConsumers.Compact();
@@ -208,6 +219,18 @@ SourceBuffer::Compact()
 
   // If we have one chunk, then we can compact if it has excess capacity.
   if (mChunks.Length() == 1 && mChunks[0].Length() == mChunks[0].Capacity()) {
+    return NS_OK;
+  }
+
+  // If the last chunk has the maximum capacity, then we know the total size
+  // will be quite large and not worth consolidating. We can likely/cheapily
+  // trim the last chunk if it is too big however.
+  size_t capacity = mChunks.LastElement().Capacity();
+  if (capacity == MAX_CHUNK_CAPACITY) {
+    size_t lastLength = mChunks.LastElement().Length();
+    if (lastLength != capacity) {
+      mChunks.LastElement().SetCapacity(lastLength);
+    }
     return NS_OK;
   }
 
@@ -273,20 +296,24 @@ SourceBuffer::FibonacciCapacityWithMinimum(size_t aMinCapacity)
 {
   mMutex.AssertCurrentThreadOwns();
 
-  // We grow the source buffer using a Fibonacci growth rate.
+  // We grow the source buffer using a Fibonacci growth rate. Unless the
+  // available data is larger than the maximum chunk size, we will cap the
+  // size at MAX_CHUNK_CAPACITY.
 
   size_t length = mChunks.Length();
 
-  if (length == 0) {
+  if (length == 0 || aMinCapacity > MAX_CHUNK_CAPACITY) {
     return aMinCapacity;
   }
 
   if (length == 1) {
-    return max(2 * mChunks[0].Capacity(), aMinCapacity);
+    return min(max(2 * mChunks[0].Capacity(), aMinCapacity),
+               MAX_CHUNK_CAPACITY);
   }
 
-  return max(mChunks[length - 1].Capacity() + mChunks[length - 2].Capacity(),
-             aMinCapacity);
+  return min(max(mChunks[length - 1].Capacity() +
+                 mChunks[length - 2].Capacity(),
+                 aMinCapacity), MAX_CHUNK_CAPACITY);
 }
 
 void
@@ -326,7 +353,9 @@ SourceBuffer::ExpectLength(size_t aExpectedLength)
     return NS_OK;
   }
 
-  if (MOZ_UNLIKELY(NS_FAILED(AppendChunk(CreateChunk(aExpectedLength, /* aRoundUp */ false))))) {
+  size_t length = min(aExpectedLength, MAX_CHUNK_CAPACITY);
+  printf_stderr("[AO][%p] SourceBuffer::ExpectLength -- expected length %lu, initial capacity %lu\n", this, aExpectedLength, length);
+  if (MOZ_UNLIKELY(NS_FAILED(AppendChunk(CreateChunk(length, 0, /* aRoundUp */ false))))) {
     return HandleError(NS_ERROR_OUT_OF_MEMORY);
   }
 
@@ -346,6 +375,7 @@ SourceBuffer::Append(const char* aData, size_t aLength)
   size_t forCurrentChunk = 0;
   size_t forNextChunk = 0;
   size_t nextChunkCapacity = 0;
+  size_t totalCapacity = 0;
 
   {
     MutexAutoLock lock(mMutex);
@@ -356,7 +386,7 @@ SourceBuffer::Append(const char* aData, size_t aLength)
     }
 
     if (MOZ_UNLIKELY(mChunks.Length() == 0)) {
-      if (MOZ_UNLIKELY(NS_FAILED(AppendChunk(CreateChunk(aLength))))) {
+      if (MOZ_UNLIKELY(NS_FAILED(AppendChunk(CreateChunk(aLength, 0))))) {
         return HandleError(NS_ERROR_OUT_OF_MEMORY);
       }
     }
@@ -381,6 +411,10 @@ SourceBuffer::Append(const char* aData, size_t aLength)
     nextChunkCapacity = forNextChunk > 0
                       ? FibonacciCapacityWithMinimum(forNextChunk)
                       : 0;
+
+    for (uint32_t i = 0 ; i < mChunks.Length() ; ++i) {
+      totalCapacity += mChunks[i].Capacity();
+    }
   }
 
   // Write everything we can fit into the current chunk.
@@ -391,7 +425,7 @@ SourceBuffer::Append(const char* aData, size_t aLength)
   Maybe<Chunk> nextChunk;
   if (forNextChunk > 0) {
     MOZ_ASSERT(nextChunkCapacity >= forNextChunk, "Next chunk too small?");
-    nextChunk = CreateChunk(nextChunkCapacity);
+    nextChunk = CreateChunk(nextChunkCapacity, totalCapacity);
     if (MOZ_LIKELY(nextChunk && !nextChunk->AllocationFailed())) {
       memcpy(nextChunk->Data(), aData + forCurrentChunk, forNextChunk);
       nextChunk->AddLength(forNextChunk);
@@ -446,11 +480,13 @@ AppendToSourceBuffer(nsIInputStream*,
   // return a failed status to the caller.
   nsresult rv = sourceBuffer->Append(aFromRawSegment, aCount);
   if (rv == NS_ERROR_OUT_OF_MEMORY) {
+    printf_stderr("[AO][%p] SourceBuffer::AppendFromInputStream -- oom, failed to append %u\n", sourceBuffer, aCount);
     return rv;
   }
 
   // Report that we wrote everything we got.
   *aWriteCount = aCount;
+  printf_stderr("[AO][%p] SourceBuffer::AppendFromInputStream -- append %u\n", sourceBuffer, aCount);
 
   return NS_OK;
 }
@@ -459,21 +495,33 @@ nsresult
 SourceBuffer::AppendFromInputStream(nsIInputStream* aInputStream,
                                     uint32_t aCount)
 {
+  printf_stderr("[AO][%p] SourceBuffer::AppendFromInputStream -- accept %u\n", this, aCount);
   uint32_t bytesRead;
   nsresult rv = aInputStream->ReadSegments(AppendToSourceBuffer, this,
                                            aCount, &bytesRead);
   if (NS_WARN_IF(NS_FAILED(rv))) {
+    printf_stderr("[AO][%p] SourceBuffer::AppendFromInputStream -- failed %d\n", this, rv);
     return rv;
   }
 
   if (bytesRead == 0) {
     // The loading of the image has been canceled.
+    printf_stderr("[AO][%p] SourceBuffer::AppendFromInputStream -- failed, read zero bytes\n", this);
     return NS_ERROR_FAILURE;
   }
 
-  MOZ_ASSERT(bytesRead == aCount,
-             "AppendToSourceBuffer should consume everything");
+  if (bytesRead != aCount) {
+    // Only some of the given data was read. We must have failed in
+    // SourceBuffer::Append but ReadSegments swalled the error because we read
+    // some of the data.
+    MutexAutoLock lock(mMutex);
+    MOZ_ASSERT(mStatus);
+    MOZ_ASSERT(NS_FAILED(*mStatus));
+    printf_stderr("[AO][%p] SourceBuffer::AppendFromInputStream -- failed, status %d\n", this, *mStatus);
+    return *mStatus;
+  }
 
+  printf_stderr("[AO][%p] SourceBuffer::AppendFromInputStream -- committed %u\n", this, aCount);
   return rv;
 }
 
@@ -484,8 +532,8 @@ SourceBuffer::Complete(nsresult aStatus)
 
   {
     MutexAutoLock lock(mMutex);
-
-    if (MOZ_UNLIKELY(mStatus)) {
+    if (mStatus && (MOZ_UNLIKELY(NS_SUCCEEDED(*mStatus) ||
+                                 aStatus != NS_IMAGELIB_ERROR_FAILURE))) {
       MOZ_ASSERT_UNREACHABLE("Called Complete more than once");
       return;
     }
@@ -497,6 +545,12 @@ SourceBuffer::Complete(nsresult aStatus)
 
     mStatus = Some(aStatus);
     waitingConsumers = Move(mWaitingConsumers);
+
+    size_t length = 0;
+    for (uint32_t i = 0 ; i < mChunks.Length() ; ++i) {
+      length += mChunks[i].Length();
+    }
+    printf_stderr("[AO][%p] SourceBuffer::Complete -- total length %lu, status %d (%d)\n", this, length, aStatus == NS_OK, aStatus);
   }
 
   // Resume any waiting consumers now that we're complete.
