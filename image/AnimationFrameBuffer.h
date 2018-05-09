@@ -7,6 +7,7 @@
 #define mozilla_image_AnimationFrameBuffer_h
 
 #include "ISurfaceProvider.h"
+#include "FrameTimeout.h"
 
 namespace mozilla {
 namespace image {
@@ -50,8 +51,12 @@ public:
    *                    going) until it has reached this frame. Useful when the
    *                    animation was progressing, but the surface was
    *                    discarded, and we had to redecode.
+   *
+   * @param aLoopBudget The minimum number of milliseconds an animation must
+   *                    loop over before it can start discarding frames.
    */
-  void Initialize(size_t aThreshold, size_t aBatch, size_t aStartFrame);
+  void Initialize(size_t aThreshold, size_t aBatch, size_t aStartFrame,
+                  FrameTimeout aLoopBudget);
 
   /**
    * Access a specific frame from the frame buffer. It should generally access
@@ -120,7 +125,7 @@ public:
    * @returns True if frames post-advance may be discarded and redecoded on
    *          demand, else false.
    */
-  bool MayDiscard() const { return mFrames.Length() > mThreshold; }
+  bool MayDiscard() const { return mMayDiscard; }
 
   /**
    * @returns True if the frame buffer was ever marked as complete. This implies
@@ -191,11 +196,17 @@ private:
   // The mFrames index that we have advanced to.
   size_t mGetIndex;
 
+  // The minimum loop budget we must exceed before discarding.
+  FrameTimeout mLoopBudget;
+
   // True if the total number of frames is known.
   bool mSizeKnown;
 
   // True if we encountered an error while redecoding.
   bool mRedecodeError;
+
+  // True if we have started discarding frames.
+  bool mMayDiscard;
 };
 
 } // namespace image

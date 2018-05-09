@@ -530,8 +530,7 @@ FrameAnimator::GetTimeoutForFrame(AnimationState& aState,
 {
   RawAccessFrameRef frame = GetRawFrame(aFrames, aFrameNum);
   if (frame) {
-    AnimationData data = frame->GetAnimationData();
-    return Some(data.mTimeout);
+    return Some(frame->GetTimeout());
   }
 
   MOZ_ASSERT(aState.mHasRequestedDecode && !aState.mIsCurrentlyDecoded);

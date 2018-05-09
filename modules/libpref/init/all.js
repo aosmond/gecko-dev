@@ -4510,12 +4510,16 @@ pref("toolkit.zoomManager.zoomValues", ".3,.5,.67,.8,.9,1,1.1,1.2,1.33,1.5,1.7,2
 
 // The maximum size (in kB) that the aggregate frames of an animation can use
 // before it starts to discard already displayed frames and redecode them as
-// necessary.
+// necessary. Also see min-loop-ms.
 pref("image.animated.decode-on-demand.threshold-kb", 4194303);
 
 // The minimum number of frames we want to have buffered ahead of an
 // animation's currently displayed frame.
 pref("image.animated.decode-on-demand.batch-size", 6);
+
+// The minimum milliseconds the loop must be before it starts to discard already
+// displayed frames and redecode them as necessary. Also see threshold-kb.
+pref("image.animated.decode-on-demand.min-loop-ms", 10000);
 
 // Maximum number of surfaces for an image before entering "factor of 2" mode.
 // This in addition to the number of "native" sizes of an image. A native size

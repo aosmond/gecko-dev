@@ -46,7 +46,12 @@ AnimationSurfaceProvider::AnimationSurfaceProvider(NotNull<RasterImage*> aImage,
     (pixelSize * frameSize.width * frameSize.height);
   size_t batch = gfxPrefs::ImageAnimatedDecodeOnDemandBatchSize();
 
-  mFrames.Initialize(threshold, batch, aCurrentFrame);
+  // Minimum loop time in milliseconds. If the animation is very short, we don't
+  // want to discard frames because the loop is very tight.
+  int32_t loopBudget = gfxPrefs::ImageAnimatedDecodeOnDemandMinimumLoopMS();
+
+  mFrames.Initialize(threshold, batch, aCurrentFrame,
+                     FrameTimeout::FromRawMilliseconds(loopBudget));
 }
 
 AnimationSurfaceProvider::~AnimationSurfaceProvider()

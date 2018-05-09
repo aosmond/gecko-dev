@@ -69,7 +69,7 @@ struct FrameTimeout
 
   FrameTimeout operator+(const FrameTimeout& aOther)
   {
-    if (*this == Forever() || aOther == Forever()) {
+    if (IsForever() || aOther.IsForever()) {
       return Forever();
     }
 
@@ -79,6 +79,23 @@ struct FrameTimeout
   FrameTimeout& operator+=(const FrameTimeout& aOther)
   {
     *this = *this + aOther;
+    return *this;
+  }
+
+  FrameTimeout operator-(const FrameTimeout& aOther)
+  {
+    if (IsForever()) {
+      return Forever();
+    }
+    if (aOther.IsForever() || aOther.mTimeout > mTimeout) {
+      return Zero();
+    }
+    return FrameTimeout(mTimeout - aOther.mTimeout);
+  }
+
+  FrameTimeout& operator-=(const FrameTimeout& aOther)
+  {
+    *this = *this - aOther;
     return *this;
   }
 
@@ -104,6 +121,9 @@ struct FrameTimeout
    * XXX(seth): This is a backwards compatibility hack that should be removed.
    */
   int32_t AsEncodedValueDeprecated() const { return mTimeout; }
+
+  bool IsZero() const { return mTimeout == 0; }
+  bool IsForever() const { return mTimeout < 0; }
 
 private:
   explicit FrameTimeout(int32_t aTimeout)

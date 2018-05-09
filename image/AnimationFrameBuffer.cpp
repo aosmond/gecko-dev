@@ -16,14 +16,17 @@ AnimationFrameBuffer::AnimationFrameBuffer()
   , mAdvance(0)
   , mInsertIndex(0)
   , mGetIndex(0)
+  , mLoopBudget(FrameTimeout::Forever())
   , mSizeKnown(false)
   , mRedecodeError(false)
+  , mMayDiscard(false)
 { }
 
 void
 AnimationFrameBuffer::Initialize(size_t aThreshold,
                                  size_t aBatch,
-                                 size_t aStartFrame)
+                                 size_t aStartFrame,
+                                 FrameTimeout aLoopBudget)
 {
   MOZ_ASSERT(mThreshold == 0);
   MOZ_ASSERT(mBatch == 0);
@@ -34,6 +37,7 @@ AnimationFrameBuffer::Initialize(size_t aThreshold,
   mThreshold = aThreshold;
   mBatch = aBatch;
   mAdvance = aStartFrame;
+  mLoopBudget = aLoopBudget;
 
   if (mBatch > SIZE_MAX/4) {
     // Batch size is so big, we will just end up decoding the whole animation.
@@ -90,14 +94,15 @@ AnimationFrameBuffer::Insert(RawAccessFrameRef&& aFrame)
   } else if (mInsertIndex == mFrames.Length()) {
     // We are still on the first pass of the animation decoding, so this is
     // the first time we have seen this frame.
+    mLoopBudget -= aFrame->GetTimeout();
     mFrames.AppendElement(Move(aFrame));
 
-    if (mInsertIndex == mThreshold) {
+    if (!mMayDiscard && mInsertIndex >= mThreshold && mLoopBudget.IsZero()) {
       // We just tripped over the threshold for the first time. This is our
       // chance to do any clearing of already displayed frames. After this,
       // we only need to release as we advance or force a restart.
-      MOZ_ASSERT(MayDiscard());
       MOZ_ASSERT(mGetIndex < mInsertIndex);
+      mMayDiscard = true;
       for (size_t i = 1; i < mGetIndex; ++i) {
         RawAccessFrameRef discard = Move(mFrames[i]);
       }

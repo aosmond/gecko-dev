@@ -866,6 +866,13 @@ imgFrame::GetSourceSurfaceInternal()
   return CreateLockedSurface(mRawSurface, mFrameRect.Size(), mFormat);
 }
 
+FrameTimeout
+imgFrame::GetTimeout() const
+{
+  MonitorAutoLock lock(mMonitor);
+  return mTimeout;
+}
+
 AnimationData
 imgFrame::GetAnimationData() const
 {

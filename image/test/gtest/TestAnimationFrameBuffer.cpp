@@ -67,8 +67,9 @@ TEST_F(ImageAnimationFrameBuffer, InitialState)
 {
   const size_t kThreshold = 800;
   const size_t kBatch = 100;
+  const FrameTimeout kLoopBudget = FrameTimeout::FromRawMilliseconds(0);
   AnimationFrameBuffer buffer;
-  buffer.Initialize(kThreshold, kBatch, 0);
+  buffer.Initialize(kThreshold, kBatch, 0, kLoopBudget);
 
   EXPECT_EQ(kThreshold, buffer.Threshold());
   EXPECT_EQ(kBatch, buffer.Batch());
@@ -84,8 +85,9 @@ TEST_F(ImageAnimationFrameBuffer, ThresholdTooSmall)
 {
   const size_t kThreshold = 0;
   const size_t kBatch = 10;
+  const FrameTimeout kLoopBudget = FrameTimeout::FromRawMilliseconds(0);
   AnimationFrameBuffer buffer;
-  buffer.Initialize(kThreshold, kBatch, 0);
+  buffer.Initialize(kThreshold, kBatch, 0, kLoopBudget);
 
   EXPECT_EQ(kBatch * 2 + 1, buffer.Threshold());
   EXPECT_EQ(kBatch, buffer.Batch());
@@ -97,8 +99,9 @@ TEST_F(ImageAnimationFrameBuffer, BatchTooSmall)
 {
   const size_t kThreshold = 10;
   const size_t kBatch = 0;
+  const FrameTimeout kLoopBudget = FrameTimeout::FromRawMilliseconds(0);
   AnimationFrameBuffer buffer;
-  buffer.Initialize(kThreshold, kBatch, 0);
+  buffer.Initialize(kThreshold, kBatch, 0, kLoopBudget);
 
   EXPECT_EQ(kThreshold, buffer.Threshold());
   EXPECT_EQ(size_t(1), buffer.Batch());
@@ -110,8 +113,9 @@ TEST_F(ImageAnimationFrameBuffer, BatchTooBig)
 {
   const size_t kThreshold = 50;
   const size_t kBatch = SIZE_MAX;
+  const FrameTimeout kLoopBudget = FrameTimeout::FromRawMilliseconds(0);
   AnimationFrameBuffer buffer;
-  buffer.Initialize(kThreshold, kBatch, 0);
+  buffer.Initialize(kThreshold, kBatch, 0, kLoopBudget);
 
   // The rounding is important here (e.g. SIZE_MAX/4 * 2 != SIZE_MAX/2).
   EXPECT_EQ(SIZE_MAX/4, buffer.Batch());
@@ -124,8 +128,9 @@ TEST_F(ImageAnimationFrameBuffer, FinishUnderBatchAndThreshold)
 {
   const size_t kThreshold = 30;
   const size_t kBatch = 10;
+  const FrameTimeout kLoopBudget = FrameTimeout::FromRawMilliseconds(0);
   AnimationFrameBuffer buffer;
-  buffer.Initialize(kThreshold, kBatch, 0);
+  buffer.Initialize(kThreshold, kBatch, 0, kLoopBudget);
   const auto& frames = buffer.Frames();
 
   EXPECT_EQ(kBatch * 2, buffer.PendingDecode());
@@ -181,8 +186,9 @@ TEST_F(ImageAnimationFrameBuffer, FinishMultipleBatchesUnderThreshold)
 {
   const size_t kThreshold = 30;
   const size_t kBatch = 2;
+  const FrameTimeout kLoopBudget = FrameTimeout::FromRawMilliseconds(0);
   AnimationFrameBuffer buffer;
-  buffer.Initialize(kThreshold, kBatch, 0);
+  buffer.Initialize(kThreshold, kBatch, 0, kLoopBudget);
   const auto& frames = buffer.Frames();
 
   EXPECT_EQ(kBatch * 2, buffer.PendingDecode());
@@ -261,8 +267,9 @@ TEST_F(ImageAnimationFrameBuffer, MayDiscard)
 {
   const size_t kThreshold = 8;
   const size_t kBatch = 3;
+  const FrameTimeout kLoopBudget = FrameTimeout::FromRawMilliseconds(0);
   AnimationFrameBuffer buffer;
-  buffer.Initialize(kThreshold, kBatch, 0);
+  buffer.Initialize(kThreshold, kBatch, 0, kLoopBudget);
   const auto& frames = buffer.Frames();
 
   EXPECT_EQ(kBatch * 2, buffer.PendingDecode());
@@ -389,8 +396,9 @@ TEST_F(ImageAnimationFrameBuffer, ResetIncompleteAboveThreshold)
 {
   const size_t kThreshold = 5;
   const size_t kBatch = 2;
+  const FrameTimeout kLoopBudget = FrameTimeout::FromRawMilliseconds(0);
   AnimationFrameBuffer buffer;
-  buffer.Initialize(kThreshold, kBatch, 0);
+  buffer.Initialize(kThreshold, kBatch, 0, kLoopBudget);
   const auto& frames = buffer.Frames();
 
   // Add frames until we exceed the threshold.
@@ -454,8 +462,9 @@ TEST_F(ImageAnimationFrameBuffer, StartAfterBeginning)
   const size_t kThreshold = 30;
   const size_t kBatch = 2;
   const size_t kStartFrame = 7;
+  const FrameTimeout kLoopBudget = FrameTimeout::FromRawMilliseconds(0);
   AnimationFrameBuffer buffer;
-  buffer.Initialize(kThreshold, kBatch, kStartFrame);
+  buffer.Initialize(kThreshold, kBatch, kStartFrame, kLoopBudget);
 
   EXPECT_EQ(kStartFrame, buffer.PendingAdvance());
 
@@ -489,8 +498,9 @@ TEST_F(ImageAnimationFrameBuffer, StartAfterBeginningAndReset)
   const size_t kThreshold = 30;
   const size_t kBatch = 2;
   const size_t kStartFrame = 7;
+  const FrameTimeout kLoopBudget = FrameTimeout::FromRawMilliseconds(0);
   AnimationFrameBuffer buffer;
-  buffer.Initialize(kThreshold, kBatch, kStartFrame);
+  buffer.Initialize(kThreshold, kBatch, kStartFrame, kLoopBudget);
 
   EXPECT_EQ(kStartFrame, buffer.PendingAdvance());
 
@@ -520,8 +530,9 @@ TEST_F(ImageAnimationFrameBuffer, RedecodeMoreFrames)
 {
   const size_t kThreshold = 5;
   const size_t kBatch = 2;
+  const FrameTimeout kLoopBudget = FrameTimeout::FromRawMilliseconds(0);
   AnimationFrameBuffer buffer;
-  buffer.Initialize(kThreshold, kBatch, 0);
+  buffer.Initialize(kThreshold, kBatch, 0, kLoopBudget);
   const auto& frames = buffer.Frames();
 
   // Add frames until we exceed the threshold.
@@ -569,8 +580,9 @@ TEST_F(ImageAnimationFrameBuffer, RedecodeFewerFrames)
 {
   const size_t kThreshold = 5;
   const size_t kBatch = 2;
+  const FrameTimeout kLoopBudget = FrameTimeout::FromRawMilliseconds(0);
   AnimationFrameBuffer buffer;
-  buffer.Initialize(kThreshold, kBatch, 0);
+  buffer.Initialize(kThreshold, kBatch, 0, kLoopBudget);
   const auto& frames = buffer.Frames();
 
   // Add frames until we exceed the threshold.
@@ -618,8 +630,9 @@ TEST_F(ImageAnimationFrameBuffer, RedecodeFewerFramesAndBehindAdvancing)
 {
   const size_t kThreshold = 5;
   const size_t kBatch = 2;
+  const FrameTimeout kLoopBudget = FrameTimeout::FromRawMilliseconds(0);
   AnimationFrameBuffer buffer;
-  buffer.Initialize(kThreshold, kBatch, 0);
+  buffer.Initialize(kThreshold, kBatch, 0, kLoopBudget);
   const auto& frames = buffer.Frames();
 
   // Add frames until we exceed the threshold.
