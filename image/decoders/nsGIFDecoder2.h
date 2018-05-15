@@ -64,6 +64,13 @@ private:
   template <typename PixelSize> PixelSize
   ColormapIndexToPixel(uint8_t aIndex);
 
+  template <typename PixelSize> Maybe<WriteState>
+  YieldPixels(const uint8_t* aData,
+              size_t aLength,
+              size_t* aBytesReadOut,
+              PixelSize* aPixelOut,
+              int32_t& aPixelsRemaining);
+
   /// A generator function that performs LZW decompression and yields pixels.
   template <typename PixelSize> NextPixel<PixelSize>
   YieldPixel(const uint8_t* aData, size_t aLength, size_t* aBytesReadOut);

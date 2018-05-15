@@ -35,6 +35,7 @@ AnimationSurfaceProvider::AnimationSurfaceProvider(NotNull<RasterImage*> aImage,
              "Use DecodedSurfaceProvider for single-frame image decodes");
 
   mFrames.Initialize(aThreshold, aBatch, aCurrentFrame);
+  mDecoder->SetFrameRecycler(this);
 }
 
 AnimationSurfaceProvider::AnimationSurfaceProvider(NotNull<RasterImage*> aImage,
@@ -68,11 +69,15 @@ AnimationSurfaceProvider::AnimationSurfaceProvider(NotNull<RasterImage*> aImage,
   size_t batch = gfxPrefs::ImageAnimatedDecodeOnDemandBatchSize();
 
   mFrames.Initialize(threshold, batch, aCurrentFrame);
+  mDecoder->SetFrameRecycler(this);
 }
 
 AnimationSurfaceProvider::~AnimationSurfaceProvider()
 {
   DropImageReference();
+  if (mDecoder) {
+    mDecoder->SetFrameRecycler(nullptr);
+  }
 }
 
 void
@@ -119,6 +124,7 @@ AnimationSurfaceProvider::Reset()
     // Recreate the decoder so we can regenerate the frames again.
     mDecoder = DecoderFactory::CloneAnimationDecoder(mDecoder);
     MOZ_ASSERT(mDecoder);
+    mDecoder->SetFrameRecycler(this);
 
     MutexAutoLock lock2(mFramesMutex);
     restartDecoder = mFrames.Reset();
@@ -143,6 +149,24 @@ AnimationSurfaceProvider::Advance(size_t aFrame)
   if (restartDecoder) {
     DecodePool::Singleton()->AsyncRun(this);
   }
+}
+
+already_AddRefed<imgFrame>
+AnimationSurfaceProvider::AllocateFrame()
+{
+#if 0
+  MutexAutoLock lock(mFramesMutex);
+  RefPtr<imgFrame> frame = mFrames.TakeRecycledFrame();
+  if (!frame) {
+    frame = MakeRefPtr<imgFrame>();
+    //printf_stderr("[AO] use new frame %p\n", frame.get());
+  } else {
+    //printf_stderr("[AO] use recycled frame %p\n", frame.get());
+  }
+  return frame.forget();
+#else
+  return MakeRefPtr<imgFrame>().forget();
+#endif
 }
 
 DrawableFrameRef
@@ -412,7 +436,9 @@ AnimationSurfaceProvider::FinishDecoding()
   if (recreateDecoder) {
     mDecoder = DecoderFactory::CloneAnimationDecoder(mDecoder);
     MOZ_ASSERT(mDecoder);
+    mDecoder->SetFrameRecycler(this);
   } else {
+    mDecoder->SetFrameRecycler(nullptr);
     mDecoder = nullptr;
   }
 

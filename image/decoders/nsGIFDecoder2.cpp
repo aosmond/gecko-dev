@@ -208,7 +208,8 @@ nsGIFDecoder2::BeginImageFrame(const IntRect& aFrameRect,
     pipe =
       SurfacePipeFactory::CreateSurfacePipe(this, mGIFStruct.images_decoded,
                                             Size(), OutputSize(),
-                                            aFrameRect, format, pipeFlags);
+                                            aFrameRect, format, pipeFlags,
+                                            BlendMethod::OVER);
   } else {
     // This is an animation frame (and not the first). To minimize the memory
     // usage of animations, the image data is stored in paletted form.
@@ -298,6 +299,132 @@ uint8_t
 nsGIFDecoder2::ColormapIndexToPixel<uint8_t>(uint8_t aIndex)
 {
   return aIndex & mColorMask;
+}
+
+template <typename PixelSize>
+Maybe<WriteState>
+nsGIFDecoder2::YieldPixels(const uint8_t* aData,
+                           size_t aLength,
+                           size_t* aBytesReadOut,
+                           PixelSize* aPixelOut,
+                           int32_t& aPixelsRemaining)
+{
+  MOZ_ASSERT(aData);
+  MOZ_ASSERT(aBytesReadOut);
+  MOZ_ASSERT(mGIFStruct.stackp >= mGIFStruct.stack);
+
+  // Advance to the next byte we should read.
+  const uint8_t* data = aData + *aBytesReadOut;
+
+  while (aPixelsRemaining > 0) {
+    // If we don't have any decoded data to yield, try to read some input and
+    // produce some.
+    if (mGIFStruct.stackp == mGIFStruct.stack) {
+      while (mGIFStruct.bits < mGIFStruct.codesize && *aBytesReadOut < aLength) {
+        // Feed the next byte into the decoder's 32-bit input buffer.
+        mGIFStruct.datum += int32_t(*data) << mGIFStruct.bits;
+        mGIFStruct.bits += 8;
+        data += 1;
+        *aBytesReadOut += 1;
+      }
+
+      if (mGIFStruct.bits < mGIFStruct.codesize) {
+        return Some(WriteState::NEED_MORE_DATA);
+      }
+
+      // Get the leading variable-length symbol from the data stream.
+      int code = mGIFStruct.datum & mGIFStruct.codemask;
+      mGIFStruct.datum >>= mGIFStruct.codesize;
+      mGIFStruct.bits -= mGIFStruct.codesize;
+
+      const int clearCode = ClearCode();
+
+      // Reset the dictionary to its original state, if requested
+      if (code == clearCode) {
+        mGIFStruct.codesize = mGIFStruct.datasize + 1;
+        mGIFStruct.codemask = (1 << mGIFStruct.codesize) - 1;
+        mGIFStruct.avail = clearCode + 2;
+        mGIFStruct.oldcode = -1;
+        return Some(WriteState::NEED_MORE_DATA);
+      }
+
+      // Check for explicit end-of-stream code. It should only appear after all
+      // image data, but if that was the case we wouldn't be in this function, so
+      // this is always an error condition.
+      if (code == (clearCode + 1)) {
+        return Some(WriteState::FAILURE);
+      }
+
+      if (mGIFStruct.oldcode == -1) {
+        if (code >= MAX_BITS) {
+          return Some(WriteState::FAILURE);  // The code's too big; something's wrong.
+        }
+
+        mGIFStruct.firstchar = mGIFStruct.oldcode = code;
+
+        // Yield a pixel at the appropriate index in the colormap.
+        mGIFStruct.pixels_remaining--;
+        *aPixelOut++ = ColormapIndexToPixel<PixelSize>(mGIFStruct.suffix[code]);
+	--aPixelsRemaining;
+	continue;
+      }
+
+      int incode = code;
+      if (code >= mGIFStruct.avail) {
+        *mGIFStruct.stackp++ = mGIFStruct.firstchar;
+        code = mGIFStruct.oldcode;
+
+        if (mGIFStruct.stackp >= mGIFStruct.stack + MAX_BITS) {
+          return Some(WriteState::FAILURE);  // Stack overflow; something's wrong.
+        }
+      }
+
+      while (code >= clearCode) {
+        if ((code >= MAX_BITS) || (code == mGIFStruct.prefix[code])) {
+          return Some(WriteState::FAILURE);
+        }
+
+        *mGIFStruct.stackp++ = mGIFStruct.suffix[code];
+        code = mGIFStruct.prefix[code];
+
+        if (mGIFStruct.stackp >= mGIFStruct.stack + MAX_BITS) {
+          return Some(WriteState::FAILURE);  // Stack overflow; something's wrong.
+        }
+      }
+
+      *mGIFStruct.stackp++ = mGIFStruct.firstchar = mGIFStruct.suffix[code];
+
+      // Define a new codeword in the dictionary.
+      if (mGIFStruct.avail < 4096) {
+        mGIFStruct.prefix[mGIFStruct.avail] = mGIFStruct.oldcode;
+        mGIFStruct.suffix[mGIFStruct.avail] = mGIFStruct.firstchar;
+        mGIFStruct.avail++;
+
+        // If we've used up all the codewords of a given length increase the
+        // length of codewords by one bit, but don't exceed the specified maximum
+        // codeword size of 12 bits.
+        if (((mGIFStruct.avail & mGIFStruct.codemask) == 0) &&
+          (mGIFStruct.avail < 4096)) {
+          mGIFStruct.codesize++;
+          mGIFStruct.codemask += mGIFStruct.avail;
+        }
+      }
+
+      mGIFStruct.oldcode = incode;
+    }
+
+    if (MOZ_UNLIKELY(mGIFStruct.stackp <= mGIFStruct.stack)) {
+      MOZ_ASSERT_UNREACHABLE("No decoded data but we didn't return early?");
+      return Some(WriteState::FAILURE);
+    }
+
+    // Yield a pixel at the appropriate index in the colormap.
+    mGIFStruct.pixels_remaining--;
+    *aPixelOut++ = ColormapIndexToPixel<PixelSize>(*--mGIFStruct.stackp);
+    --aPixelsRemaining;
+  }
+
+  return Nothing();
 }
 
 template <typename PixelSize>
@@ -1052,9 +1179,15 @@ nsGIFDecoder2::ReadLZWData(const char* aData, size_t aLength)
          (length > 0 || mGIFStruct.bits >= mGIFStruct.codesize)) {
     size_t bytesRead = 0;
 
+#if 0
     auto result = mGIFStruct.images_decoded == 0 || ShouldBlendAnimation()
       ? mPipe.WritePixels<uint32_t>([&]{ return YieldPixel<uint32_t>(data, length, &bytesRead); })
       : mPipe.WritePixels<uint8_t>([&]{ return YieldPixel<uint8_t>(data, length, &bytesRead); });
+#else
+    auto result = mGIFStruct.images_decoded == 0 || ShouldBlendAnimation()
+      ? mPipe.WriteUnsafePixels<uint32_t>([&](uint32_t* aOut, int32_t& aRemaining){ return YieldPixels<uint32_t>(data, length, &bytesRead, aOut, aRemaining); })
+      : mPipe.WriteUnsafePixels<uint8_t>([&](uint8_t* aOut, int32_t& aRemaining){ return YieldPixels<uint8_t>(data, length, &bytesRead, aOut, aRemaining); });
+#endif
 
     if (MOZ_UNLIKELY(bytesRead > length)) {
       MOZ_ASSERT_UNREACHABLE("Overread?");

@@ -31,7 +31,11 @@ enum class BlendMethod : int8_t {
 
   // The frame should be composited onto the output buffer based on its alpha,
   // using a simple OVER operation.
-  OVER
+  OVER,
+
+  // The frame should be composited onto the output buffer based on its alpha,
+  // using a simple OVER operation.
+  OVER_SIMPLE
 };
 
 enum class DisposalMethod : int8_t {

@@ -907,20 +907,40 @@ nsPNGDecoder::WriteRow(uint8_t* aRow)
     }
   }
 
+//#define AO_UNSAFE_COMPUTED 1
+
   // Write this row to the SurfacePipe.
   DebugOnly<WriteState> result;
   if (HasAlphaChannel()) {
     if (mDisablePremultipliedAlpha) {
+#ifndef AO_UNSAFE_COMPUTED
       result = mPipe.WritePixelsToRow<uint32_t>([&]{
         return PackUnpremultipliedRGBAPixelAndAdvance(rowToWrite);
       });
+#else
+      result = mPipe.WriteUnsafeComputedRow<uint32_t>([&] (uint32_t* aOutputRow, int32_t aRowLength) {
+        while (--aRowLength >= 0) {
+          *aOutputRow++ = gfxPackedPixelNoPreMultiply(rowToWrite[3], rowToWrite[0], rowToWrite[1], rowToWrite[2]);
+          rowToWrite += 4;
+        }
+      });
+#endif
     } else {
+#ifndef AO_UNSAFE_COMPUTED
       result = mPipe.WritePixelsToRow<uint32_t>([&]{
         return PackRGBAPixelAndAdvance(rowToWrite);
       });
+#else
+      result = mPipe.WriteUnsafeComputedRow<uint32_t>([&] (uint32_t* aOutputRow, int32_t aRowLength) {
+        while (--aRowLength >= 0) {
+          *aOutputRow++ = gfxPackedPixel(rowToWrite[3], rowToWrite[0], rowToWrite[1], rowToWrite[2]);
+          rowToWrite += 4;
+        }
+      });
+#endif
     }
   } else {
-#if 1
+#ifndef AO_UNSAFE_COMPUTED
     result = mPipe.WritePixelsToRow<uint32_t>([&]{
       return PackRGBPixelAndAdvance(rowToWrite);
     });
@@ -933,6 +953,8 @@ nsPNGDecoder::WriteRow(uint8_t* aRow)
     });
 #endif
   }
+
+#undef AO_UNSAFE_COMPUTED
 
   MOZ_ASSERT(WriteState(result) != WriteState::FAILURE);
 

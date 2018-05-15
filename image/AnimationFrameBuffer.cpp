@@ -253,6 +253,11 @@ AnimationFrameBuffer::AdvanceInternal()
       MOZ_ASSERT(mSizeKnown && framesLength > 1);
       discard = Move(mFrames[framesLength - 1]);
     }
+
+    if (discard && mRecycledFrames.size() < mBatch) {
+      //printf_stderr("[AO] recycle frame %p\n", discard.get());
+      mRecycledFrames.push(discard.get());
+    }
   }
 
   if (!mRedecodeError && (!mSizeKnown || MayDiscard())) {

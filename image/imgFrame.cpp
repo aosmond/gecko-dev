@@ -237,6 +237,26 @@ imgFrame::InitForDecoder(const nsIntSize& aImageSize,
                          bool aIsAnimated /* = false */,
                          bool aIsFullFrame /* = true */)
 {
+  // If we are recycling the frame, ensure it is suitable.
+  if (mAborted || mFinished) {
+    if (mImageSize != aImageSize || !mFrameRect.IsEqualEdges(aRect) ||
+        mPaletteDepth != aPaletteDepth || !aIsFullFrame || !mRawSurface ||
+        mNonPremult != aNonPremult || !mLockedSurface) {
+      printf_stderr("[AO] init failed -- image size %dx%d (%dx%d), frame rect %dx%d,%dx%d (%dx%d,%dx%d), format %d (%d), palette %d (%d), nonpre %d (%d), full frame %d (%d), raw %p, locked %p\n",
+        aImageSize.width, aImageSize.height, mImageSize.width, mImageSize.height,
+	aRect.x, aRect.y, aRect.width, aRect.height,
+	mFrameRect.x, mFrameRect.y, mFrameRect.width, mFrameRect.height,
+	aFormat, mFormat, aPaletteDepth, mPaletteDepth, aNonPremult, mNonPremult, aIsFullFrame, mIsFullFrame,
+	mRawSurface.get(), mLockedSurface.get());
+      return NS_ERROR_FAILURE;
+    }
+
+    mAborted = false;
+    mFinished = false;
+    mDecoded.SetBox(0, 0, 0, 0);
+    return NS_OK;
+  }
+
   // Assert for properties that should be verified by decoders,
   // warn for properties related to bad content.
   if (!AllowedImageAndFrameDimensions(aImageSize, aRect)) {

@@ -10,6 +10,7 @@
 #ifndef mozilla_image_AnimationSurfaceProvider_h
 #define mozilla_image_AnimationSurfaceProvider_h
 
+#include "Decoder.h"
 #include "FrameAnimator.h"
 #include "IDecodingTask.h"
 #include "ISurfaceProvider.h"
@@ -26,6 +27,7 @@ namespace image {
 class AnimationSurfaceProvider final
   : public ISurfaceProvider
   , public IDecodingTask
+  , public IDecoderFrameRecycler
 {
 public:
   NS_INLINE_DECL_THREADSAFE_REFCOUNTING(AnimationSurfaceProvider, override)
@@ -85,6 +87,8 @@ public:
   // Full decodes are low priority compared to metadata decodes because they
   // don't block layout or page load.
   TaskPriority Priority() const override { return TaskPriority::eLow; }
+
+  already_AddRefed<imgFrame> AllocateFrame() override;
 
 private:
   virtual ~AnimationSurfaceProvider();

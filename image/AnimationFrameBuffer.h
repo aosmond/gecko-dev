@@ -6,6 +6,7 @@
 #ifndef mozilla_image_AnimationFrameBuffer_h
 #define mozilla_image_AnimationFrameBuffer_h
 
+#include <queue>
 #include "ISurfaceProvider.h"
 
 namespace mozilla {
@@ -167,11 +168,24 @@ public:
    */
   const nsTArray<RawAccessFrameRef>& Frames() const { return mFrames; }
 
+  already_AddRefed<imgFrame> TakeRecycledFrame()
+  {
+    if (mRecycledFrames.empty()) {
+      return nullptr;
+    }
+
+    RefPtr<imgFrame> frame = mRecycledFrames.front().forget();
+    mRecycledFrames.pop();
+    return frame.forget();
+  }
+
 private:
   bool AdvanceInternal();
 
   /// The frames of this animation, in order, but may have holes if discarding.
   nsTArray<RawAccessFrameRef> mFrames;
+
+  std::queue<RefPtr<imgFrame>> mRecycledFrames;
 
   // The maximum number of frames we can have before discarding.
   size_t mThreshold;

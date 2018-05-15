@@ -88,6 +88,12 @@ struct DecoderTelemetry final
   const TimeDuration mDecodeTime;
 };
 
+class IDecoderFrameRecycler
+{
+public:
+  virtual already_AddRefed<imgFrame> AllocateFrame() = 0;
+};
+
 class Decoder
 {
 public:
@@ -428,6 +434,11 @@ public:
     mHasFrameToTake = false;
   }
 
+  void SetFrameRecycler(IDecoderFrameRecycler* aFrameRecycler)
+  {
+    mFrameRecycler = aFrameRecycler;
+  }
+
 protected:
   friend class AutoRecordDecoderTelemetry;
   friend class nsICODecoder;
@@ -576,6 +587,7 @@ protected:
 private:
   RefPtr<RasterImage> mImage;
   Maybe<SourceBufferIterator> mIterator;
+  IDecoderFrameRecycler* mFrameRecycler;
   RawAccessFrameRef mCurrentFrame;
   RawAccessFrameRef mRestoreFrame;
   ImageMetadata mImageMetadata;

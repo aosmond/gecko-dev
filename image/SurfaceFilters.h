@@ -368,6 +368,7 @@ public:
   BlendAnimationFilter()
     : mRow(0)
     , mRowLength(0)
+    , mBlendMethod(BlendMethod::SOURCE)
     , mOverProc(nullptr)
     , mBaseFrameRowPtr(nullptr)
   { }
@@ -401,19 +402,20 @@ public:
       mFrameRect.MoveTo(0, 0);
     }
 
-    BlendMethod blendMethod = aConfig.mBlendMethod;
-    switch (blendMethod) {
+    mBlendMethod = aConfig.mBlendMethod;
+    switch (mBlendMethod) {
       default:
-        blendMethod = BlendMethod::SOURCE;
+        mBlendMethod = BlendMethod::SOURCE;
         MOZ_FALLTHROUGH_ASSERT("Unexpected blend method!");
       case BlendMethod::SOURCE:
         // Default, overwrites base frame data (if any) with new.
         break;
       case BlendMethod::OVER:
+      case BlendMethod::OVER_SIMPLE:
         // OVER only has an impact on the output if we have new data to blend
         // with.
         if (mFrameRect.IsEmpty()) {
-          blendMethod = BlendMethod::SOURCE;
+          mBlendMethod = BlendMethod::SOURCE;
         }
         break;
     }
@@ -421,7 +423,7 @@ public:
     // Determine what we need to clear and what we need to copy. If this frame
     // is a full frame and uses source blending, there is no need to consider
     // the disposal method of the previous frame.
-    if (fullFrame && blendMethod == BlendMethod::SOURCE) {
+    if (fullFrame && mBlendMethod == BlendMethod::SOURCE) {
       mDirtyRect = outputRect;
     } else if (aConfig.mCurrentFrame) {
       gfx::IntRect currRect;
@@ -450,8 +452,7 @@ public:
             // We are restored to the post-disposal state, but we have the
             // complete frame.
             if (disposalMethod == DisposalMethod::CLEAR) {
-              ConfigureBaseFrame(aConfig.mRestoreFrame, blendMethod,
-                                 outputRect, prevRect);
+              ConfigureBaseFrame(aConfig.mRestoreFrame, outputRect, prevRect);
             } else {
               mBaseFrame = aConfig.mRestoreFrame->RawAccessRef();
               MOZ_ASSERT(mBaseFrame);
@@ -467,8 +468,7 @@ public:
           // to treat it the same as clear according to the APNG specification.
           MOZ_FALLTHROUGH;
         case DisposalMethod::CLEAR:
-          ConfigureBaseFrame(aConfig.mCurrentFrame, blendMethod,
-                             outputRect, currRect);
+          ConfigureBaseFrame(aConfig.mCurrentFrame, outputRect, currRect);
 
           // Calculate the area which has changed from the current frame.
           {
@@ -493,13 +493,13 @@ public:
       // Switch to SOURCE if no base frame to ensure we don't allocate an
       // intermediate buffer below. OVER does nothing without the base frame
       // data.
-      blendMethod = BlendMethod::SOURCE;
+      mBlendMethod = BlendMethod::SOURCE;
     }
 
     // Skia provides arch-specific accelerated methods to perform blending.
     // Note that this is an internal Skia API and may be prone to change,
     // but we avoid the overhead of setting up Skia objects.
-    if (blendMethod == BlendMethod::OVER) {
+    if (mBlendMethod == BlendMethod::OVER) {
       mOverProc = SkBlitRow::Factory32(SkBlitRow::kSrcPixelAlpha_Flag32);
       MOZ_ASSERT(mOverProc);
     }
@@ -508,7 +508,8 @@ public:
     // width is larger than the clamped frame rect width. In that case, the
     // caller will end up writing data that won't end up in the final image at
     // all, and we'll need a buffer to give that data a place to go.
-    if (mFrameRect.width < mUnclampedFrameRect.width || mOverProc) {
+    if (mFrameRect.width < mUnclampedFrameRect.width ||
+        mBlendMethod != BlendMethod::SOURCE) {
       mBuffer.reset(new (fallible) uint8_t[mUnclampedFrameRect.width *
                                            sizeof(uint32_t)]);
       if (MOZ_UNLIKELY(!mBuffer)) {
@@ -604,12 +605,21 @@ protected:
                       std::min(mUnclampedFrameRect.x, 0);
       dst += mFrameRect.x;
       if (mOverProc) {
+        MOZ_ASSERT(mBlendMethod == BlendMethod::OVER);
         mOverProc(dst, src, width, 0xFF);
+      } else if (mBlendMethod == BlendMethod::OVER_SIMPLE) {
+	for (int32_t i = 0; i < width; ++i) {
+          if (src[i]) {
+            dst[i] = src[i];
+          }
+	}
       } else {
+        MOZ_ASSERT(mBlendMethod == BlendMethod::SOURCE);
         memcpy(dst, src, width * sizeof(uint32_t));
       }
       rowPtr = mNext.AdvanceRow() ? mBuffer.get() : nullptr;
     } else {
+      MOZ_ASSERT(mBlendMethod == BlendMethod::SOURCE);
       MOZ_ASSERT(!mOverProc);
       rowPtr = mNext.AdvanceRow();
     }
@@ -641,7 +651,6 @@ private:
   }
 
   void ConfigureBaseFrame(imgFrame* aBaseFrame,
-                          BlendMethod aBlendMethod,
                           const gfx::IntRect& aOutputRect,
                           const gfx::IntRect& aBaseRect)
   {
@@ -649,7 +658,7 @@ private:
     // overwrites a non-overlapping area) or the blend method may cause us
     // to combine old data and new.
     if (!mFrameRect.Contains(aBaseRect) ||
-        aBlendMethod == BlendMethod::OVER) {
+        mBlendMethod != BlendMethod::SOURCE) {
       mClearRect = aBaseRect;
     }
 
@@ -725,6 +734,7 @@ private:
       return nullptr;  // Nothing left to write.
     }
 
+    MOZ_ASSERT(mBlendMethod == BlendMethod::SOURCE);
     MOZ_ASSERT(!mOverProc);
     return aNextRowPointer + mFrameRect.x * sizeof(uint32_t);
   }
@@ -740,6 +750,7 @@ private:
   int32_t  mRow;                       /// The row in unclamped frame rect space
                                        /// that we're currently writing.
   size_t mRowLength;                   /// Length in bytes of a row.
+  BlendMethod mBlendMethod;            /// The blend method.
   SkBlitRow::Proc32 mOverProc;         /// Function pointer to perform over blending.
   RawAccessFrameRef mBaseFrame;        /// The base frame that we need to copy
                                        /// pixel data from.

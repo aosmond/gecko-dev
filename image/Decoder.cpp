@@ -53,6 +53,7 @@ Decoder::Decoder(RasterImage* aImage)
   , mColormap(nullptr)
   , mColormapSize(0)
   , mImage(aImage)
+  , mFrameRecycler(nullptr)
   , mProgress(NoProgress)
   , mFrameCount(0)
   , mLoopLength(FrameTimeout::Zero())
@@ -338,7 +339,15 @@ Decoder::AllocateFrameInternal(uint32_t aFrameNum,
     return RawAccessFrameRef();
   }
 
-  auto frame = MakeNotNull<RefPtr<imgFrame>>();
+  RefPtr<imgFrame> frame;
+  if (mFrameRecycler) {
+    MOZ_ASSERT(aOutputSize == aFrameRect);
+    frame = mFrameRecycler->AllocateFrame();
+    MOZ_ASSERT(frame);
+  } else {
+    frame = MakeNotNull<RefPtr<imgFrame>>();
+  }
+
   bool nonPremult = bool(mSurfaceFlags & SurfaceFlags::NO_PREMULTIPLY_ALPHA);
   bool fullFrame = aFrameNum == 0 || ShouldBlendAnimation();
   if (NS_FAILED(frame->InitForDecoder(aOutputSize, aFrameRect, aFormat,

@@ -174,6 +174,15 @@ public:
     return *result;
   }
 
+  template <typename PixelType, typename Func>
+  WriteState WriteUnsafePixels(Func aFunc)
+  {
+    Maybe<WriteState> result;
+    while (!(result = DoWriteUnsafePixelsToRow<PixelType>(Forward<Func>(aFunc)))) { }
+
+    return *result;
+  }
+
   /**
    * A variant of WritePixels() that writes a single row of pixels to the
    * surface one at a time by repeatedly calling a lambda that yields pixels.
@@ -205,6 +214,13 @@ public:
    */
   template <typename PixelType, typename Func>
   WriteState WritePixelsToRow(Func aFunc)
+  {
+    return DoWritePixelsToRow<PixelType>(Forward<Func>(aFunc))
+           .valueOr(WriteState::NEED_MORE_DATA);
+  }
+
+  template <typename PixelType, typename Func>
+  WriteState WriteUnsafePixelsToRow(Func aFunc)
   {
     return DoWritePixelsToRow<PixelType>(Forward<Func>(aFunc))
            .valueOr(WriteState::NEED_MORE_DATA);
@@ -509,6 +525,46 @@ private:
                                : Nothing();
   }
 
+  template <typename PixelType, typename Func>
+  Maybe<WriteState> DoWriteUnsafePixelsToRow(Func aFunc)
+  {
+    MOZ_ASSERT(mPixelSize == 1 || mPixelSize == 4);
+    MOZ_ASSERT_IF(mPixelSize == 1, sizeof(PixelType) == sizeof(uint8_t));
+    MOZ_ASSERT_IF(mPixelSize == 4, sizeof(PixelType) == sizeof(uint32_t));
+
+    if (IsSurfaceFinished()) {
+      return Some(WriteState::FINISHED);  // We're already done.
+    }
+
+    PixelType* rowPtr = reinterpret_cast<PixelType*>(mRowPointer);
+    auto remainder = mInputSize.width - mCol;
+    Maybe<WriteState> result = aFunc(&rowPtr[mCol], remainder);
+    if (remainder == 0) {
+      MOZ_ASSERT(result.isNothing());
+      mCol = mInputSize.width;
+      AdvanceRow();  // We've finished the row.
+      return IsSurfaceFinished() ? Some(WriteState::FINISHED)
+                                 : Nothing();
+    }
+
+    mCol = mInputSize.width - remainder;
+    switch (*result) {
+      case WriteState::NEED_MORE_DATA:
+        return Some(WriteState::NEED_MORE_DATA);
+
+      case WriteState::FINISHED:
+        ZeroOutRestOfSurface<PixelType>();
+        return Some(WriteState::FINISHED);
+
+      case WriteState::FAILURE:
+        // Note that we don't need to record this anywhere, because this
+        // indicates an error in aFunc, and there's nothing wrong with our
+        // machinery. The caller can recover as needed and continue writing to
+        // the row.
+        return Some(WriteState::FAILURE);
+    }
+  }
+
   template <typename PixelType>
   void ZeroOutRestOfSurface()
   {
@@ -566,6 +622,13 @@ public:
     return mHead->WritePixels<PixelType>(Forward<Func>(aFunc));
   }
 
+  template <typename PixelType, typename Func>
+  WriteState WriteUnsafePixels(Func aFunc)
+  {
+    MOZ_ASSERT(mHead, "Use before configured!");
+    return mHead->WriteUnsafePixels<PixelType>(Forward<Func>(aFunc));
+  }
+
   /**
    * A variant of WritePixels() that writes a single row of pixels to the
    * surface one at a time by repeatedly calling a lambda that yields pixels.
@@ -578,6 +641,13 @@ public:
   {
     MOZ_ASSERT(mHead, "Use before configured!");
     return mHead->WritePixelsToRow<PixelType>(Forward<Func>(aFunc));
+  }
+
+  template <typename PixelType, typename Func>
+  WriteState WriteUnsafePixelsToRow(Func aFunc)
+  {
+    MOZ_ASSERT(mHead, "Use before configured!");
+    return mHead->WriteUnsafePixelsToRow<PixelType>(Forward<Func>(aFunc));
   }
 
   /**
