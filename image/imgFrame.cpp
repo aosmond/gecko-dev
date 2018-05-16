@@ -505,7 +505,8 @@ imgFrame::SetRawAccessOnly()
   AssertImageDataLocked();
 
   // Lock our data and throw away the key.
-  LockImageData();
+  uint8_t* data;
+  LockImageData(&data);
 }
 
 
@@ -747,7 +748,7 @@ imgFrame::GetPaletteData() const
 }
 
 nsresult
-imgFrame::LockImageData()
+imgFrame::LockImageData(uint8_t** aData)
 {
   MonitorAutoLock lock(mMonitor);
 
@@ -756,25 +757,25 @@ imgFrame::LockImageData()
     return NS_ERROR_FAILURE;
   }
 
-  mLockCount++;
-
-  // If we are not the first lock, there's nothing to do.
-  if (mLockCount != 1) {
-    return NS_OK;
-  }
-
-  // If we're the first lock, but have the locked surface, we're OK.
-  if (mLockedSurface) {
-    return NS_OK;
-  }
-
-  // Paletted images don't have surfaces, so there's nothing to do.
+  uint8_t* data;
   if (mPalettedImageData) {
-    return NS_OK;
+    data = mPalettedImageData;
+  } else if (mLockedSurface) {
+    data = mLockedSurface->GetData();
+  } else {
+    data = nullptr;
   }
 
-  MOZ_ASSERT_UNREACHABLE("It's illegal to re-lock an optimized imgFrame");
-  return NS_ERROR_FAILURE;
+  // If the raw data is still available, we should get a valid pointer for it.
+  if (!data) {
+    MOZ_ASSERT_UNREACHABLE("It's illegal to re-lock an optimized imgFrame");
+    return NS_ERROR_FAILURE;
+  }
+
+  MOZ_ASSERT(aData);
+  *aData = data;
+  ++mLockCount;
+  return NS_OK;
 }
 
 void
