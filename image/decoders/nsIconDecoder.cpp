@@ -72,6 +72,7 @@ nsIconDecoder::ReadHeader(const char* aData)
   Maybe<SurfacePipe> pipe =
     SurfacePipeFactory::CreateSurfacePipe(this, 0, Size(), OutputSize(),
                                           FullFrame(), SurfaceFormat::B8G8R8A8,
+                                          /* aAnimParams */ Nothing(),
                                           SurfacePipeFlags());
   if (!pipe) {
     return Transition::TerminateFailure();

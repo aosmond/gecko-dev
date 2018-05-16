@@ -78,7 +78,9 @@ SurfaceSink::Configure(const SurfaceConfig& aConfig)
   nsresult rv = aConfig.mDecoder->AllocateFrame(aConfig.mFrameNum,
                                                 surfaceSize,
                                                 frameRect,
-                                                aConfig.mFormat);
+                                                aConfig.mFormat,
+                                                /* aPaletteDepth */ 0,
+                                                aConfig.mAnimParams);
   if (NS_FAILED(rv)) {
     return rv;
   }
@@ -131,7 +133,8 @@ PalettedSurfaceSink::Configure(const PalettedSurfaceConfig& aConfig)
                                                 aConfig.mOutputSize,
                                                 aConfig.mFrameRect,
                                                 aConfig.mFormat,
-                                                aConfig.mPaletteDepth);
+                                                aConfig.mPaletteDepth,
+                                                aConfig.mAnimParams);
   if (NS_FAILED(rv)) {
     return rv;
   }

@@ -34,6 +34,8 @@
 #include "mozilla/Variant.h"
 #include "mozilla/gfx/2D.h"
 
+#include "AnimationParams.h"
+
 namespace mozilla {
 namespace image {
 
@@ -683,6 +685,7 @@ struct SurfaceConfig
   gfx::IntSize mOutputSize;    /// The size of the surface.
   gfx::SurfaceFormat mFormat;  /// The surface format (BGRA or BGRX).
   bool mFlipVertically;        /// If true, write the rows from bottom to top.
+  Maybe<AnimationParams> mAnimParams; /// Given for animated images.
 };
 
 /**
@@ -713,6 +716,7 @@ struct PalettedSurfaceConfig
   gfx::SurfaceFormat mFormat;  /// The surface format (BGRA or BGRX).
   uint8_t mPaletteDepth;       /// The palette depth of this surface.
   bool mFlipVertically;        /// If true, write the rows from bottom to top.
+  Maybe<AnimationParams> mAnimParams; /// Given for animated images.
 };
 
 /**

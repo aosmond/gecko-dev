@@ -11,6 +11,7 @@
 #include "mozilla/Maybe.h"
 #include "mozilla/NotNull.h"
 #include "mozilla/RefPtr.h"
+#include "AnimationParams.h"
 #include "DecoderFlags.h"
 #include "Downscaler.h"
 #include "ImageMetadata.h"
@@ -26,6 +27,8 @@ namespace Telemetry {
 } // namespace Telemetry
 
 namespace image {
+
+class imgFrame;
 
 struct DecoderFinalStatus final
 {
@@ -477,11 +480,7 @@ protected:
   // Specify whether this frame is opaque as an optimization.
   // For animated images, specify the disposal, blend method and timeout for
   // this frame.
-  void PostFrameStop(Opacity aFrameOpacity = Opacity::SOME_TRANSPARENCY,
-                     DisposalMethod aDisposalMethod = DisposalMethod::KEEP,
-                     FrameTimeout aTimeout = FrameTimeout::Forever(),
-                     BlendMethod aBlendMethod = BlendMethod::OVER,
-                     const Maybe<nsIntRect>& aBlendRect = Nothing());
+  void PostFrameStop(Opacity aFrameOpacity = Opacity::SOME_TRANSPARENCY);
 
   /**
    * Called by the decoders when they have a region to invalidate. We may not
@@ -519,7 +518,8 @@ protected:
                          const gfx::IntSize& aOutputSize,
                          const gfx::IntRect& aFrameRect,
                          gfx::SurfaceFormat aFormat,
-                         uint8_t aPaletteDepth = 0);
+                         uint8_t aPaletteDepth = 0,
+                         const Maybe<AnimationParams>& aAnimParams = Nothing());
 
 private:
   /// Report that an error was encountered while decoding.
@@ -548,6 +548,7 @@ private:
                                           const gfx::IntRect& aFrameRect,
                                           gfx::SurfaceFormat aFormat,
                                           uint8_t aPaletteDepth,
+                                          const Maybe<AnimationParams>& aAnimParams,
                                           imgFrame* aPreviousFrame);
 
 protected:

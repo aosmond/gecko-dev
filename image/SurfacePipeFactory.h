@@ -79,6 +79,7 @@ public:
    * @param aFrameRect The portion of the image that actually contains data.
    * @param aFormat The surface format of the image; generally B8G8R8A8 or
    *                B8G8R8X8.
+   * @param aAnimParams Extra parameters used by animated images.
    * @param aFlags Flags enabling or disabling various functionality for the
    *               SurfacePipe; see the SurfacePipeFlags documentation for more
    *               information.
@@ -94,6 +95,7 @@ public:
                     const nsIntSize& aOutputSize,
                     const nsIntRect& aFrameRect,
                     gfx::SurfaceFormat aFormat,
+                    const Maybe<AnimationParams>& aAnimParams,
                     SurfacePipeFlags aFlags)
   {
     const bool deinterlace = bool(aFlags & SurfacePipeFlags::DEINTERLACE);
@@ -126,7 +128,7 @@ public:
     RemoveFrameRectConfig removeFrameRectConfig { aFrameRect };
     DownscalingConfig downscalingConfig { aInputSize, aFormat };
     SurfaceConfig surfaceConfig { aDecoder, aFrameNum, aOutputSize,
-                                  aFormat, flipVertically };
+                                  aFormat, flipVertically, aAnimParams };
 
     Maybe<SurfacePipe> pipe;
 
@@ -188,6 +190,7 @@ public:
    * @param aFormat The surface format of the image; generally B8G8R8A8 or
    *                B8G8R8X8.
    * @param aPaletteDepth The palette depth of the image.
+   * @param aAnimParams Extra parameters used by animated images.
    * @param aFlags Flags enabling or disabling various functionality for the
    *               SurfacePipe; see the SurfacePipeFlags documentation for more
    *               information.
@@ -203,6 +206,7 @@ public:
                             const nsIntRect& aFrameRect,
                             gfx::SurfaceFormat aFormat,
                             uint8_t aPaletteDepth,
+                            const Maybe<AnimationParams>& aAnimParams,
                             SurfacePipeFlags aFlags)
   {
     const bool deinterlace = bool(aFlags & SurfacePipeFlags::DEINTERLACE);
@@ -213,7 +217,7 @@ public:
     DeinterlacingConfig<uint8_t> deinterlacingConfig { progressiveDisplay };
     PalettedSurfaceConfig palettedSurfaceConfig { aDecoder, aFrameNum, aInputSize,
                                                   aFrameRect, aFormat, aPaletteDepth,
-                                                  flipVertically };
+                                                  flipVertically, aAnimParams };
 
     Maybe<SurfacePipe> pipe;
 
