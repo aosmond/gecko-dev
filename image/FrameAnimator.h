@@ -348,12 +348,8 @@ private: // methods
    */
   RefreshResult AdvanceFrame(AnimationState& aState,
                              DrawableSurface& aFrames,
+                             RawAccessFrameRef& aCurrentFrame,
                              TimeStamp aTime);
-
-  /// @return the given frame's timeout if it is available
-  Maybe<FrameTimeout> GetTimeoutForFrame(AnimationState& aState,
-                                         DrawableSurface& aFrames,
-                                         uint32_t aFrameNum) const;
 
   /**
    * Get the time the frame we're currently displaying is supposed to end.
@@ -361,8 +357,8 @@ private: // methods
    * In the error case (like if the requested frame is not currently
    * decoded), returns None().
    */
-  Maybe<TimeStamp> GetCurrentImgFrameEndTime(AnimationState& aState,
-                                             DrawableSurface& aFrames) const;
+  TimeStamp GetCurrentImgFrameEndTime(AnimationState& aState,
+                                      FrameTimeout aCurrentTimeout) const;
 
   bool DoBlend(const RawAccessFrameRef& aPrevFrame,
                const RawAccessFrameRef& aNextFrame,
