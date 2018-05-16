@@ -204,6 +204,34 @@ AnimationFrameBuffer::Get(size_t aFrame)
   return mFrames[aFrame]->DrawableRef();
 }
 
+RawAccessFrameRef
+AnimationFrameBuffer::GetRaw(size_t aFrame)
+{
+  // We should not have asked for a frame if we never inserted.
+  if (mFrames.IsEmpty()) {
+    MOZ_ASSERT_UNREACHABLE("Calling GetRaw() when we have no frames");
+    return RawAccessFrameRef();
+  }
+
+  // If we don't have that frame, return an empty frame ref.
+  if (aFrame >= mFrames.Length()) {
+    return RawAccessFrameRef();
+  }
+
+  // We've got the requested frame because we are not discarding frames. While
+  // we typically should have not run out of frames since we ask for more before
+  // we want them, it is possible the decoder is behind.
+  if (!mFrames[aFrame]) {
+    MOZ_ASSERT(MayDiscard());
+    return RawAccessFrameRef();
+  }
+
+  // If we are advancing on behalf of the animation, we don't expect it to be
+  // getting any frames (besides the first) until we get the desired frame.
+  MOZ_ASSERT(aFrame == 0 || mAdvance == 0);
+  return mFrames[aFrame]->RawAccessRef();
+}
+
 bool
 AnimationFrameBuffer::AdvanceTo(size_t aExpectedFrame)
 {

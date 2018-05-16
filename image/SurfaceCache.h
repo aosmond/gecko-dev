@@ -234,6 +234,10 @@ struct SurfaceCache
   static LookupResult Lookup(const ImageKey    aImageKey,
                              const SurfaceKey& aSurfaceKey);
 
+  static already_AddRefed<ISurfaceProvider>
+  LookupProvider(const ImageKey aImageKey,
+                 const SurfaceKey& aSurfaceKey);
+
   /**
    * Looks up the best matching cache entry and returns a drawable reference to
    * its associated surface.

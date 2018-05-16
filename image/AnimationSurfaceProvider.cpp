@@ -137,6 +137,19 @@ AnimationSurfaceProvider::DrawableRef(size_t aFrame)
   return mFrames.Get(aFrame);
 }
 
+RawAccessFrameRef
+AnimationSurfaceProvider::RawAccessRef(size_t aFrame)
+{
+  MutexAutoLock lock(mFramesMutex);
+
+  if (Availability().IsPlaceholder()) {
+    MOZ_ASSERT_UNREACHABLE("Calling RawAccessRef() on a placeholder");
+    return RawAccessFrameRef();
+  }
+
+  return mFrames.GetRaw(aFrame);
+}
+
 bool
 AnimationSurfaceProvider::IsFinished() const
 {

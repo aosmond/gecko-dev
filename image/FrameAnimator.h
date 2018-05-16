@@ -21,7 +21,7 @@ namespace mozilla {
 namespace image {
 
 class RasterImage;
-class DrawableSurface;
+class AnimationSurfaceProvider;
 
 class AnimationState
 {
@@ -52,7 +52,7 @@ public:
                             const gfx::IntSize& aSize,
                             bool aAllowInvalidation = true);
 private:
-  const gfx::IntRect UpdateStateInternal(LookupResult& aResult,
+  const gfx::IntRect UpdateStateInternal(AnimationSurfaceProvider* aProvider,
                                     bool aAnimationFinished,
                                     const gfx::IntSize& aSize,
                                     bool aAllowInvalidation = true);
@@ -347,19 +347,8 @@ private: // methods
    *          advanced, and its resulting dirty rect.
    */
   RefreshResult AdvanceFrame(AnimationState& aState,
-                             DrawableSurface& aFrames,
+                             AnimationSurfaceProvider* aProvider,
                              TimeStamp aTime);
-
-  /**
-   * Get the @aIndex-th frame in the frame index, ignoring results of blending.
-   */
-  RawAccessFrameRef GetRawFrame(DrawableSurface& aFrames,
-                                uint32_t aFrameNum) const;
-
-  /// @return the given frame's timeout if it is available
-  Maybe<FrameTimeout> GetTimeoutForFrame(AnimationState& aState,
-                                         DrawableSurface& aFrames,
-                                         uint32_t aFrameNum) const;
 
   /**
    * Get the time the frame we're currently displaying is supposed to end.
@@ -368,7 +357,9 @@ private: // methods
    * decoded), returns None().
    */
   Maybe<TimeStamp> GetCurrentImgFrameEndTime(AnimationState& aState,
-                                             DrawableSurface& aFrames) const;
+                                             AnimationSurfaceProvider* aProvider) const;
+  TimeStamp GetCurrentImgFrameEndTime(AnimationState& aState,
+                                      FrameTimeout aCurrentTimeout) const;
 
   bool DoBlend(const RawAccessFrameRef& aPrevFrame,
                const RawAccessFrameRef& aNextFrame,

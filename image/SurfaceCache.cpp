@@ -132,6 +132,11 @@ public:
     , mIsLocked(false)
   { }
 
+  ISurfaceProvider* GetProvider() const
+  {
+    return mProvider.get();
+  }
+
   DrawableSurface GetDrawableSurface() const
   {
     if (MOZ_UNLIKELY(IsPlaceholder())) {
@@ -983,6 +988,35 @@ public:
     return LookupResult(Move(drawableSurface), matchType, suggestedSize);
   }
 
+  already_AddRefed<ISurfaceProvider>
+  LookupProvider(const ImageKey    aImageKey,
+                 const SurfaceKey& aSurfaceKey,
+                 const StaticMutexAutoLock& aAutoLock,
+                 bool aMarkUsed = true)
+  {
+    RefPtr<ImageSurfaceCache> cache = GetImageCache(aImageKey);
+    if (!cache) {
+      // No cached surfaces for this image.
+      return nullptr;
+    }
+
+    RefPtr<CachedSurface> surface = cache->Lookup(aSurfaceKey, aMarkUsed);
+    if (!surface) {
+      // Lookup in the per-image cache missed.
+      return nullptr;
+    }
+
+    // FIXME?!?!??!
+    if (aMarkUsed && !surface->IsPlaceholder() &&
+        !MarkUsed(WrapNotNull(surface), WrapNotNull(cache), aAutoLock)) {
+      Remove(WrapNotNull(surface), /* aStopTracking */ false, aAutoLock);
+      return nullptr;
+    }
+
+    RefPtr<ISurfaceProvider> provider = surface->GetProvider();
+    return provider.forget();
+  }
+
   bool CanHold(const Cost aCost) const
   {
     return aCost <= mMaxCost;
@@ -1482,6 +1516,26 @@ SurfaceCache::LookupBestMatch(const ImageKey         aImageKey,
   }
 
   return rv;
+}
+
+/* static */ already_AddRefed<ISurfaceProvider>
+SurfaceCache::LookupProvider(const ImageKey    aImageKey,
+                             const SurfaceKey& aSurfaceKey)
+{
+  nsTArray<RefPtr<CachedSurface>> discard;
+  RefPtr<ISurfaceProvider> provider;
+
+  {
+    StaticMutexAutoLock lock(sInstanceMutex);
+    if (!sInstance) {
+      return nullptr;
+    }
+
+    provider = sInstance->LookupProvider(aImageKey, aSurfaceKey, lock);
+    sInstance->TakeDiscard(discard, lock);
+  }
+
+  return provider.forget();
 }
 
 /* static */ InsertOutcome

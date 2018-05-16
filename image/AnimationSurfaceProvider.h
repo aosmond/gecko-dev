@@ -55,8 +55,10 @@ public:
   void Reset() override;
   void Advance(size_t aFrame) override;
 
-protected:
   DrawableFrameRef DrawableRef(size_t aFrame) override;
+  RawAccessFrameRef RawAccessRef(size_t aFrame);
+
+protected:
 
   // Animation frames are always locked. This is because we only want to release
   // their memory atomically (due to the surface cache discarding them). If they

@@ -64,6 +64,7 @@ public:
    * @returns The frame, if available.
    */
   DrawableFrameRef Get(size_t aFrame);
+  RawAccessFrameRef GetRaw(size_t aFrame);
 
   /**
    * Inserts a frame into the frame buffer. If it has yet to fully decode the
