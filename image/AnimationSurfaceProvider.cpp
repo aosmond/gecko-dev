@@ -152,11 +152,11 @@ AnimationSurfaceProvider::Advance(size_t aFrame)
 }
 
 already_AddRefed<imgFrame>
-AnimationSurfaceProvider::AllocateFrame()
+AnimationSurfaceProvider::AllocateFrame(IntRect& aInvalidRect)
 {
-#if 0
+#if 1
   MutexAutoLock lock(mFramesMutex);
-  RefPtr<imgFrame> frame = mFrames.TakeRecycledFrame();
+  RefPtr<imgFrame> frame = mFrames.TakeRecycledFrame(aInvalidRect);
   if (!frame) {
     frame = MakeRefPtr<imgFrame>();
     //printf_stderr("[AO] use new frame %p\n", frame.get());

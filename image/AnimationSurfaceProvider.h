@@ -88,7 +88,7 @@ public:
   // don't block layout or page load.
   TaskPriority Priority() const override { return TaskPriority::eLow; }
 
-  already_AddRefed<imgFrame> AllocateFrame() override;
+  already_AddRefed<imgFrame> AllocateFrame(gfx::IntRect& aInvalidRect) override;
 
 private:
   virtual ~AnimationSurfaceProvider();

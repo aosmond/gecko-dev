@@ -342,10 +342,15 @@ Decoder::AllocateFrameInternal(uint32_t aFrameNum,
   RefPtr<imgFrame> frame;
   if (mFrameRecycler) {
     MOZ_ASSERT(aOutputSize == aFrameRect);
-    frame = mFrameRecycler->AllocateFrame();
+    mRecycleRect.SetBox(0, 0, 0, 0);
+    frame = mFrameRecycler->AllocateFrame(mRecycleRect);
     MOZ_ASSERT(frame);
+    if (mRecycleRect.IsEmpty()) {
+      mRecycleRect.SetBox(0, 0, aOutputSize.width, aOutputSize.height);
+    }
   } else {
     frame = MakeNotNull<RefPtr<imgFrame>>();
+    mRecycleRect.SetBox(0, 0, aOutputSize.width, aOutputSize.height);
   }
 
   bool nonPremult = bool(mSurfaceFlags & SurfaceFlags::NO_PREMULTIPLY_ALPHA);
@@ -388,6 +393,9 @@ Decoder::AllocateFrameInternal(uint32_t aFrameNum,
     if (ShouldBlendAnimation() &&
         disposalMethod != DisposalMethod::RESTORE_PREVIOUS) {
       mRestoreFrame = aPreviousFrame->RawAccessRef();
+      mRestoreDirtyRect.SetBox(0, 0, 0, 0);
+    } else {
+      mRestoreDirtyRect = mRestoreDirtyRect.Union(aPreviousFrame->GetDirtyRect());
     }
   } else {
     MOZ_ASSERT(aFrameNum == 0, "Must provide a previous frame when animated");

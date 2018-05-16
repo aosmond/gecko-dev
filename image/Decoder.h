@@ -91,7 +91,7 @@ struct DecoderTelemetry final
 class IDecoderFrameRecycler
 {
 public:
-  virtual already_AddRefed<imgFrame> AllocateFrame() = 0;
+  virtual already_AddRefed<imgFrame> AllocateFrame(gfx::IntRect& aInvalidRect) = 0;
 };
 
 class Decoder
@@ -434,10 +434,21 @@ public:
     mHasFrameToTake = false;
   }
 
+  const gfx::IntRect& GetRestoreDirtyRect() const { return mRestoreDirtyRect; }
+
+  void SetCurrentFrameDirtyRect(const gfx::IntRect& aDirtyRect)
+  {
+    if (mCurrentFrame) {
+      mCurrentFrame->SetDirtyRect(aDirtyRect);
+    }
+  }
+
   void SetFrameRecycler(IDecoderFrameRecycler* aFrameRecycler)
   {
     mFrameRecycler = aFrameRecycler;
   }
+
+  const gfx::IntRect& GetRecycleRect() const { return mRecycleRect; }
 
 protected:
   friend class AutoRecordDecoderTelemetry;
@@ -592,6 +603,8 @@ private:
   RawAccessFrameRef mRestoreFrame;
   ImageMetadata mImageMetadata;
   gfx::IntRect mInvalidRect; // Tracks an invalidation region in the current frame.
+  gfx::IntRect mRecycleRect; // Tracks an invalidation region in the current frame.
+  gfx::IntRect mRestoreDirtyRect; // Tracks an invalidation region in the current frame.
   Maybe<gfx::IntSize> mOutputSize;  // The size of our output surface.
   Maybe<gfx::IntSize> mExpectedSize; // The expected size of the image.
   Progress mProgress;

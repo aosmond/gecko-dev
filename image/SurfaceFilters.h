@@ -351,6 +351,8 @@ struct BlendAnimationConfig
   imgFrame* mCurrentFrame;     /// The current frame in the animation.
   imgFrame* mRestoreFrame;     /// The previous frame in the animation for the
                                /// purposes of disposing RESTORE_PREVIOUS.
+  Decoder* mDecoder;
+  gfx::IntRect mRestoreDirtyRect;
 };
 
 /**
@@ -368,10 +370,19 @@ public:
   BlendAnimationFilter()
     : mRow(0)
     , mRowLength(0)
+    , mAvoided(0)
+    , mUsingRestore(false)
     , mBlendMethod(BlendMethod::SOURCE)
     , mOverProc(nullptr)
     , mBaseFrameRowPtr(nullptr)
   { }
+
+  virtual ~BlendAnimationFilter()
+  {
+    if (mAvoided /*&& mUsingRestore*/) {
+      printf_stderr("[AO] avoided copying %lu\n", mAvoided);
+    }
+  }
 
   template <typename... Rest>
   nsresult Configure(BlendAnimationConfig& aConfig, Rest... aRest)
@@ -381,6 +392,7 @@ public:
       return rv;
     }
 
+    mRecycleRect = aConfig.mDecoder->GetRecycleRect();
     mFrameRect = mUnclampedFrameRect = aConfig.mFrameRect;
     gfx::IntSize outputSize = mNext.InputSize();
     mRowLength = outputSize.width * sizeof(uint32_t);
@@ -393,6 +405,11 @@ public:
     // Clamp mFrameRect to the output size.
     gfx::IntRect outputRect(0, 0, outputSize.width, outputSize.height);
     mFrameRect = mFrameRect.Intersect(outputRect);
+    mRecycleRect = mRecycleRect.Intersect(outputRect);
+    /*if (!mRecycleRect.IsEqualEdges(outputRect)) {
+    printf_stderr("[AO] recycle invalid (%d-%d,%d-%d) size (%d,%d)\n", mRecycleRect.x, mRecycleRect.y, mRecycleRect.XMost(), mRecycleRect.YMost(), outputSize.width, outputSize.height);
+    }*/
+    //mRecycleRect = outputRect;
     bool fullFrame = outputRect.IsEqualEdges(mFrameRect);
 
     // If there's no intersection, |mFrameRect| will be an empty rect positioned
@@ -460,7 +477,9 @@ public:
 
             // We don't know what the aggregate impact of the frame rects are
             // so for now we just reset the whole image.
-            mDirtyRect = outputRect;
+            //mDirtyRect = outputRect;
+	    mDirtyRect = mDirtyRect.Union(aConfig.mRestoreDirtyRect);
+	    mUsingRestore = true;
             break;
           }
           // If we are told to use the previous frame, but there is none (i.e.
@@ -643,11 +662,16 @@ private:
   DisposalMethod GetAnimationState(imgFrame* aBaseFrame,
                                    gfx::IntRect& aFrameRect) const
   {
+#if 0
       AnimationData animData = aBaseFrame->GetAnimationData();
       aFrameRect = animData.mBlendRect
                  ? animData.mRect.Intersect(*animData.mBlendRect)
                  : animData.mRect;
       return animData.mDisposalMethod;
+#else
+      aFrameRect = aBaseFrame->GetBlendRect();
+      return aBaseFrame->GetDisposalMethod();
+#endif
   }
 
   void ConfigureBaseFrame(imgFrame* aBaseFrame,
@@ -684,9 +708,16 @@ private:
       return;
     }
 
+    bool needBaseFrame = mRow >= mRecycleRect.y &&
+                         mRow < mRecycleRect.YMost();
+
     if (!mBaseFrameRowPtr) {
       // No base frame, so we are clearing everything.
-      memset(dest, 0, mRowLength);
+      if (needBaseFrame) {
+        memset(dest, 0, mRowLength);
+      } else {
+        //mAvoided += mRowLength;
+      }
     } else if (mClearRect.height > 0 &&
                mClearRect.y <= mRow &&
                mClearRect.YMost() > mRow) {
@@ -697,11 +728,21 @@ private:
       size_t postfixOffset = prefixLength + clearLength;
       size_t postfixLength = mRowLength - postfixOffset;
       MOZ_ASSERT(prefixLength + clearLength + postfixLength == mRowLength);
-      memcpy(dest, mBaseFrameRowPtr, prefixLength);
+      if (needBaseFrame) {
+        memcpy(dest, mBaseFrameRowPtr, prefixLength);
+      } else {
+        //mAvoided += prefixLength;
+      }
       memset(dest + prefixLength, 0, clearLength);
-      memcpy(dest + postfixOffset, mBaseFrameRowPtr + postfixOffset, postfixLength);
-    } else {
+      if (needBaseFrame) {
+        memcpy(dest + postfixOffset, mBaseFrameRowPtr + postfixOffset, postfixLength);
+      } else {
+        //mAvoided += postfixLength;
+      }
+    } else if (needBaseFrame) {
       memcpy(dest, mBaseFrameRowPtr, mRowLength);
+    } else {
+      //mAvoided += mRowLength;
     }
   }
 
@@ -750,6 +791,8 @@ private:
   int32_t  mRow;                       /// The row in unclamped frame rect space
                                        /// that we're currently writing.
   size_t mRowLength;                   /// Length in bytes of a row.
+  size_t mAvoided;
+  bool mUsingRestore;
   BlendMethod mBlendMethod;            /// The blend method.
   SkBlitRow::Proc32 mOverProc;         /// Function pointer to perform over blending.
   RawAccessFrameRef mBaseFrame;        /// The base frame that we need to copy
@@ -759,6 +802,8 @@ private:
   gfx::IntRect mClearRect;             /// The frame area to clear.
   gfx::IntRect mDirtyRect;             /// The frame area which has changed from
                                        /// the previous frame.
+  gfx::IntRect mRecycleRect;           /// The frame area which has changed from
+                                       /// the original frame stored in the data.
 };
 
 //////////////////////////////////////////////////////////////////////////////

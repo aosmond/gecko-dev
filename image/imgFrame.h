@@ -234,7 +234,10 @@ public:
 
   IntSize GetImageSize() const { return mImageSize; }
   IntRect GetRect() const { return mFrameRect; }
+  IntRect GetBlendRect() const { return mBlendRect ? mFrameRect.Intersect(*mBlendRect) : mFrameRect; }
   IntSize GetSize() const { return mFrameRect.Size(); }
+  DisposalMethod GetDisposalMethod() const { return mDisposalMethod; }
+  FrameTimeout GetTimeout() const { return mTimeout; }
   void GetImageData(uint8_t** aData, uint32_t* length) const;
   uint8_t* GetImageData() const;
 
@@ -242,6 +245,9 @@ public:
   void GetPaletteData(uint32_t** aPalette, uint32_t* length) const;
   uint32_t* GetPaletteData() const;
   uint8_t GetPaletteDepth() const { return mPaletteDepth; }
+
+  IntRect GetDirtyRect() const { return mDirtyRect.IsEmpty() ? mFrameRect : mDirtyRect; }
+  void SetDirtyRect(const IntRect& aDirtyRect) { mDirtyRect = aDirtyRect; }
 
   bool IsFullFrame() const { return mIsFullFrame; }
 
@@ -340,6 +346,7 @@ private: // data
   DisposalMethod mDisposalMethod;
   BlendMethod    mBlendMethod;
   Maybe<IntRect> mBlendRect;
+  IntRect        mDirtyRect;
   SurfaceFormat  mFormat;
 
   bool mAborted;

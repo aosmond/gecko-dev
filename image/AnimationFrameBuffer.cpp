@@ -85,11 +85,13 @@ AnimationFrameBuffer::Insert(RawAccessFrameRef&& aFrame)
 
     if (mInsertIndex > 0) {
       MOZ_ASSERT(!mFrames[mInsertIndex]);
+      mFrameRects[mInsertIndex] = aFrame->GetDirtyRect();
       mFrames[mInsertIndex] = Move(aFrame);
     }
   } else if (mInsertIndex == mFrames.Length()) {
     // We are still on the first pass of the animation decoding, so this is
     // the first time we have seen this frame.
+    mFrameRects.AppendElement(aFrame->GetDirtyRect());
     mFrames.AppendElement(Move(aFrame));
 
     if (mInsertIndex == mThreshold) {
@@ -108,6 +110,7 @@ AnimationFrameBuffer::Insert(RawAccessFrameRef&& aFrame)
     // except for the first frame.
     MOZ_ASSERT(mInsertIndex < mFrames.Length());
     MOZ_ASSERT(!mFrames[mInsertIndex]);
+    MOZ_ASSERT(mFrameRects[mInsertIndex] == aFrame->GetDirtyRect());
     MOZ_ASSERT(MayDiscard());
     mFrames[mInsertIndex] = Move(aFrame);
   } else { // mInsertIndex == 0
@@ -165,6 +168,7 @@ AnimationFrameBuffer::MarkComplete()
     // because we know we won't need to grow beyond here.
     mSizeKnown = true;
     mFrames.Compact();
+    mFrameRects.Compact();
 
     if (!MayDiscard()) {
       // If we did not meet the threshold, then we know we want to keep all of the
@@ -247,16 +251,19 @@ AnimationFrameBuffer::AdvanceInternal()
   // frame, we can remove the last frame.
   if (MayDiscard()) {
     RawAccessFrameRef discard;
+    size_t discardIndex = 0;
     if (mGetIndex > 1) {
-      discard = Move(mFrames[mGetIndex - 1]);
+      discardIndex = mGetIndex - 1;
+      discard = Move(mFrames[discardIndex]);
     } else if (mGetIndex == 0) {
       MOZ_ASSERT(mSizeKnown && framesLength > 1);
-      discard = Move(mFrames[framesLength - 1]);
+      discardIndex = framesLength - 1;
+      discard = Move(mFrames[discardIndex]);
     }
 
     if (discard && mRecycledFrames.size() < mBatch) {
       //printf_stderr("[AO] recycle frame %p\n", discard.get());
-      mRecycledFrames.push(discard.get());
+      mRecycledFrames.push(RecycledFrame { discard.get(), discardIndex });
     }
   }
 

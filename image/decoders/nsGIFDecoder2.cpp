@@ -234,6 +234,7 @@ nsGIFDecoder2::BeginImageFrame(const IntRect& aFrameRect,
   }
 
   mPipe = Move(*pipe);
+  mFrameRect = aFrameRect;
   return NS_OK;
 }
 
@@ -266,7 +267,8 @@ nsGIFDecoder2::EndImageFrame()
   // Tell the superclass we finished a frame
   PostFrameStop(opacity,
                 DisposalMethod(mGIFStruct.disposal_method),
-                FrameTimeout::FromRawMilliseconds(mGIFStruct.delay_time));
+                FrameTimeout::FromRawMilliseconds(mGIFStruct.delay_time),
+                BlendMethod::OVER, Some(mFrameRect));
 
   // Reset the transparent pixel
   if (mOldColor) {

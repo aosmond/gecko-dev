@@ -135,7 +135,7 @@ public:
     RemoveFrameRectConfig removeFrameRectConfig { aFrameRect };
     BlendAnimationConfig blendAnimationConfig { aFrameRect, aBlendMethod,
                                                 currentFrame.get(),
-                                                restoreFrame.get() };
+                                                restoreFrame.get(), aDecoder, aDecoder->GetRestoreDirtyRect() };
     DownscalingConfig downscalingConfig { aInputSize, aFormat };
     SurfaceConfig surfaceConfig { aDecoder, aFrameNum, aOutputSize,
                                   aFormat, flipVertically };
@@ -191,6 +191,9 @@ public:
       }
     }
 
+    if (pipe) {
+      aDecoder->SetCurrentFrameDirtyRect(pipe->DirtyRect());
+    }
     return pipe;
   }
 

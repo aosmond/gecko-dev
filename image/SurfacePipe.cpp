@@ -60,6 +60,8 @@ AbstractSurfaceSink::DoAdvanceRow()
   return mRow < uint32_t(InputSize().height) ? GetRowPointer()
                                              : nullptr;
 }
+    
+static Atomic<uint32_t> sSinkCounter(0);
 
 nsresult
 SurfaceSink::Configure(const SurfaceConfig& aConfig)
@@ -75,6 +77,14 @@ SurfaceSink::Configure(const SurfaceConfig& aConfig)
   // XXX(seth): Once every Decoder subclass uses SurfacePipe, we probably want
   // to allocate the frame directly here and get rid of Decoder::AllocateFrame
   // altogether.
+#ifdef MOZ_GECKO_PROFILER
+  if (profiler_is_active()) {
+    uint32_t sample = ++sSinkCounter;
+    char marker[64];
+    SprintfLiteral(marker, "SurfacePipe %d", sample);
+    profiler_add_marker(marker);
+  }
+#endif
   nsresult rv = aConfig.mDecoder->AllocateFrame(aConfig.mFrameNum,
                                                 surfaceSize,
                                                 frameRect,
@@ -126,7 +136,14 @@ PalettedSurfaceSink::Configure(const PalettedSurfaceConfig& aConfig)
   // Allocate the frame.
   // XXX(seth): Once every Decoder subclass uses SurfacePipe, we probably want
   // to allocate the frame directly here and get rid of Decoder::AllocateFrame
-  // altogether.
+#ifdef MOZ_GECKO_PROFILER
+  if (profiler_is_active()) {
+    uint32_t sample = ++sSinkCounter;
+    char marker[64];
+    SprintfLiteral(marker, "SurfacePipe %d (pal)", sample);
+    profiler_add_marker(marker);
+  }
+#endif // altogether.
   nsresult rv = aConfig.mDecoder->AllocateFrame(aConfig.mFrameNum,
                                                 aConfig.mOutputSize,
                                                 aConfig.mFrameRect,

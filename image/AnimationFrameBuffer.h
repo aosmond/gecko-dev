@@ -168,15 +168,29 @@ public:
    */
   const nsTArray<RawAccessFrameRef>& Frames() const { return mFrames; }
 
-  already_AddRefed<imgFrame> TakeRecycledFrame()
+  already_AddRefed<imgFrame> TakeRecycledFrame(gfx::IntRect& aInvalidRect)
   {
     if (mRecycledFrames.empty()) {
       return nullptr;
     }
 
-    RefPtr<imgFrame> frame = mRecycledFrames.front().forget();
+    RecycledFrame r = Move(mRecycledFrames.front());
     mRecycledFrames.pop();
-    return frame.forget();
+
+    if (r.mIndex > mInsertIndex) {
+      for (auto i = r.mIndex + 1; i < mFrameRects.Length(); ++i) {
+        aInvalidRect = aInvalidRect.Union(mFrameRects[i]);
+      }
+      for (auto i = size_t(0); i < mInsertIndex; ++i) {
+        aInvalidRect = aInvalidRect.Union(mFrameRects[i]);
+      }
+    } else {
+      for (auto i = r.mIndex + 1; i < mInsertIndex; ++i) {
+        aInvalidRect = aInvalidRect.Union(mFrameRects[i]);
+      }
+    }
+
+    return r.mFrame.forget();
   }
 
 private:
@@ -185,7 +199,14 @@ private:
   /// The frames of this animation, in order, but may have holes if discarding.
   nsTArray<RawAccessFrameRef> mFrames;
 
-  std::queue<RefPtr<imgFrame>> mRecycledFrames;
+  nsTArray<gfx::IntRect> mFrameRects;
+
+  struct RecycledFrame {
+    RefPtr<imgFrame> mFrame;
+    size_t mIndex;
+  };
+
+  std::queue<RecycledFrame> mRecycledFrames;
 
   // The maximum number of frames we can have before discarding.
   size_t mThreshold;

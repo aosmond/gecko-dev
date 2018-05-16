@@ -907,7 +907,7 @@ nsPNGDecoder::WriteRow(uint8_t* aRow)
     }
   }
 
-//#define AO_UNSAFE_COMPUTED 1
+#define AO_UNSAFE_COMPUTED 1
 
   // Write this row to the SurfacePipe.
   DebugOnly<WriteState> result;

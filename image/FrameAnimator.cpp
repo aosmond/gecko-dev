@@ -333,7 +333,9 @@ FrameAnimator::AdvanceFrame(AnimationState& aState,
   if (nextFrameIndex == 0) {
     MOZ_ASSERT(nextFrame->IsFullFrame());
     ret.mDirtyRect = aState.FirstFrameRefreshArea();
-  } else if (!nextFrame->IsFullFrame()) {
+  } else if (nextFrame->IsFullFrame()) {
+    ret.mDirtyRect = nextFrame->GetDirtyRect();
+  } else {
     MOZ_ASSERT(nextFrameIndex == currentFrameIndex + 1);
     // Change frame
     if (!DoBlend(aFrames, &ret.mDirtyRect, currentFrameIndex, nextFrameIndex)) {
@@ -560,8 +562,12 @@ FrameAnimator::GetTimeoutForFrame(AnimationState& aState,
 {
   RawAccessFrameRef frame = GetRawFrame(aFrames, aFrameNum);
   if (frame) {
+#if 0
     AnimationData data = frame->GetAnimationData();
     return Some(data.mTimeout);
+#else
+    return Some(frame->GetTimeout());
+#endif
   }
 
   MOZ_ASSERT(aState.mHasRequestedDecode && !aState.mIsCurrentlyDecoded);

@@ -156,6 +156,7 @@ private:
   gif_struct mGIFStruct;
 
   SurfacePipe mPipe;  /// The SurfacePipe used to write to the output surface.
+  gfx::IntRect mFrameRect;
 };
 
 } // namespace image
