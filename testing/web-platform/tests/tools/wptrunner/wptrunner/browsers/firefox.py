@@ -208,7 +208,8 @@ class FirefoxBrowser(Browser):
             self.profile.set_preferences({"browser.tabs.remote.autostart": True})
 
         if self.test_type == "reftest":
-            self.profile.set_preferences({"layout.interruptible-reflow.enabled": False})
+            self.profile.set_preferences({"layout.interruptible-reflow.enabled": False,
+                                          "image.downscale-during-decode.enabled": False})
 
         if self.leak_check and kwargs.get("check_leaks", True):
             self.leak_report_file = os.path.join(self.profile.profile, "runtests_leaks.log")
