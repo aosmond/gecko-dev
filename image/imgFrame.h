@@ -188,6 +188,9 @@ public:
   uint32_t* GetPaletteData() const;
   uint8_t GetPaletteDepth() const { return mPaletteDepth; }
 
+  const IntRect& GetDirtyRect() const { return mDirtyRect; }
+  void SetDirtyRect(const IntRect& aDirtyRect) { mDirtyRect = aDirtyRect; }
+
   bool GetCompositingFailed() const;
   void SetCompositingFailed(bool val);
 
@@ -295,9 +298,24 @@ private: // data
   // Effectively const data, only mutated in the Init methods.
   //////////////////////////////////////////////////////////////////////////////
 
+  //! The size of the buffer we are decoding to.
   IntSize      mImageSize;
+
+  //! The rect to which we are decoding. The origin of the rect should be 0, 0,
+  //! and its width/height match mImageSize.
   IntRect      mFrameRect;
+
+  //! The contents for the frame, as represented in the encoded image. This may
+  //! differ from mImageSize because it may be a partial frame. For the first
+  //! frame, this means we need to shift the data in place, and for animated
+  //! frames, it likely need to combine with a previous frame to get the full
+  //! contents.
   IntRect      mBlendRect;
+
+  //! This is the region that has changed between this frame and the previous
+  //! frame of an animation. For the first frame, this will be the same as
+  //! mFrameRect.
+  IntRect      mDirtyRect;
 
   //! The timeout for this frame.
   FrameTimeout mTimeout;
