@@ -188,6 +188,9 @@ public:
   uint32_t* GetPaletteData() const;
   uint8_t GetPaletteDepth() const { return mPaletteDepth; }
 
+  const IntRect& GetDirtyRect() const { return mDirtyRect; }
+  void SetDirtyRect(const IntRect& aDirtyRect) { mDirtyRect = aDirtyRect; }
+
   bool GetCompositingFailed() const;
   void SetCompositingFailed(bool val);
 
@@ -298,6 +301,7 @@ private: // data
   IntSize      mImageSize;
   IntRect      mFrameRect;
   IntRect      mBlendRect;
+  IntRect      mDirtyRect;
 
   //! The timeout for this frame.
   FrameTimeout mTimeout;
