@@ -291,7 +291,7 @@ Decoder::AllocateFrame(const gfx::IntSize& aOutputSize,
 {
   mCurrentFrame = AllocateFrameInternal(aOutputSize, aFrameRect, aFormat,
                                         aPaletteDepth, aAnimParams,
-                                        mCurrentFrame.get());
+                                        Move(mCurrentFrame));
 
   if (mCurrentFrame) {
     mHasFrameToTake = true;
@@ -321,7 +321,7 @@ Decoder::AllocateFrameInternal(const gfx::IntSize& aOutputSize,
                                SurfaceFormat aFormat,
                                uint8_t aPaletteDepth,
                                const Maybe<AnimationParams>& aAnimParams,
-                               imgFrame* aPreviousFrame)
+                               RawAccessFrameRef&& aPreviousFrame)
 {
   if (HasError()) {
     return RawAccessFrameRef();
@@ -374,7 +374,24 @@ Decoder::AllocateFrameInternal(const gfx::IntSize& aOutputSize,
 
     // Some GIFs are huge but only have a small area that they animate. We only
     // need to refresh that small area when frame 0 comes around again.
-    mFirstFrameRefreshArea.UnionRect(mFirstFrameRefreshArea, frame->GetRect());
+    mFirstFrameRefreshArea.UnionRect(mFirstFrameRefreshArea,
+                                     ref->GetBoundedBlendRect());
+
+    if (ShouldBlendAnimation()) {
+      if (aPreviousFrame->GetDisposalMethod() !=
+          DisposalMethod::RESTORE_PREVIOUS) {
+        // If the new restore frame is the direct previous frame, then we know
+        // the dirty rect is composed only of the current frame's blend rect and
+        // this frame's clear rect (if applicable) which are handled in filters.
+        mRestoreFrame = Move(aPreviousFrame);
+        mRestoreDirtyRect.SetBox(0, 0, 0, 0);
+      } else {
+        // We are keeping the current restore frame, which means we need to keep
+        // building up the dirty rect between us and the new frame.
+        mRestoreDirtyRect.UnionRect(mRestoreDirtyRect,
+                                    aPreviousFrame->GetDirtyRect());
+      }
+    }
   }
 
   mFrameCount++;
