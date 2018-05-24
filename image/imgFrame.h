@@ -73,6 +73,17 @@ public:
                           false, Some(animParams), true);
   }
 
+  /**
+   * Reinitialize this imgFrame with the new parameters, but otherwise retain
+   * the underlying buffer.
+   *
+   * This is appropriate for use with animated images, where the decoder was
+   * given an IDecoderFrameRecycler object which may yield a recycled imgFrame
+   * that was discarded to save memory.
+   */
+  nsresult InitForDecoderRecycle(SurfaceFormat aFormat,
+                                 const Maybe<AnimationParams>& aAnimParams = Nothing());
+
 
   /**
    * Initialize this imgFrame with a new surface and draw the provided
@@ -197,6 +208,13 @@ public:
   bool GetCompositingFailed() const;
   void SetCompositingFailed(bool val);
 
+  bool ShouldRecycle() const { return mShouldRecycle; }
+  void MarkShouldRecycle()
+  {
+    MOZ_ASSERT(!mShouldRecycle);
+    mShouldRecycle = true;
+  }
+
   void SetOptimizable();
 
   void FinalizeSurface();
@@ -230,7 +248,7 @@ private: // methods
   uint32_t GetImageBytesPerRow() const;
   uint32_t GetImageDataLength() const;
   void FinalizeSurfaceInternal();
-  already_AddRefed<SourceSurface> GetSourceSurfaceInternal();
+  already_AddRefed<SourceSurface> GetSourceSurfaceInternal(bool aTemporary);
 
   uint32_t PaletteDataLength() const
   {
@@ -241,10 +259,23 @@ private: // methods
   struct SurfaceWithFormat {
     RefPtr<gfxDrawable> mDrawable;
     SurfaceFormat mFormat;
-    SurfaceWithFormat() { }
+    SurfaceWithFormat()
+      : mFormat(SurfaceFormat::UNKNOWN)
+    { }
     SurfaceWithFormat(gfxDrawable* aDrawable, SurfaceFormat aFormat)
       : mDrawable(aDrawable), mFormat(aFormat)
     { }
+    SurfaceWithFormat(SurfaceWithFormat&& aOther)
+      : mDrawable(Move(aOther.mDrawable)), mFormat(aOther.mFormat)
+    { }
+    SurfaceWithFormat& operator=(SurfaceWithFormat&& aOther)
+    {
+      mDrawable = Move(aOther.mDrawable);
+      mFormat = aOther.mFormat;
+      return *this;
+    }
+    SurfaceWithFormat& operator=(const SurfaceWithFormat& aOther) = delete;
+    SurfaceWithFormat(const SurfaceWithFormat& aOther) = delete;
     bool IsValid() { return !!mDrawable; }
   };
 
@@ -257,6 +288,8 @@ private: // data
   friend class DrawableFrameRef;
   friend class RawAccessFrameRef;
   friend class UnlockImageDataRunnable;
+
+  class RecyclingSourceSurface;
 
   //////////////////////////////////////////////////////////////////////////////
   // Thread-safe mutable data, protected by mMonitor.
@@ -287,11 +320,13 @@ private: // data
   nsIntRect mDecoded;
 
   //! Number of RawAccessFrameRefs currently alive for this imgFrame.
-  int32_t mLockCount;
+  int16_t mLockCount;
+  int16_t mRecycleLockCount;
 
   bool mAborted;
   bool mFinished;
   bool mOptimizable;
+  bool mShouldRecycle;
 
 
   //////////////////////////////////////////////////////////////////////////////

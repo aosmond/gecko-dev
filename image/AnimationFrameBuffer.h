@@ -7,9 +7,258 @@
 #define mozilla_image_AnimationFrameBuffer_h
 
 #include "ISurfaceProvider.h"
+#include <deque>
 
 namespace mozilla {
 namespace image {
+
+class AnimationFrameQueue
+{
+public:
+  enum class InsertStatus : uint8_t
+  {
+    YIELD, // No more frames required at this time.
+    CONTINUE, // Continue decoding more frames.
+    DISCARD, // Crossed threshold, switch to discarding structure.
+    DISCARD_CONTINUE // Crossed threshold, switch to discarding structure.
+  };
+
+  AnimationFrameQueue(size_t aBatch, size_t aStartFrame)
+    : mSize(0)
+    , mBatch(aBatch)
+    , mGetIndex(0)
+    , mAdvance(aStartFrame)
+    , mPending(0)
+    , mSizeKnown(false)
+    , mMayDiscard(false)
+    , mRedecodeError(false)
+    , mRecycling(false)
+  {
+    if (mBatch > SIZE_MAX/4) {
+      // Batch size is so big, we will just end up decoding the whole animation.
+      mBatch = SIZE_MAX/4;
+    } else if (mBatch < 1) {
+      // Never permit a batch size smaller than 1. We always want to be asking
+      // for at least one frame to start.
+      mBatch = 1;
+    }
+  }
+
+  AnimationFrameQueue(const AnimationFrameQueue& aOther)
+    : mSize(aOther.mSize)
+    , mBatch(aOther.mBatch)
+    , mGetIndex(aOther.mGetIndex)
+    , mAdvance(aOther.mAdvance)
+    , mPending(aOther.mPending)
+    , mSizeKnown(aOther.mSizeKnown)
+    , mMayDiscard(aOther.mMayDiscard)
+    , mRedecodeError(aOther.mRedecodeError)
+    , mRecycling(aOther.mRecycling)
+  { }
+
+  virtual ~AnimationFrameQueue()
+  { }
+
+  bool MayDiscard() const { return mMayDiscard; }
+  bool SizeKnown() const { return mSizeKnown; }
+  bool HasRedecodeError() const { return mRedecodeError; }
+  bool IsRecycling() const { return mRecycling; }
+  size_t Size() const { return mSize; }
+
+  bool Reset()
+  {
+    // The animation needs to start back at the beginning.
+    mGetIndex = 0;
+    mAdvance = 0;
+    return ResetInternal();
+  }
+
+  bool AdvanceTo(size_t aExpectedFrame)
+  {
+    MOZ_ASSERT(mAdvance == 0);
+
+    if (++mGetIndex == mSize && mSizeKnown) {
+      mGetIndex = 0;
+    }
+    MOZ_ASSERT(mGetIndex == aExpectedFrame);
+
+    bool hasPending = mPending > 0;
+    AdvanceInternal();
+    // Restart the decoder if we transitioned from no pending frames being
+    // decoded, to some pending frames to be decoded.
+    return !hasPending && mPending > 0;
+  }
+
+  InsertStatus Insert(RawAccessFrameRef&& aFrame)
+  {
+    MOZ_ASSERT(mPending > 0);
+    MOZ_ASSERT(aFrame);
+
+    --mPending;
+    if (!mSizeKnown) {
+      ++mSize;
+    }
+
+    bool retain = InsertInternal(Move(aFrame));
+
+    if (mAdvance > 0) {
+      --mAdvance;
+      ++mGetIndex;
+      AdvanceInternal();
+    }
+
+    if (!retain) {
+      return mPending > 0 ? InsertStatus::DISCARD_CONTINUE
+                          : InsertStatus::DISCARD;
+    }
+
+    return mPending > 0 ? InsertStatus::CONTINUE : InsertStatus::YIELD;
+  }
+
+  virtual imgFrame* Get(size_t aFrame, bool aForDisplay) = 0;
+
+  virtual bool IsFirstFrameFinished() const = 0;
+
+  virtual bool IsLastFrame(const RawAccessFrameRef& aFrame) const = 0;
+
+  virtual bool MarkComplete(const gfx::IntRect& aFirstFrameRefreshArea) = 0;
+
+  virtual void AddSizeOfExcludingThis(MallocSizeOf aMallocSizeOf,
+                                      size_t& aHeapSizeOut,
+                                      size_t& aNonHeapSizeOut,
+                                      size_t& aExtHandlesOut) = 0;
+
+  virtual RawAccessFrameRef RecycleFrame(gfx::IntRect& aRecycleRect)
+  {
+    MOZ_ASSERT(!mRecycling);
+    return RawAccessFrameRef();
+  }
+
+protected:
+  virtual bool InsertInternal(RawAccessFrameRef&& aFrame) = 0;
+  virtual void AdvanceInternal() = 0;
+  virtual bool ResetInternal() = 0;
+
+  size_t mSize;
+  size_t mBatch;
+  size_t mGetIndex;
+  // The number of frames we need to auto-advance to synchronize with the caller.
+  size_t mAdvance;
+  size_t mPending;
+  bool mSizeKnown;
+  bool mMayDiscard;
+  bool mRedecodeError;
+  bool mRecycling;
+};
+
+class AnimationFrameRetainedQueue final : public AnimationFrameQueue
+{
+public:
+  AnimationFrameRetainedQueue(size_t aThreshold, size_t aBatch, size_t aCurrentFrame);
+
+  imgFrame* Get(size_t aFrame, bool aForDisplay) override;
+  bool IsFirstFrameFinished() const override;
+  bool IsLastFrame(const RawAccessFrameRef& aFrame) const override;
+  bool MarkComplete(const gfx::IntRect& aFirstFrameRefreshArea) override;
+  void AddSizeOfExcludingThis(MallocSizeOf aMallocSizeOf,
+                              size_t& aHeapSizeOut,
+                              size_t& aNonHeapSizeOut,
+                              size_t& aExtHandlesOut) override;
+
+private:
+  friend class AnimationFrameDiscardingQueue;
+  friend class AnimationFrameRecyclingQueue;
+
+  bool InsertInternal(RawAccessFrameRef&& aFrame) override;
+  void AdvanceInternal() override;
+  bool ResetInternal() override;
+
+  nsTArray<RawAccessFrameRef> mFrames;
+  size_t mThreshold;
+};
+
+class AnimationFrameDiscardingQueue : public AnimationFrameQueue
+{
+public:
+  explicit AnimationFrameDiscardingQueue(AnimationFrameRetainedQueue& aQueue);
+
+  imgFrame* Get(size_t aFrame, bool aForDisplay) final;
+  bool IsFirstFrameFinished() const final;
+  bool IsLastFrame(const RawAccessFrameRef& aFrame) const final;
+  bool MarkComplete(const gfx::IntRect& aFirstFrameRefreshArea) override;
+  void AddSizeOfExcludingThis(MallocSizeOf aMallocSizeOf,
+                              size_t& aHeapSizeOut,
+                              size_t& aNonHeapSizeOut,
+                              size_t& aExtHandlesOut) override;
+
+protected:
+  bool InsertInternal(RawAccessFrameRef&& aFrame) override;
+  void AdvanceInternal() override;
+  bool ResetInternal() override;
+
+  size_t mInsertIndex;
+
+  /// Queue storing frames to be displayed by the animator. The first frame in
+  /// the queue is the currently displayed frame.
+  std::deque<RawAccessFrameRef> mDisplay;
+
+  /// The first frame which is never replaced.
+  RawAccessFrameRef mFirstFrame;
+};
+
+class AnimationFrameRecyclingQueue final : public AnimationFrameDiscardingQueue
+{
+public:
+  explicit AnimationFrameRecyclingQueue(AnimationFrameRetainedQueue& aQueue);
+
+  bool MarkComplete(const gfx::IntRect& aFirstFrameRefreshArea) override;
+  void AddSizeOfExcludingThis(MallocSizeOf aMallocSizeOf,
+                              size_t& aHeapSizeOut,
+                              size_t& aNonHeapSizeOut,
+                              size_t& aExtHandlesOut) override;
+
+  RawAccessFrameRef RecycleFrame(gfx::IntRect& aRecycleRect) override;
+
+protected:
+  void AdvanceInternal() override;
+  bool ResetInternal() override;
+
+  struct RecycleEntry {
+    RecycleEntry(const gfx::IntRect &aDirtyRect)
+      : mDirtyRect(aDirtyRect)
+    { }
+
+    RecycleEntry(RecycleEntry&& aOther)
+      : mFrame(Move(aOther.mFrame))
+      , mDirtyRect(aOther.mDirtyRect)
+      , mRecycleRect(aOther.mRecycleRect)
+    {
+    }
+
+    RecycleEntry& operator=(RecycleEntry&& aOther)
+    {
+      mFrame = Move(aOther.mFrame);
+      mDirtyRect = aOther.mDirtyRect;
+      mRecycleRect = aOther.mRecycleRect;
+      return *this;
+    }
+
+    RecycleEntry(const RecycleEntry& aOther) = delete;
+    RecycleEntry& operator=(const RecycleEntry& aOther) = delete;
+
+    RawAccessFrameRef mFrame;  // The frame containing the buffer to recycle.
+    gfx::IntRect mDirtyRect;   // The dirty rect of the frame itself.
+    gfx::IntRect mRecycleRect; // The dirty rect between the recycled frame and
+                               // the future frame that will be written to it.
+  };
+
+  /// Queue storing frames to be recycled by the decoder to produce its future
+  /// frames. May contain up to mBatch frames, where the last frame in the queue
+  /// is adjacent to the first frame in the mDisplay queue.
+  std::deque<RecycleEntry> mRecycle;
+
+  gfx::IntRect mFirstFrameRefreshArea;
+};
 
 /**
  * An AnimationFrameBuffer owns the frames outputted by an animated image

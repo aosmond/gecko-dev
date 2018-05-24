@@ -53,6 +53,7 @@ Decoder::Decoder(RasterImage* aImage)
   , mColormap(nullptr)
   , mColormapSize(0)
   , mImage(aImage)
+  , mFrameRecycler(nullptr)
   , mProgress(NoProgress)
   , mFrameCount(0)
   , mLoopLength(FrameTimeout::Zero())
@@ -339,43 +340,67 @@ Decoder::AllocateFrameInternal(const gfx::IntSize& aOutputSize,
     return RawAccessFrameRef();
   }
 
-  auto frame = MakeNotNull<RefPtr<imgFrame>>();
-  bool nonPremult = bool(mSurfaceFlags & SurfaceFlags::NO_PREMULTIPLY_ALPHA);
-  if (NS_FAILED(frame->InitForDecoder(aOutputSize, aFrameRect, aFormat,
-                                      aPaletteDepth, nonPremult,
-                                      aAnimParams, ShouldBlendAnimation()))) {
-    NS_WARNING("imgFrame::Init should succeed");
-    return RawAccessFrameRef();
+  RawAccessFrameRef ref;
+
+  // If we have a frame recycler, it must be for an animated image producing
+  // full frames. If the higher layers are discarding frames because of the
+  // memory footprint, then the recycler will allow us to reuse the buffers.
+  // Each frame should be the same size and have mostly the same properties.
+  if (mFrameRecycler) {
+    MOZ_ASSERT(ShouldBlendAnimation());
+    MOZ_ASSERT(aPaletteDepth == 0);
+    MOZ_ASSERT(aAnimParams);
+    MOZ_ASSERT(aFrameRect.IsEqualEdges(IntRect(IntPoint(0, 0), aOutputSize)));
+
+    ref = mFrameRecycler->RecycleFrame(mRecycleRect);
+    if (ref) {
+      if (ref.get() != mRestoreFrame.get()) {
+        nsresult rv = ref->InitForDecoderRecycle(aFormat, aAnimParams);
+        if (NS_WARN_IF(NS_FAILED(rv))) {
+          ref.reset();
+        }
+      } else {
+        // We cannot recycle a frame if we are still using it for restoring.
+        // The next frame might still need the same frame to restore from.
+        ref.reset();
+      }
+    }
   }
 
-  RawAccessFrameRef ref = frame->RawAccessRef();
+  // Either the recycler had nothing to give us, or we don't have a recycler.
+  // Produce a new frame to store the data.
   if (!ref) {
-    frame->Abort();
-    return RawAccessFrameRef();
+    // There is no underlying data to reuse, so reset the recycle rect to be
+    // the full frame, to ensure the restore frame is fully copied.
+    mRecycleRect = IntRect(IntPoint(0, 0), aOutputSize);
+
+    bool nonPremult = bool(mSurfaceFlags & SurfaceFlags::NO_PREMULTIPLY_ALPHA);
+    auto frame = MakeNotNull<RefPtr<imgFrame>>();
+    if (NS_FAILED(frame->InitForDecoder(aOutputSize, aFrameRect, aFormat,
+                                        aPaletteDepth, nonPremult,
+                                        aAnimParams, ShouldBlendAnimation()))) {
+      NS_WARNING("imgFrame::Init should succeed");
+      return RawAccessFrameRef();
+    }
+
+    if (mFrameRecycler) {
+      frame->MarkShouldRecycle();
+    }
+
+    ref = frame->RawAccessRef();
+    if (!ref) {
+      frame->Abort();
+      return RawAccessFrameRef();
+    }
   }
 
   if (frameNum == 1) {
     MOZ_ASSERT(aPreviousFrame, "Must provide a previous frame when animated");
     aPreviousFrame->SetRawAccessOnly();
-
-    // If we dispose of the first frame by clearing it, then the first frame's
-    // refresh area is all of itself.
-    // RESTORE_PREVIOUS is invalid (assumed to be DISPOSE_CLEAR).
-    DisposalMethod prevDisposal = aPreviousFrame->GetDisposalMethod();
-    if (prevDisposal == DisposalMethod::CLEAR ||
-        prevDisposal == DisposalMethod::CLEAR_ALL ||
-        prevDisposal == DisposalMethod::RESTORE_PREVIOUS) {
-      mFirstFrameRefreshArea = aPreviousFrame->GetRect();
-    }
   }
 
   if (frameNum > 0) {
     ref->SetRawAccessOnly();
-
-    // Some GIFs are huge but only have a small area that they animate. We only
-    // need to refresh that small area when frame 0 comes around again.
-    mFirstFrameRefreshArea.UnionRect(mFirstFrameRefreshArea,
-                                     ref->GetBoundedBlendRect());
 
     if (ShouldBlendAnimation()) {
       if (aPreviousFrame->GetDisposalMethod() !=
@@ -488,11 +513,32 @@ Decoder::PostFrameStop(Opacity aFrameOpacity)
 
   mLoopLength += mCurrentFrame->GetTimeout();
 
-  // If we're not sending partial invalidations, then we send an invalidation
-  // here when the first frame is complete.
-  if (!ShouldSendPartialInvalidations() && mFrameCount == 1) {
-    mInvalidRect.UnionRect(mInvalidRect,
-                           IntRect(IntPoint(), Size()));
+  if (mFrameCount == 1) {
+    // If we're not sending partial invalidations, then we send an invalidation
+    // here when the first frame is complete.
+    if (!ShouldSendPartialInvalidations()) {
+      mInvalidRect.UnionRect(mInvalidRect,
+                             IntRect(IntPoint(), Size()));
+    }
+
+    // If we dispose of the first frame by clearing it, then the first frame's
+    // refresh area is all of itself. RESTORE_PREVIOUS is invalid (assumed to
+    // be DISPOSE_CLEAR).
+    switch (mCurrentFrame->GetDisposalMethod()) {
+      case DisposalMethod::CLEAR:
+      case DisposalMethod::CLEAR_ALL:
+      case DisposalMethod::RESTORE_PREVIOUS:
+        mFirstFrameRefreshArea = IntRect(IntPoint(), Size());
+        break;
+      default:
+        mFirstFrameRefreshArea = mCurrentFrame->GetBoundedBlendRect();
+        break;
+    }
+  } else {
+    // Some GIFs are huge but only have a small area that they animate. We only
+    // need to refresh that small area when frame 0 comes around again.
+    mFirstFrameRefreshArea.UnionRect(mFirstFrameRefreshArea,
+                                     mCurrentFrame->GetBoundedBlendRect());
   }
 }
 
