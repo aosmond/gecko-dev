@@ -227,19 +227,6 @@ Decoder::CompleteDecode()
       mProgress |= FLAG_DECODE_COMPLETE | FLAG_HAS_ERROR;
     }
   }
-
-  if (mDecodeDone) {
-    MOZ_ASSERT(HasError() || mCurrentFrame, "Should have an error or a frame");
-
-    // If this image wasn't animated and isn't a transient image, mark its frame
-    // as optimizable. We don't support optimizing animated images and
-    // optimizing transient images isn't worth it.
-    if (!HasAnimation() &&
-        !(mDecoderFlags & DecoderFlags::IMAGE_IS_TRANSIENT) &&
-        mCurrentFrame) {
-      mCurrentFrame->SetOptimizable();
-    }
-  }
 }
 
 void
@@ -383,25 +370,25 @@ Decoder::AllocateFrameInternal(const gfx::IntSize& aOutputSize,
       return RawAccessFrameRef();
     }
 
-    if (mFrameRecycler) {
-      frame->MarkShouldRecycle();
-    }
-
     ref = frame->RawAccessRef();
     if (!ref) {
       frame->Abort();
       return RawAccessFrameRef();
     }
+
+    if (mFrameRecycler) {
+      frame->MarkShouldRecycle();
+      frame->SetRawAccessOnly();
+    }
   }
 
-  if (frameNum == 1) {
+  if (frameNum == 1 && !ShouldBlendAnimation()) {
     MOZ_ASSERT(aPreviousFrame, "Must provide a previous frame when animated");
+    // Paletted or incomplete frames must remain locked so we can blend later.
     aPreviousFrame->SetRawAccessOnly();
   }
 
   if (frameNum > 0) {
-    ref->SetRawAccessOnly();
-
     if (ShouldBlendAnimation()) {
       if (aPreviousFrame->GetDisposalMethod() !=
           DisposalMethod::RESTORE_PREVIOUS) {
@@ -416,6 +403,9 @@ Decoder::AllocateFrameInternal(const gfx::IntSize& aOutputSize,
         mRestoreDirtyRect.UnionRect(mRestoreDirtyRect,
                                     aPreviousFrame->GetDirtyRect());
       }
+    } else {
+      // Paletted or incomplete frames must remain locked so we can blend later.
+      ref->SetRawAccessOnly();
     }
   }
 
@@ -507,7 +497,13 @@ Decoder::PostFrameStop(Opacity aFrameOpacity)
   mInFrame = false;
   mFinishedNewFrame = true;
 
-  mCurrentFrame->Finish(aFrameOpacity, mFinalizeFrames);
+  // If this image isn't a transient image and a full frame, mark it as
+  // optimizable. We don't support optimizing incomplete frames because that is
+  // not what the draw target will be given, and optimizing transient images
+  // isn't worth it.
+  bool optimizable = (!HasAnimation() || ShouldBlendAnimation()) &&
+                     !(mDecoderFlags & DecoderFlags::IMAGE_IS_TRANSIENT);
+  mCurrentFrame->Finish(aFrameOpacity, mFinalizeFrames, optimizable);
 
   mProgress |= FLAG_FRAME_COMPLETE;
 

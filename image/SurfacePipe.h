@@ -717,6 +717,15 @@ public:
     return mHead->WriteEmptyRow();
   }
 
+  /**
+   * Ensures the surface has been fully written to. Any incomplete rows will be
+   * written with empty rows.
+   */
+  void EnsureSurfaceFinished()
+  {
+    while (WriteEmptyRow() != WriteState::FINISHED) { }
+  }
+
   /// @return true if we've finished writing to the surface.
   bool IsSurfaceFinished() const { return mHead->IsSurfaceFinished(); }
 

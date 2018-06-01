@@ -147,22 +147,19 @@ AnimationSurfaceProvider::DrawableRef(size_t aFrame)
   return frame->DrawableRef();
 }
 
-RawAccessFrameRef
-AnimationSurfaceProvider::RawAccessRef(size_t aFrame)
+already_AddRefed<imgFrame>
+AnimationSurfaceProvider::GetFrame(size_t aFrame)
 {
   MutexAutoLock lock(mFramesMutex);
 
   if (Availability().IsPlaceholder()) {
-    MOZ_ASSERT_UNREACHABLE("Calling RawAccessRef() on a placeholder");
-    return RawAccessFrameRef();
+    MOZ_ASSERT_UNREACHABLE("Calling GetFrame() on a placeholder");
+    return nullptr;
   }
 
-  imgFrame* frame = mFrames->Get(aFrame, /* aForDisplay */ false);
-  if (!frame) {
-    return RawAccessFrameRef();
-  }
-
-  return frame->RawAccessRef(/* aOnlyFinished */ true);
+  RefPtr<imgFrame> frame = mFrames->Get(aFrame, /* aForDisplay */ false);
+  MOZ_ASSERT_IF(frame, frame->IsFinished());
+  return frame.forget();
 }
 
 bool
@@ -290,7 +287,7 @@ AnimationSurfaceProvider::CheckForNewFrameAtYield()
     MutexAutoLock lock(mFramesMutex);
 
     // Try to get the new frame from the decoder.
-    RawAccessFrameRef frame = mDecoder->GetCurrentFrameRef();
+    RefPtr<imgFrame> frame = mDecoder->GetCurrentFrame();
     MOZ_ASSERT(mDecoder->HasFrameToTake());
     mDecoder->ClearHasFrameToTake();
 
@@ -350,14 +347,14 @@ AnimationSurfaceProvider::CheckForNewFrameAtTerminalState()
 
     // The decoder may or may not have a new frame for us at this point. Avoid
     // reinserting the same frame again.
-    RawAccessFrameRef frame = mDecoder->GetCurrentFrameRef();
+    RefPtr<imgFrame> frame = mDecoder->GetCurrentFrame();
 
     // If the decoder didn't finish a new frame (ie if, after starting the
     // frame, it got an error and aborted the frame and the rest of the decode)
     // that means it won't be reporting it to the image or FrameAnimator so we
     // should ignore it too, that's what HasFrameToTake tracks basically.
     if (!mDecoder->HasFrameToTake()) {
-      frame = RawAccessFrameRef();
+      frame = nullptr;
     } else {
       MOZ_ASSERT(frame);
       mDecoder->ClearHasFrameToTake();

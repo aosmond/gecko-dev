@@ -91,7 +91,7 @@ ShouldUseHeap(const IntSize& aSize,
 
   // For as long as an animated image is retained, its frames will never be
   // released to let the OS purge volatile buffers.
-  if (aIsAnimated && gfxPrefs::ImageMemAnimatedUseHeap()) {
+  if (aIsAnimated) {
     return true;
   }
 
@@ -366,7 +366,10 @@ imgFrame::InitForDecoder(const nsIntSize& aImageSize,
       return NS_ERROR_OUT_OF_MEMORY;
     }
 
-    if (!ClearSurface(mRawSurface, mFrameRect.Size(), mFormat)) {
+    // We don't clear the surface for animated images. This is because animated
+    // frames aren't accessed until they are fully written.
+    if (postFirstFrame &&
+        !ClearSurface(mRawSurface, mFrameRect.Size(), mFormat)) {
       NS_WARNING("Could not clear allocated buffer");
       mAborted = true;
       return NS_ERROR_OUT_OF_MEMORY;
@@ -767,7 +770,8 @@ imgFrame::ImageUpdatedInternal(const nsIntRect& aUpdateRect)
 
 void
 imgFrame::Finish(Opacity aFrameOpacity /* = Opacity::SOME_TRANSPARENCY */,
-                 bool aFinalize /* = true */)
+                 bool aFinalize /* = true */,
+                 bool aOptimizable /* = false */)
 {
   MonitorAutoLock lock(mMonitor);
   MOZ_ASSERT(mLockCount > 0, "Image data should be locked");
@@ -778,6 +782,7 @@ imgFrame::Finish(Opacity aFrameOpacity /* = Opacity::SOME_TRANSPARENCY */,
     FinalizeSurfaceInternal();
   }
 
+  mOptimizable = aOptimizable;
   mFinished = true;
 
   // The image is now complete, wake up anyone who's waiting.
@@ -931,14 +936,6 @@ imgFrame::UnlockImageData()
   mLockCount--;
 
   return NS_OK;
-}
-
-void
-imgFrame::SetOptimizable()
-{
-  AssertImageDataLocked();
-  MonitorAutoLock lock(mMonitor);
-  mOptimizable = true;
 }
 
 void

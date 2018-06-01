@@ -270,6 +270,8 @@ nsPNGDecoder::EndImageFrame()
 
   mNumFrames++;
 
+  mPipe.EnsureSurfaceFinished();
+
   Opacity opacity = mFormat == SurfaceFormat::B8G8R8X8
                   ? Opacity::FULLY_OPAQUE
                   : Opacity::SOME_TRANSPARENCY;

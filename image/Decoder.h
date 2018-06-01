@@ -431,7 +431,6 @@ public:
    */
   imgFrame* GetCurrentFrame()
   {
-    MOZ_ASSERT(ShouldBlendAnimation());
     return mCurrentFrame.get();
   }
 

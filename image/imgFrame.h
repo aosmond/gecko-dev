@@ -142,9 +142,12 @@ public:
    * @param aFrameOpacity    Whether this imgFrame is opaque.
    * @param aFinalize        Finalize the underlying surface (e.g. so that it
    *                         may be marked as read only if possible).
+   * @param aOptimizable     Whether the underlying surface is allowed to be
+   *                         optimized now that it is complete.
    */
   void Finish(Opacity aFrameOpacity = Opacity::SOME_TRANSPARENCY,
-              bool aFinalize = true);
+              bool aFinalize = true,
+              bool aOptimizable = false);
 
   /**
    * Mark this imgFrame as aborted. This informs the imgFrame that if it isn't
@@ -214,8 +217,6 @@ public:
     MOZ_ASSERT(!mShouldRecycle);
     mShouldRecycle = true;
   }
-
-  void SetOptimizable();
 
   void FinalizeSurface();
   already_AddRefed<SourceSurface> GetSourceSurface();

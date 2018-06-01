@@ -252,6 +252,9 @@ nsGIFDecoder2::EndImageFrame()
 {
   Opacity opacity = Opacity::SOME_TRANSPARENCY;
 
+  // Ensure any unwritten pixels are cleared.
+  mPipe.EnsureSurfaceFinished();
+
   if (mGIFStruct.images_decoded == 0) {
     // We need to send invalidations for the first frame.
     FlushImageData();

@@ -33,7 +33,7 @@ AnimationFrameRetainedQueue::AnimationFrameRetainedQueue(size_t aThreshold,
 }
 
 bool
-AnimationFrameRetainedQueue::InsertInternal(RawAccessFrameRef&& aFrame)
+AnimationFrameRetainedQueue::InsertInternal(RefPtr<imgFrame>&& aFrame)
 {
   // We should only insert new frames if we actually asked for them.
   MOZ_ASSERT(!mSizeKnown);
@@ -133,9 +133,9 @@ AnimationFrameRetainedQueue::IsFirstFrameFinished() const
 }
 
 bool
-AnimationFrameRetainedQueue::IsLastFrame(const RawAccessFrameRef& aFrame) const
+AnimationFrameRetainedQueue::IsLastFrame(imgFrame* aFrame) const
 {
-  return !mFrames.IsEmpty() && mFrames.LastElement().get() == aFrame.get();
+  return !mFrames.IsEmpty() && mFrames.LastElement().get() == aFrame;
 }
 
 void
@@ -144,7 +144,7 @@ AnimationFrameRetainedQueue::AddSizeOfExcludingThis(MallocSizeOf aMallocSizeOf,
                                                     size_t& aNonHeapSizeOut,
                                                     size_t& aExtHandlesOut)
 {
-  for (const RawAccessFrameRef& frame : mFrames) {
+  for (const RefPtr<imgFrame>& frame : mFrames) {
     frame->AddSizeOfExcludingThis(aMallocSizeOf, aHeapSizeOut,
                                   aNonHeapSizeOut, aExtHandlesOut);
   }
@@ -168,7 +168,7 @@ AnimationFrameDiscardingQueue::AnimationFrameDiscardingQueue(AnimationFrameRetai
 }
 
 bool
-AnimationFrameDiscardingQueue::InsertInternal(RawAccessFrameRef&& aFrame)
+AnimationFrameDiscardingQueue::InsertInternal(RefPtr<imgFrame>&& aFrame)
 {
   // Even though we don't use redecoded first frames for display purposes, we
   // will still use them for recycling, so we still need to insert it.
@@ -281,9 +281,9 @@ AnimationFrameDiscardingQueue::IsFirstFrameFinished() const
 }
 
 bool
-AnimationFrameDiscardingQueue::IsLastFrame(const RawAccessFrameRef& aFrame) const
+AnimationFrameDiscardingQueue::IsLastFrame(imgFrame* aFrame) const
 {
-  return !mDisplay.empty() && mDisplay.back().get() == aFrame.get();
+  return !mDisplay.empty() && mDisplay.back().get() == aFrame;
 }
 
 void
@@ -294,7 +294,7 @@ AnimationFrameDiscardingQueue::AddSizeOfExcludingThis(MallocSizeOf aMallocSizeOf
 {
   mFirstFrame->AddSizeOfExcludingThis(aMallocSizeOf, aHeapSizeOut,
                                       aNonHeapSizeOut, aExtHandlesOut);
-  for (const RawAccessFrameRef& frame : mDisplay) {
+  for (const RefPtr<imgFrame>& frame : mDisplay) {
     frame->AddSizeOfExcludingThis(aMallocSizeOf, aHeapSizeOut,
                                   aNonHeapSizeOut, aExtHandlesOut);
   }
@@ -334,7 +334,7 @@ AnimationFrameRecyclingQueue::AdvanceInternal()
   MOZ_ASSERT(!mDisplay.empty());
   MOZ_ASSERT(mDisplay.front());
 
-  RawAccessFrameRef& front = mDisplay.front();
+  RefPtr<imgFrame>& front = mDisplay.front();
 
   // The first frame should always have a dirty rect that matches the frame
   // rect. As such, we should use mFirstFrameRefreshArea instead for recycle
@@ -352,7 +352,7 @@ AnimationFrameRecyclingQueue::AdvanceInternal()
     // dirty rect of all of the frames ahead of us to be displayed, and to be
     // used for recycling. Or in other words, the dirty rect between the
     // recycled frame and the decoded frame which reuses the buffer.
-    for (const RawAccessFrameRef& frame : mDisplay) {
+    for (const RefPtr<imgFrame>& frame : mDisplay) {
       newEntry.mRecycleRect = newEntry.mRecycleRect.Union(frame->GetDirtyRect());
     }
     for (const RecycleEntry& entry : mRecycle) {
@@ -382,9 +382,12 @@ AnimationFrameRecyclingQueue::RecycleFrame(gfx::IntRect& aRecycleRect)
     return RawAccessFrameRef();
   }
 
-  RawAccessFrameRef frame = Move(mRecycle.front().mFrame);
-  if (frame) {
-    aRecycleRect = mRecycle.front().mRecycleRect;
+  RawAccessFrameRef frame;
+  if (mRecycle.front().mFrame) {
+    frame = mRecycle.front().mFrame->RawAccessRef();
+    if (frame) {
+      aRecycleRect = mRecycle.front().mRecycleRect;
+    }
   }
 
   mRecycle.pop_front();

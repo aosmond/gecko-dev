@@ -89,7 +89,7 @@ public:
     return !hasPending && mPending > 0;
   }
 
-  InsertStatus Insert(RawAccessFrameRef&& aFrame)
+  InsertStatus Insert(RefPtr<imgFrame>&& aFrame)
   {
     MOZ_ASSERT(mPending > 0);
     MOZ_ASSERT(aFrame);
@@ -119,7 +119,7 @@ public:
 
   virtual bool IsFirstFrameFinished() const = 0;
 
-  virtual bool IsLastFrame(const RawAccessFrameRef& aFrame) const = 0;
+  virtual bool IsLastFrame(imgFrame* aFrame) const = 0;
 
   virtual bool MarkComplete(const gfx::IntRect& aFirstFrameRefreshArea) = 0;
 
@@ -135,7 +135,7 @@ public:
   }
 
 protected:
-  virtual bool InsertInternal(RawAccessFrameRef&& aFrame) = 0;
+  virtual bool InsertInternal(RefPtr<imgFrame>&& aFrame) = 0;
   virtual void AdvanceInternal() = 0;
   virtual bool ResetInternal() = 0;
 
@@ -158,7 +158,7 @@ public:
 
   imgFrame* Get(size_t aFrame, bool aForDisplay) override;
   bool IsFirstFrameFinished() const override;
-  bool IsLastFrame(const RawAccessFrameRef& aFrame) const override;
+  bool IsLastFrame(imgFrame* aFrame) const override;
   bool MarkComplete(const gfx::IntRect& aFirstFrameRefreshArea) override;
   void AddSizeOfExcludingThis(MallocSizeOf aMallocSizeOf,
                               size_t& aHeapSizeOut,
@@ -169,11 +169,11 @@ private:
   friend class AnimationFrameDiscardingQueue;
   friend class AnimationFrameRecyclingQueue;
 
-  bool InsertInternal(RawAccessFrameRef&& aFrame) override;
+  bool InsertInternal(RefPtr<imgFrame>&& aFrame) override;
   void AdvanceInternal() override;
   bool ResetInternal() override;
 
-  nsTArray<RawAccessFrameRef> mFrames;
+  nsTArray<RefPtr<imgFrame>> mFrames;
   size_t mThreshold;
 };
 
@@ -184,7 +184,7 @@ public:
 
   imgFrame* Get(size_t aFrame, bool aForDisplay) final;
   bool IsFirstFrameFinished() const final;
-  bool IsLastFrame(const RawAccessFrameRef& aFrame) const final;
+  bool IsLastFrame(imgFrame* aFrame) const final;
   bool MarkComplete(const gfx::IntRect& aFirstFrameRefreshArea) override;
   void AddSizeOfExcludingThis(MallocSizeOf aMallocSizeOf,
                               size_t& aHeapSizeOut,
@@ -192,7 +192,7 @@ public:
                               size_t& aExtHandlesOut) override;
 
 protected:
-  bool InsertInternal(RawAccessFrameRef&& aFrame) override;
+  bool InsertInternal(RefPtr<imgFrame>&& aFrame) override;
   void AdvanceInternal() override;
   bool ResetInternal() override;
 
@@ -200,10 +200,10 @@ protected:
 
   /// Queue storing frames to be displayed by the animator. The first frame in
   /// the queue is the currently displayed frame.
-  std::deque<RawAccessFrameRef> mDisplay;
+  std::deque<RefPtr<imgFrame>> mDisplay;
 
   /// The first frame which is never replaced.
-  RawAccessFrameRef mFirstFrame;
+  RefPtr<imgFrame> mFirstFrame;
 };
 
 class AnimationFrameRecyclingQueue final : public AnimationFrameDiscardingQueue
@@ -246,7 +246,7 @@ protected:
     RecycleEntry(const RecycleEntry& aOther) = delete;
     RecycleEntry& operator=(const RecycleEntry& aOther) = delete;
 
-    RawAccessFrameRef mFrame;  // The frame containing the buffer to recycle.
+    RefPtr<imgFrame> mFrame;   // The frame containing the buffer to recycle.
     gfx::IntRect mDirtyRect;   // The dirty rect of the frame itself.
     gfx::IntRect mRecycleRect; // The dirty rect between the recycled frame and
                                // the future frame that will be written to it.
