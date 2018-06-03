@@ -359,13 +359,17 @@ public:
   BlendAnimationFilter()
     : mRow(0)
     , mRowLength(0)
+    , mRecycleRow(0)
+    , mRecycleRowMost(0)
+    , mRecycleRowOffset(0)
+    , mRecycleRowLength(0)
     , mOverProc(nullptr)
     , mBaseFrameStartPtr(nullptr)
     , mBaseFrameRowPtr(nullptr)
   { }
 
   template <typename... Rest>
-  nsresult Configure(const BlendAnimationConfig& aConfig, Rest... aRest)
+  nsresult Configure(const BlendAnimationConfig& aConfig, Rest&... aRest)
   {
     nsresult rv = mNext.Configure(aRest...);
     if (NS_FAILED(rv)) {
@@ -470,6 +474,15 @@ public:
         mClearRect = outputRect;
       }
     }
+
+    // We may be able to reuse parts of our underlying buffer that we are
+    // writing the new frame to. The recycle rect gives us the invalidation
+    // region which needs to be copied from the restore frame.
+    const gfx::IntRect& recycleRect = aConfig.mDecoder->GetRecycleRect();
+    mRecycleRow = recycleRect.y;
+    mRecycleRowMost = recycleRect.YMost();
+    mRecycleRowOffset = recycleRect.x * sizeof(uint32_t);
+    mRecycleRowLength = recycleRect.width * sizeof(uint32_t);
 
     // The dirty rect, or delta between the current frame and the previous frame
     // (chronologically, not necessarily the restore frame) is the last
@@ -623,9 +636,16 @@ private:
       return;
     }
 
+    // No need to copy pixels from the base frame for rows that will not change
+    // between the recycled frame and the new frame.
+    bool needBaseFrame = mRow >= mRecycleRow &&
+                         mRow < mRecycleRowMost;
+
     if (!mBaseFrameRowPtr) {
       // No base frame, so we are clearing everything.
-      memset(dest, 0, mRowLength);
+      if (needBaseFrame) {
+        memset(dest + mRecycleRowOffset, 0, mRecycleRowLength);
+      }
     } else if (mClearRect.height > 0 &&
                mClearRect.y <= mRow &&
                mClearRect.YMost() > mRow) {
@@ -639,8 +659,10 @@ private:
       memcpy(dest, mBaseFrameRowPtr, prefixLength);
       memset(dest + prefixLength, 0, clearLength);
       memcpy(dest + postfixOffset, mBaseFrameRowPtr + postfixOffset, postfixLength);
-    } else {
-      memcpy(dest, mBaseFrameRowPtr, mRowLength);
+    } else if (needBaseFrame) {
+      memcpy(dest + mRecycleRowOffset,
+             mBaseFrameRowPtr + mRecycleRowOffset,
+             mRecycleRowLength);
     }
   }
 
@@ -688,6 +710,10 @@ private:
   int32_t  mRow;                       /// The row in unclamped frame rect space
                                        /// that we're currently writing.
   size_t mRowLength;                   /// Length in bytes of a row.
+  int32_t mRecycleRow;                 /// The starting row of the recycle rect.
+  int32_t mRecycleRowMost;             /// The ending row of the recycle rect.
+  size_t mRecycleRowOffset;            /// Row offset in bytes of the recycle rect.
+  size_t mRecycleRowLength;            /// Row length in bytes of the recycle rect.
   SkBlitRow::Proc32 mOverProc;         /// Function pointer to perform over blending.
   const uint8_t* mBaseFrameStartPtr;   /// Starting row pointer to the base frame
                                        /// data from which we copy pixel data from.
