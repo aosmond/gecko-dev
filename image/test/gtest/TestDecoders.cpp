@@ -606,7 +606,7 @@ TEST_F(ImageDecoders, AnimatedGIFWithFRAME_FIRST)
     EXPECT_TRUE(NS_SUCCEEDED(result.Surface().Seek(0)));
     EXPECT_TRUE(bool(result.Surface()));
 
-    RawAccessFrameRef partialFrame = result.Surface().RawAccessRef(1);
+    RefPtr<imgFrame> partialFrame = result.Surface().GetFrame(1);
     EXPECT_TRUE(bool(partialFrame));
   }
 
@@ -692,7 +692,7 @@ TEST_F(ImageDecoders, AnimatedGIFWithFRAME_CURRENT)
     EXPECT_TRUE(NS_SUCCEEDED(result.Surface().Seek(0)));
     EXPECT_TRUE(bool(result.Surface()));
 
-    RawAccessFrameRef partialFrame = result.Surface().RawAccessRef(1);
+    RefPtr<imgFrame> partialFrame = result.Surface().GetFrame(1);
     EXPECT_TRUE(bool(partialFrame));
   }
 
@@ -735,7 +735,7 @@ TEST_F(ImageDecoders, AnimatedGIFWithFRAME_CURRENT)
     EXPECT_TRUE(NS_SUCCEEDED(result.Surface().Seek(0)));
     EXPECT_TRUE(bool(result.Surface()));
 
-    RawAccessFrameRef partialFrame = result.Surface().RawAccessRef(1);
+    RefPtr<imgFrame> partialFrame = result.Surface().GetFrame(1);
     EXPECT_TRUE(bool(partialFrame));
   }
 }
@@ -804,7 +804,7 @@ TEST_F(ImageDecoders, AnimatedGIFWithExtraImageSubBlocks)
   EXPECT_TRUE(NS_SUCCEEDED(result.Surface().Seek(0)));
   EXPECT_TRUE(bool(result.Surface()));
 
-  RawAccessFrameRef partialFrame = result.Surface().RawAccessRef(1);
+  RefPtr<imgFrame> partialFrame = result.Surface().GetFrame(1);
   EXPECT_TRUE(bool(partialFrame));
 }
 
