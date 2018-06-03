@@ -352,7 +352,7 @@ private: // methods
    */
   RefreshResult AdvanceFrame(AnimationState& aState,
                              DrawableSurface& aFrames,
-                             RawAccessFrameRef& aCurrentFrame,
+                             RefPtr<imgFrame>& aCurrentFrame,
                              TimeStamp aTime);
 
   /**
