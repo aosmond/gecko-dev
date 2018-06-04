@@ -395,7 +395,17 @@ AnimationSurfaceProvider::CheckForNewFrameAtTerminalState()
 void
 AnimationSurfaceProvider::RequestFrameDiscarding()
 {
-  MOZ_ASSERT_UNREACHABLE("Missing implementation");
+  mDecodingMutex.AssertCurrentThreadOwns();
+  mFramesMutex.AssertCurrentThreadOwns();
+  MOZ_ASSERT(mDecoder);
+
+  if (mFrames->MayDiscard()) {
+    MOZ_ASSERT_UNREACHABLE("Already replaced frame queue!");
+    return;
+  }
+
+  auto oldFrameQueue = static_cast<AnimationFrameRetainedQueue*>(mFrames.get());
+  mFrames.reset(new AnimationFrameDiscardingQueue(std::move(*oldFrameQueue)));
 }
 
 void
