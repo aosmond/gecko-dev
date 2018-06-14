@@ -97,6 +97,10 @@ public:
 
   bool ShouldContinueFromReplyTimeout() override;
 
+  mozilla::ipc::IPCResult
+  RecvDidAdvanceSharedSurfacePipeline(const wr::PipelineId& aPipelineId,
+                                      const wr::ExternalImageId& aId) override;
+
 private:
   static StaticRefPtr<CompositorManagerChild> sInstance;
 

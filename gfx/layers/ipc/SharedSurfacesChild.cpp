@@ -433,5 +433,21 @@ SharedSurfacesChild::Unshare(const wr::ExternalImageId& aId,
   }
 }
 
+/* static */ nsresult
+SharedSurfacesChild::AddPipeline(wr::PipelineId& aId)
+{
+}
+
+/* static */ void
+SharedSurfacesChild::RemovePipeline(const wr::PipelineId& aId)
+{
+}
+
+/* static */ void
+SharedSurfacesChild::DidAdvanceForPipeline(const wr::PipelineId& aId,
+                                           const wr::ExternalImageId& aImageId)
+{
+}
+
 } // namespace layers
 } // namespace mozilla

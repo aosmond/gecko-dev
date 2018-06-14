@@ -17,6 +17,7 @@ using mozilla::gfx::IntSize from "mozilla/gfx/2D.h";
 using mozilla::ipc::SharedMemoryBasic::Handle from "mozilla/ipc/SharedMemoryBasic.h";
 using mozilla::layers::CompositorOptions from "mozilla/layers/CompositorOptions.h";
 using mozilla::wr::ExternalImageId from "mozilla/webrender/WebRenderTypes.h";
+using mozilla::wr::PipelineId from "mozilla/webrender/WebRenderTypes.h";
 
 namespace mozilla {
 namespace layers {
@@ -75,6 +76,12 @@ parent:
 
   async AddSharedSurface(ExternalImageId aId, SurfaceDescriptorShared aDesc);
   async RemoveSharedSurface(ExternalImageId aId);
+  async AddSharedSurfacePipeline(PipelineId aId);
+  async RemoveSharedSurfacePipeline(PipelineId aId);
+  async BindSharedSurfaceToPipeline(PipelineId aId, ExternalImageId aImageId, int32_t aFrameTimeout);
+
+child:
+  async DidAdvanceSharedSurfacePipeline(PipelineId aId, ExternalImageId aImageId);
 };
 
 } // layers

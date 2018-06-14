@@ -847,6 +847,16 @@ WebRenderBridgeParent::ProcessWebRenderParentCommands(const InfallibleTArray<Web
         RemovePipelineIdForCompositable(op.pipelineId(), aTxn);
         break;
       }
+      case WebRenderParentCommand::TOpAddPipelineIdForSharedSurface: {
+        const OpAddPipelineIdForSharedSurface& op = cmd.get_OpAddPipelineIdForSharedSurface();
+        AddPipelineIdForSharedSurface(op.pipelineId());
+        break;
+      }
+      case WebRenderParentCommand::TOpRemovePipelineIdForSharedSurface: {
+        const OpRemovePipelineIdForSharedSurface& op = cmd.get_OpRemovePipelineIdForSharedSurface();
+        RemovePipelineIdForSharedSurface(op.pipelineId());
+        break;
+      }
       case WebRenderParentCommand::TOpAddExternalImageIdForCompositable: {
         const OpAddExternalImageIdForCompositable& op = cmd.get_OpAddExternalImageIdForCompositable();
         AddExternalImageIdForCompositable(op.externalImageId(),
@@ -1062,6 +1072,16 @@ WebRenderBridgeParent::RemovePipelineIdForCompositable(const wr::PipelineId& aPi
   aTxn.RemovePipeline(aPipelineId);
   mAsyncCompositables.Remove(wr::AsUint64(aPipelineId));
   return;
+}
+
+void
+WebRenderBridgeParent::AddPipelineIdForSharedSurface(const wr::PipelineId& aPipelineId)
+{
+}
+
+void
+WebRenderBridgeParent::RemovePipelineIdForSharedSurface(const wr::PipelineId& aPipelineId)
+{
 }
 
 void

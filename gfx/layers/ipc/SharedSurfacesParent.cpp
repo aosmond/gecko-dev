@@ -204,5 +204,36 @@ SharedSurfacesParent::Remove(const wr::ExternalImageId& aId)
   MOZ_ASSERT(rv);
 }
 
+/* static */ void
+SharedSurfacesParent::AddPipeline(const wr::PipelineId& aId,
+                                  base::ProcessId aPid)
+{
+}
+
+/* static */ void
+SharedSurfacesParent::RemovePipeline(const wr::PipelineId& aId,
+                                     base::ProcessId aPid)
+{
+}
+
+/* static */ void
+SharedSurfacesParent::BindToPipeline(const wr::PipelineId& aId,
+                                     const wr::ExternalImageId& aImageId,
+                                     int32_t aFrameTimeout,
+                                     base::ProcessId aPid)
+{
+}
+
+#if 0
+// FIXME: what about pipeline parameters like an image key from WRLM,
+// and various sizing information
+/* static */ void
+SharedSurfacesParent::ConfigurePipeline(const wr::PipelineId& aId,
+                                        const wr::ImageKey& aImageKey,
+                                        base::ProcessId aPid)
+{
+}
+#endif
+
 } // namespace layers
 } // namespace mozilla

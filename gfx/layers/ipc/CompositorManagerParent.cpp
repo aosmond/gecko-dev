@@ -288,5 +288,28 @@ CompositorManagerParent::RecvRemoveSharedSurface(const wr::ExternalImageId& aId)
   return IPC_OK();
 }
 
+mozilla::ipc::IPCResult
+CompositorManagerParent::RecvAddSharedSurfacePipeline(const wr::PipelineId& aId)
+{
+  SharedSurfacesParent::AddPipeline(aId, OtherPid());
+  return IPC_OK();
+}
+
+mozilla::ipc::IPCResult
+CompositorManagerParent::RecvRemoveSharedSurfacePipeline(const wr::PipelineId& aId)
+{
+  SharedSurfacesParent::RemovePipeline(aId, OtherPid());
+  return IPC_OK();
+}
+
+mozilla::ipc::IPCResult
+CompositorManagerParent::RecvBindSharedSurfaceToPipeline(const wr::PipelineId& aId,
+                                                         const wr::ExternalImageId& aImageId,
+                                                         const int32_t& aFrameTimeout)
+{
+  SharedSurfacesParent::BindToPipeline(aId, aImageId, aFrameTimeout, OtherPid());
+  return IPC_OK();
+}
+
 } // namespace layers
 } // namespace mozilla

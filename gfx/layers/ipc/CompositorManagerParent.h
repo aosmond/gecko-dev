@@ -43,6 +43,11 @@ public:
   mozilla::ipc::IPCResult RecvAddSharedSurface(const wr::ExternalImageId& aId,
                                                const SurfaceDescriptorShared& aDesc) override;
   mozilla::ipc::IPCResult RecvRemoveSharedSurface(const wr::ExternalImageId& aId) override;
+  mozilla::ipc::IPCResult RecvAddSharedSurfacePipeline(const wr::PipelineId& aId) override;
+  mozilla::ipc::IPCResult RecvRemoveSharedSurfacePipeline(const wr::PipelineId& aId) override;
+  mozilla::ipc::IPCResult RecvBindSharedSurfaceToPipeline(const wr::PipelineId& aId,
+                                                          const wr::ExternalImageId& aImageId,
+                                                          const int32_t& aFrameTimeout) override;
 
   void BindComplete();
   void ActorDestroy(ActorDestroyReason aReason) override;

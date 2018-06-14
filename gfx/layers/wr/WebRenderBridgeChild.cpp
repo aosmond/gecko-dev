@@ -213,6 +213,20 @@ WebRenderBridgeChild::RemovePipelineIdForCompositable(const wr::PipelineId& aPip
     OpRemovePipelineIdForCompositable(aPipelineId));
 }
 
+void
+WebRenderBridgeChild::AddPipelineIdForSharedSurface(const wr::PipelineId& aPipelineId)
+{
+  AddWebRenderParentCommand(
+    OpAddPipelineIdForSharedSurface(aPipelineId));
+}
+
+void
+WebRenderBridgeChild::RemovePipelineIdForSharedSurface(const wr::PipelineId& aPipelineId)
+{
+  AddWebRenderParentCommand(
+    OpRemovePipelineIdForSharedSurface(aPipelineId));
+}
+
 wr::ExternalImageId
 WebRenderBridgeChild::GetNextExternalImageId()
 {

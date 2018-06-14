@@ -99,6 +99,8 @@ public:
   void AddPipelineIdForCompositable(const wr::PipelineId& aPipelineId,
                                     const CompositableHandle& aHandlee);
   void RemovePipelineIdForCompositable(const wr::PipelineId& aPipelineId);
+  void AddPipelineIdForSharedSurface(const wr::PipelineId& aPipelineId);
+  void RemovePipelineIdForSharedSurface(const wr::PipelineId& aPipelineId);
 
   wr::ExternalImageId AllocExternalImageIdForCompositable(CompositableClient* aCompositable);
   void DeallocExternalImageId(const wr::ExternalImageId& aImageId);

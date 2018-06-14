@@ -65,6 +65,14 @@ struct OpRemovePipelineIdForCompositable {
   PipelineId pipelineId;
 };
 
+struct OpAddPipelineIdForSharedSurface {
+  PipelineId pipelineId;
+};
+
+struct OpRemovePipelineIdForSharedSurface {
+  PipelineId pipelineId;
+};
+
 struct OpAddExternalImageIdForCompositable {
   ExternalImageId externalImageId;
   CompositableHandle handle;
@@ -91,6 +99,8 @@ union WebRenderParentCommand {
   OpUpdateAsyncImagePipeline;
   CompositableOperation;
   OpAddCompositorAnimations;
+  OpAddPipelineIdForSharedSurface;
+  OpRemovePipelineIdForSharedSurface;
 };
 
 struct OffsetRange {

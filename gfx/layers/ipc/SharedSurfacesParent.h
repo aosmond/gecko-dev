@@ -52,6 +52,17 @@ public:
 
   static void Remove(const wr::ExternalImageId& aId);
 
+  static void AddPipeline(const wr::PipelineId& aId,
+                          base::ProcessId aPid);
+
+  static void RemovePipeline(const wr::PipelineId& aId,
+                             base::ProcessId aPid);
+
+  static void BindToPipeline(const wr::PipelineId& aId,
+                             const wr::ExternalImageId& aImageId,
+                             int32_t aFrameTimeout,
+                             base::ProcessId aPid);
+
   static void DestroyProcess(base::ProcessId aPid);
 
   ~SharedSurfacesParent();

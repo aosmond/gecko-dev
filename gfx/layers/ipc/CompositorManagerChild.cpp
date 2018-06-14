@@ -10,6 +10,7 @@
 #include "mozilla/layers/CompositorBridgeChild.h"
 #include "mozilla/layers/CompositorManagerParent.h"
 #include "mozilla/layers/CompositorThread.h"
+#include "mozilla/layers/SharedSurfacesChild.h"
 #include "mozilla/gfx/gfxVars.h"
 #include "mozilla/gfx/GPUProcessManager.h"
 #include "mozilla/dom/ContentChild.h"   // for ContentChild
@@ -304,6 +305,14 @@ CompositorManagerChild::ShouldContinueFromReplyTimeout()
     GPUProcessManager::Get()->KillProcess();
   }
   return false;
+}
+
+mozilla::ipc::IPCResult
+CompositorManagerChild::RecvDidAdvanceSharedSurfacePipeline(const wr::PipelineId& aId,
+                                                            const wr::ExternalImageId& aImageId)
+{
+  SharedSurfacesChild::DidAdvanceForPipeline(aId, aImageId);
+  return IPC_OK();
 }
 
 } // namespace layers

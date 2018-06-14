@@ -71,6 +71,13 @@ public:
                         wr::IpcResourceUpdateQueue& aResources,
                         wr::ImageKey& aKey);
 
+  static nsresult AddPipeline(wr::PipelineId& aId);
+
+  static void RemovePipeline(const wr::PipelineId& aId);
+
+  static void DidAdvanceForPipeline(const wr::PipelineId& aId,
+                                    const wr::ExternalImageId& aImageId);
+
 private:
   SharedSurfacesChild() = delete;
   ~SharedSurfacesChild() = delete;
