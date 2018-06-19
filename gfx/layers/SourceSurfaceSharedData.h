@@ -78,10 +78,23 @@ public:
     return ++mConsumers == 1;
   }
 
-  bool RemoveConsumer()
+  bool RemoveConsumer(Maybe<wr::PipelineId>& aId)
   {
     MOZ_ASSERT(mConsumers > 0);
-    return --mConsumers == 0;
+    --mConsumers;
+    if (mConsumers <= 1) {
+      aId = mPipeline;
+    }
+    return mConsumers == 0;
+  }
+
+  bool MaybeSetPipeline(const wr::PipelineId& aId)
+  {
+    if (mPipeline) {
+      return mPipeline.ref() == aId;
+    }
+    mPipeline.emplace(aId);
+    return true;
   }
 
 private:
@@ -101,6 +114,7 @@ private:
   RefPtr<SharedMemoryBasic> mBuf;
   SurfaceFormat mFormat;
   base::ProcessId mCreatorPid;
+  Maybe<wr::PipelineId> mPipeline;
 };
 
 /**

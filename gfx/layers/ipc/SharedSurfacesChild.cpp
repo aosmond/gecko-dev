@@ -436,6 +436,7 @@ SharedSurfacesChild::Unshare(const wr::ExternalImageId& aId,
 /* static */ nsresult
 SharedSurfacesChild::AddPipeline(wr::PipelineId& aId)
 {
+  return NS_ERROR_FAILURE;
 }
 
 /* static */ void

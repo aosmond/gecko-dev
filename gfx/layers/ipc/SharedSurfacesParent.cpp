@@ -92,6 +92,15 @@ SharedSurfacesParent::Release(const wr::ExternalImageId& aId)
     return false;
   }
 
+  return ReleaseLocked(aId);
+}
+
+/* static */ bool
+SharedSurfacesParent::ReleaseLocked(const wr::ExternalImageId& aId)
+{
+  MOZ_ASSERT(sInstance);
+  sMutex.AssertCurrentThreadOwns();
+
   uint64_t id = wr::AsUint64(aId);
   RefPtr<SourceSurfaceSharedDataWrapper> surface;
   sInstance->mSurfaces.Get(wr::AsUint64(aId), getter_AddRefs(surface));
@@ -99,9 +108,18 @@ SharedSurfacesParent::Release(const wr::ExternalImageId& aId)
     return false;
   }
 
-  if (surface->RemoveConsumer()) {
+  Maybe<wr::PipelineId> pipelineId;
+  if (surface->RemoveConsumer(pipelineId)) {
     wr::RenderThread::Get()->UnregisterExternalImage(id);
     sInstance->mSurfaces.Remove(id);
+  }
+
+  if (pipelineId) {
+    Pipeline* pipeline =
+      sInstance->mPipelines.Get(wr::AsUint64(pipelineId.ref()));
+    if (pipeline) {
+      pipeline->MayRecycle(aId);
+    }
   }
 
   return true;
@@ -158,7 +176,9 @@ SharedSurfacesParent::DestroyProcess(base::ProcessId aPid)
   // lot of surfaces still bound that require unmapping.
   for (auto i = sInstance->mSurfaces.Iter(); !i.Done(); i.Next()) {
     SourceSurfaceSharedDataWrapper* surface = i.Data();
-    if (surface->GetCreatorPid() == aPid && surface->RemoveConsumer()) {
+    Maybe<wr::PipelineId> pipelineId;
+    if (surface->GetCreatorPid() == aPid &&
+        surface->RemoveConsumer(pipelineId)) {
       wr::RenderThread::Get()->UnregisterExternalImage(i.Key());
       i.Remove();
     }
@@ -208,12 +228,33 @@ SharedSurfacesParent::Remove(const wr::ExternalImageId& aId)
 SharedSurfacesParent::AddPipeline(const wr::PipelineId& aId,
                                   base::ProcessId aPid)
 {
+  StaticMutexAutoLock lock(sMutex);
+  if (!sInstance) {
+    return;
+  }
+
+  uint64_t id = wr::AsUint64(aId);
+  DebugOnly<Pipeline*> pipeline =
+    sInstance->mPipelines.LookupOrAdd(id, aId, aPid);
+  MOZ_ASSERT(pipeline->GetCreatorPid() == aPid);
 }
 
 /* static */ void
 SharedSurfacesParent::RemovePipeline(const wr::PipelineId& aId,
                                      base::ProcessId aPid)
 {
+  StaticMutexAutoLock lock(sMutex);
+  if (!sInstance) {
+    return;
+  }
+
+  uint64_t id = wr::AsUint64(aId);
+  Pipeline* pipeline = sInstance->mPipelines.Get(id);
+  if (!pipeline || pipeline->GetCreatorPid() != aPid) {
+    return;
+  }
+
+  sInstance->mPipelines.Remove(id);
 }
 
 /* static */ void
@@ -222,6 +263,151 @@ SharedSurfacesParent::BindToPipeline(const wr::PipelineId& aId,
                                      int32_t aFrameTimeout,
                                      base::ProcessId aPid)
 {
+  StaticMutexAutoLock lock(sMutex);
+  if (!sInstance) {
+    return;
+  }
+
+  Pipeline* pipeline = sInstance->mPipelines.Get(wr::AsUint64(aId));
+  if (!pipeline || pipeline->GetCreatorPid() != aPid) {
+    MOZ_ASSERT_UNREACHABLE("Invalid pipeline!");
+    return;
+  }
+
+  // FIXME: ensure the surface format types match!
+  RefPtr<SourceSurfaceSharedDataWrapper> surface;
+  sInstance->mSurfaces.Get(wr::AsUint64(aImageId), getter_AddRefs(surface));
+  if (!surface || surface->GetCreatorPid() != aPid ||
+      !surface->MaybeSetPipeline(aId)) {
+    MOZ_ASSERT_UNREACHABLE("Invalid surface!");
+    return;
+  }
+
+  DebugOnly<bool> rv = surface->AddConsumer();
+  MOZ_ASSERT(!rv);
+  pipeline->Add(aImageId, aFrameTimeout);
+}
+
+/* static */ Maybe<wr::ExternalImageId>
+SharedSurfacesParent::AdvancePipeline(const wr::PipelineId& aId,
+                                      const TimeStamp& aTime)
+{
+  StaticMutexAutoLock lock(sMutex);
+  if (!sInstance) {
+    return Nothing();
+  }
+
+  Pipeline* pipeline = sInstance->mPipelines.Get(wr::AsUint64(aId));
+  if (!pipeline) {
+    MOZ_ASSERT_UNREACHABLE("Invalid pipeline!");
+    return Nothing();
+  }
+
+  return pipeline->Advance(aTime);
+}
+
+Maybe<wr::ExternalImageId>
+SharedSurfacesParent::Pipeline::Advance(const TimeStamp& aTime)
+{
+  if (!mHeadExpiryTime) {
+    if (mEntries.empty()) {
+      return Nothing();
+    }
+
+    mHeadExpiryTime.emplace(mEntries.front().ExpiryTime(aTime));
+  }
+
+  MOZ_ASSERT(!mEntries.empty());
+  while (aTime >= *mHeadExpiryTime) {
+    if (mEntries.size() <= 1) {
+      break;
+    }
+
+    if (!mDiscarding) {
+      PipelineEntry tmp = std::move(mEntries.front());
+      if (mHasLastFrame) {
+        mEntries.push_back(std::move(tmp));
+      } else {
+        mDiscardEntries.push_back(std::move(tmp));
+      }
+    }
+
+    mEntries.pop_front();
+    mHeadExpiryTime = Some(mEntries.front().ExpiryTime(mHeadExpiryTime.ref()));
+  }
+
+  // FIXME: let content process know which entry is the new current frame
+  return mEntries.front().TakeId();
+}
+
+void
+SharedSurfacesParent::Pipeline::Reset()
+{
+  mHeadExpiryTime.reset();
+
+  if (mDiscarding) {
+    // If we are discarding, the owner will just discard everything, so no need
+    // to preserve our state. We'll get the new first frame push to us again.
+    mEntries.clear();
+    mDiscardEntries.clear();
+    return;
+  }
+
+  if (!mHasLastFrame) {
+    // If we aren't discarding, and we don't know what the last frame is, then
+    // we know we preserved the original frames, in order, in the discard queue.
+    // Just add them to the front of the queue again.
+    while (!mDiscardEntries.empty()) {
+      mEntries.push_front(std::move(mDiscardEntries.back()));
+      mDiscardEntries.pop_back();
+    }
+  } else if (mEntries.empty()) {
+    // We didn't get any frames yet.
+    return;
+  } else {
+    // If we aren't discarding, and we have the last frame, then we just need to
+    // shuffle the queue forward to start at the first frame.
+    uint32_t frameIndex = mEntries.front().FrameIndex();
+    while (mEntries.front().FrameIndex()) {
+      PipelineEntry tmp = std::move(mEntries.front());
+      mEntries.pop_front();
+      mEntries.push_back(std::move(tmp));
+
+      if (frameIndex == mEntries.front().FrameIndex()) {
+        MOZ_ASSERT_UNREACHABLE("Not discarding but doesn't have first frame!");
+        break;
+      }
+    }
+  }
+
+  MOZ_ASSERT(mEntries.front().FrameIndex() == 0);
+}
+
+void
+SharedSurfacesParent::Pipeline::SetDiscarding()
+{
+  MOZ_ASSERT(!mDiscarding);
+  MOZ_ASSERT(!mHasLastFrame);
+  mDiscarding = true;
+  mDiscardEntries.clear();
+}
+
+void
+SharedSurfacesParent::Pipeline::SetHasLastFrame()
+{
+  mHasLastFrame = true;
+  while (!mDiscardEntries.empty()) {
+    mEntries.push_back(std::move(mDiscardEntries.front()));
+    mDiscardEntries.pop_front();
+  }
+}
+
+void
+SharedSurfacesParent::Pipeline::MayRecycle(const wr::ExternalImageId& aId)
+{
+  if (mDiscarding) {
+    // FIXME: let content process know the surface can be recycled
+  }
 }
 
 #if 0
@@ -229,7 +415,7 @@ SharedSurfacesParent::BindToPipeline(const wr::PipelineId& aId,
 // and various sizing information
 /* static */ void
 SharedSurfacesParent::ConfigurePipeline(const wr::PipelineId& aId,
-                                        const wr::ImageKey& aImageKey,
+                                        WebRenderBridgeParent* aParent,
                                         base::ProcessId aPid)
 {
 }
