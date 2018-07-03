@@ -41,6 +41,7 @@ DOM_PREF(EnableAutoDeclineCanvasPrompts, "privacy.resistFingerprinting.autoDecli
 DOM_PREF(DevToolsEnabled, "devtools.enabled")
 DOM_PREF(PerformanceObserverEnabled, "dom.enable_performance_observer")
 DOM_PREF(IndexedDBStorageOptionsEnabled, "dom.indexedDB.storageOption.enabled")
+DOM_PREF(ImageDecodingAttrEnabled, "dom.image.decoding_attr.enabled")
 #ifdef JS_BUILD_BINAST
 DOM_PREF(BinASTEncodingEnabled, "dom.script_loader.binast_encoding.enabled")
 #endif
@@ -59,6 +60,7 @@ DOM_WEBIDL_PREF(WebkitBlinkDirectoryPickerEnabled)
 DOM_WEBIDL_PREF(NetworkInformationEnabled)
 DOM_WEBIDL_PREF(FetchObserverEnabled)
 DOM_WEBIDL_PREF(PerformanceObserverEnabled)
+DOM_WEBIDL_PREF(ImageDecodingAttrEnabled)
 
 DOM_UINT32_PREF(WorkerCancelingTimeoutMillis,
                 "dom.worker.canceling.timeoutMilliseconds",

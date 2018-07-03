@@ -206,6 +206,9 @@ pref("dom.gamepad.non_standard_events.enabled", true);
 pref("dom.gamepad.extensions.enabled", true);
 pref("dom.gamepad.haptic_feedback.enabled", true);
 
+// Enable the decoding attribute on img elements
+pref("dom.image.decoding_attr.enabled", true);
+
 // If this is true, TextEventDispatcher dispatches keydown and keyup events
 // even during composition (keypress events are never fired during composition
 // even if this is true).

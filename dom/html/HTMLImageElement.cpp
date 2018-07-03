@@ -404,6 +404,9 @@ HTMLImageElement::AfterSetAttr(int32_t aNameSpaceID, nsAtom* aName,
     PictureSourceSizesChanged(this, attrVal.String(), aNotify);
   } else if (aName == nsGkAtoms::decoding &&
              aNameSpaceID == kNameSpaceID_None) {
+    if (!DOMPrefs::ImageDecodingAttrEnabled()) {
+      return NS_ERROR_DOM_NOT_SUPPORTED_ERR;
+    }
     // Request sync or async image decoding.
     SetSyncDecodingHint(aValue &&
                         aValue->GetEnumValue() == NS_IMAGE_DECODING_SYNC);
