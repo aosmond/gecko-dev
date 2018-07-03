@@ -25,6 +25,7 @@
 #include "nsContentPolicyUtils.h"
 #include "nsIDOMWindow.h"
 #include "nsFocusManager.h"
+#include "mozilla/dom/DOMPrefs.h"
 #include "mozilla/dom/HTMLFormElement.h"
 #include "mozilla/dom/MutationEventBinding.h"
 #include "nsAttrValueOrString.h"
@@ -72,6 +73,19 @@ static bool IsPreviousSibling(nsINode *aSubject, nsINode *aNode)
 
 namespace mozilla {
 namespace dom {
+
+#define NS_IMAGE_DECODING_AUTO    0
+#define NS_IMAGE_DECODING_ASYNC   1
+#define NS_IMAGE_DECODING_SYNC    2
+
+static const nsAttrValue::EnumTable kDecodingTable[] = {
+  { "auto",   NS_IMAGE_DECODING_AUTO },
+  { "async",  NS_IMAGE_DECODING_ASYNC },
+  { "sync",   NS_IMAGE_DECODING_SYNC },
+  { nullptr,  0 }
+};
+
+static const nsAttrValue::EnumTable* kDecodingTableDefault = &kDecodingTable[0];
 
 // Calls LoadSelectedImage on host element unless it has been superseded or
 // canceled -- this is the synchronous section of "update the image data".
@@ -222,6 +236,12 @@ HTMLImageElement::Y()
   return GetXY().y;
 }
 
+void
+HTMLImageElement::GetDecoding(nsAString& aValue)
+{
+  GetEnumAttr(nsGkAtoms::decoding, kDecodingTableDefault->tag, aValue);
+}
+
 bool
 HTMLImageElement::ParseAttribute(int32_t aNamespaceID,
                                  nsAtom* aAttribute,
@@ -236,6 +256,10 @@ HTMLImageElement::ParseAttribute(int32_t aNamespaceID,
     if (aAttribute == nsGkAtoms::crossorigin) {
       ParseCORSValue(aValue, aResult);
       return true;
+    }
+    if (aAttribute == nsGkAtoms::decoding) {
+      return aResult.ParseEnumValue(aValue, kDecodingTable, false,
+                                    kDecodingTableDefault);
     }
     if (ParseImageAttribute(aAttribute, aValue, aResult)) {
       return true;
@@ -378,6 +402,11 @@ HTMLImageElement::AfterSetAttr(int32_t aNameSpaceID, nsAtom* aName,
     mUseUrgentStartForChannel = EventStateManager::IsHandlingUserInput();
 
     PictureSourceSizesChanged(this, attrVal.String(), aNotify);
+  } else if (aName == nsGkAtoms::decoding &&
+             aNameSpaceID == kNameSpaceID_None) {
+    // Request sync or async image decoding.
+    SetSyncDecodingHint(aValue &&
+                        aValue->GetEnumValue() == NS_IMAGE_DECODING_SYNC);
   }
 
   return nsGenericHTMLElement::AfterSetAttr(aNameSpaceID, aName,
