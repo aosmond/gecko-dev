@@ -26,19 +26,25 @@ public:
                const wr::ImageKey& aImageKey)
     : mManager(aManager)
     , mImageKey(aImageKey)
+    , mValid(true)
   { }
 
   ImageKeyData(ImageKeyData&& aOther)
     : mManager(std::move(aOther.mManager))
     , mDirtyRect(std::move(aOther.mDirtyRect))
     , mImageKey(aOther.mImageKey)
-  { }
+    , mValid(aOther.mValid)
+  {
+    aOtther.mValid = false;
+  }
 
   ImageKeyData& operator=(ImageKeyData&& aOther)
   {
     mManager = std::move(aOther.mManager);
     mDirtyRect = std::move(aOther.mDirtyRect);
     mImageKey = aOther.mImageKey;
+    mValid = aOther.mValid;
+    aOther.mValid = false;
     return *this;
   }
 
@@ -64,6 +70,7 @@ public:
   RefPtr<WebRenderLayerManager> mManager;
   Maybe<IntRect> mDirtyRect;
   wr::ImageKey mImageKey;
+  bool mValid;
 };
 
 class SharedSurfacesChild::SharedUserData final
@@ -76,33 +83,36 @@ public:
 
   ~SharedUserData()
   {
-    if (mShared) {
+    if (mShared || !mKeys.IsEmpty()) {
       mShared = false;
       if (NS_IsMainThread()) {
-        SharedSurfacesChild::Unshare(mId, mKeys);
+        SharedSurfacesChild::Unshare(mId, mShared, mKeys);
       } else {
         class DestroyRunnable final : public Runnable
         {
         public:
           DestroyRunnable(const wr::ExternalImageId& aId,
+                          bool aReleaseId,
                           nsTArray<ImageKeyData>&& aKeys)
             : Runnable("SharedSurfacesChild::SharedUserData::DestroyRunnable")
             , mId(aId)
+            , mReleaseId(aReleaseId)
             , mKeys(std::move(aKeys))
           { }
 
           NS_IMETHOD Run() override
           {
-            SharedSurfacesChild::Unshare(mId, mKeys);
+            SharedSurfacesChild::Unshare(mId, mReleaseId, mKeys);
             return NS_OK;
           }
 
         private:
           wr::ExternalImageId mId;
+          bool mReleaseId;
           AutoTArray<ImageKeyData, 1> mKeys;
         };
 
-        nsCOMPtr<nsIRunnable> task = new DestroyRunnable(mId, std::move(mKeys));
+        nsCOMPtr<nsIRunnable> task = new DestroyRunnable(mId, mShared, std::move(mKeys));
         SystemGroup::Dispatch(TaskCategory::Other, task.forget());
       }
     }
@@ -113,7 +123,16 @@ public:
     return mId;
   }
 
-  void SetId(const wr::ExternalImageId& aId)
+  void SetBorrowedId(const wr::ExternalImageId& aId)
+  {
+    MOZ_ASSERT(!mShared);
+    mId = aId;
+    for (auto& entry : mKeys) {
+      entry.mValid = false;
+    }
+  }
+
+  void SetOwnedId(const wr::ExternalImageId& aId)
   {
     mId = aId;
     mKeys.Clear();
@@ -170,9 +189,12 @@ public:
           if (dirtyRect) {
             aResources.UpdateExternalImage(mId, entry.mImageKey,
                                            ViewAs<ImagePixel>(dirtyRect.ref()));
+          } else if (!entry.mValid) {
+            aResources.UpdateExternalImage(mId, entry.mImageKey);
           }
         }
 
+	entry.mValid = true;
         key = entry.mImageKey;
         found = true;
       } else {
@@ -233,7 +255,7 @@ SharedSurfacesChild::ShareInternal(SourceSurfaceSharedData* aSurface,
   } else if (!manager->OwnsExternalImageId(data->Id())) {
     // If the id isn't owned by us, that means the bridge was reinitialized, due
     // to the GPU process crashing. All previous mappings have been released.
-    data->SetId(manager->GetNextExternalImageId());
+    data->SetOwnedId(manager->GetNextExternalImageId());
   } else if (data->IsShared()) {
     // It has already been shared with the GPU process.
     *aUserData = data;
@@ -386,6 +408,16 @@ SharedSurfacesChild::Share(ImageContainer* aContainer,
   }
 
   auto sharedSurface = static_cast<SourceSurfaceSharedData*>(surface.get());
+  RefPtr<SharedSurfacesClient> client = aContainer->GetSharedSurfacesClient();
+  if (client) {
+    nsresult rv = SharedSurfacesChild::ShareInternal(sharedSurface, &data);
+    if (NS_SUCCEEDED(rv)) {
+      MOZ_ASSERT(data);
+      aKey = client->UpdateKey(aManager, aResources, data->Id());
+    }
+    return rv;
+  }
+
   return Share(sharedSurface, aManager, aResources, aKey);
 }
 
@@ -416,6 +448,7 @@ SharedSurfacesChild::Share(SourceSurface* aSurface,
 
 /* static */ void
 SharedSurfacesChild::Unshare(const wr::ExternalImageId& aId,
+                             bool aReleaseId,
                              nsTArray<ImageKeyData>& aKeys)
 {
   MOZ_ASSERT(NS_IsMainThread());
@@ -425,11 +458,17 @@ SharedSurfacesChild::Unshare(const wr::ExternalImageId& aId,
       continue;
     }
 
-    entry.mManager->AddImageKeyForDiscard(entry.mImageKey);
+    if (entry.mValid) {
+      entry.mManager->AddImageKeyForDiscard(entry.mImageKey);
+    }
     WebRenderBridgeChild* wrBridge = entry.mManager->WrBridge();
-    if (wrBridge) {
+    if (aReleaseId && wrBridge) {
       wrBridge->DeallocExternalImageId(aId);
     }
+  }
+
+  if (!aReleaseId) {
+    return;
   }
 
   CompositorManagerChild* manager = CompositorManagerChild::GetInstance();

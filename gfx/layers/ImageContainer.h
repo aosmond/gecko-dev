@@ -168,6 +168,7 @@ class NVImage;
 #ifdef XP_WIN
 class D3D11YCbCrRecycleAllocator;
 #endif
+class SharedSurfacesClient;
 
 struct ImageBackendData
 {
@@ -639,6 +640,10 @@ public:
 
   void DropImageClient();
 
+  already_AddRefed<SharedSurfacesClient> GetSharedSurfacesClient();
+
+  void EnsureSharedSurfacesClient();
+
 private:
   typedef mozilla::RecursiveMutex RecursiveMutex;
 
@@ -706,6 +711,8 @@ private:
   ProducerID mCurrentProducerID;
 
   RefPtr<ImageContainerListener> mNotifyCompositeListener;
+
+  RefPtr<SharedSurfacesClient> mSharedSurfacesClient;
 
   static mozilla::Atomic<uint32_t> sGenerationCounter;
 };

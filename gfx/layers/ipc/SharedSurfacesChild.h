@@ -72,6 +72,8 @@ public:
                         wr::ImageKey& aKey);
 
 private:
+  friend class SharedSurfacesClient;
+
   SharedSurfacesChild() = delete;
   ~SharedSurfacesChild() = delete;
 
@@ -81,8 +83,24 @@ private:
   static nsresult ShareInternal(gfx::SourceSurfaceSharedData* aSurface,
                                 SharedUserData** aUserData);
 
-  static void Unshare(const wr::ExternalImageId& aId, nsTArray<ImageKeyData>& aKeys);
+  static void Unshare(const wr::ExternalImageId& aId,
+                      bool aReleaseId,
+                      nsTArray<ImageKeyData>& aKeys);
   static void DestroySharedUserData(void* aClosure);
+};
+
+class SharedSurfacesClient final
+{
+public:
+  SharedSurfacesClient()
+  { }
+
+private:
+  friend class SharedSurfacesChild;
+
+  ~SharedSurfacesClient();
+
+  nsAutoPtr<SharedSurfacesChild::SharedUserData> mUserData;
 };
 
 } // namespace layers
