@@ -31,6 +31,11 @@ public:
   }
 
   // Inherited methods from Image.
+  Tuple<ImgDrawResult, RefPtr<layers::ImageContainer>>
+    GetImageContainerAtSize(layers::LayerManager* aManager,
+                            const gfx::IntSize& aSize,
+                            const Maybe<SVGImageContext>& aSVGContext,
+                            uint32_t aFlags) override;
   nsresult GetNativeSizes(nsTArray<gfx::IntSize>& aNativeSizes) const override;
   size_t GetNativeSizesLength() const override;
   virtual already_AddRefed<ProgressTracker> GetProgressTracker() override;

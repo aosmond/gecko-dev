@@ -893,7 +893,7 @@ VectorImage::IsImageContainerAvailableAtSize(LayerManager* aManager,
 }
 
 //******************************************************************************
-NS_IMETHODIMP_(already_AddRefed<ImageContainer>)
+Tuple<ImgDrawResult, RefPtr<layers::ImageContainer>>
 VectorImage::GetImageContainerAtSize(LayerManager* aManager,
                                      const IntSize& aSize,
                                      const Maybe<SVGImageContext>& aSVGContext,

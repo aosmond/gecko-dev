@@ -360,7 +360,7 @@ protected:
     return gfx::IntSize(0, 0);
   }
 
-  already_AddRefed<layers::ImageContainer>
+  virtual Tuple<ImgDrawResult, RefPtr<layers::ImageContainer>>
     GetImageContainerImpl(layers::LayerManager* aManager,
                           const gfx::IntSize& aSize,
                           const Maybe<SVGImageContext>& aSVGContext,

@@ -618,7 +618,10 @@ nsImageRenderer::BuildWebRenderDisplayItems(nsPresContext* aPresContext,
       gfx::IntSize decodeSize =
         nsLayoutUtils::ComputeImageContainerDrawingParameters(mImageContainer, mForFrame, destRect,
                                                               aSc, containerFlags, svgContext);
-      RefPtr<layers::ImageContainer> container =
+
+      ImgDrawResult drawResult;
+      RefPtr<layers::ImageContainer> container;
+      Tie(drawResult, container) =
         mImageContainer->GetImageContainerAtSize(aManager, decodeSize, svgContext, containerFlags);
       if (!container) {
         NS_WARNING("Failed to get image container");

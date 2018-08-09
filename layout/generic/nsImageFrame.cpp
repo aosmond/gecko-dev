@@ -1811,7 +1811,10 @@ nsDisplayImage::CreateWebRenderCommands(mozilla::wr::DisplayListBuilder& aBuilde
   IntSize decodeSize =
     nsLayoutUtils::ComputeImageContainerDrawingParameters(mImage, mFrame, destRect,
                                                           aSc, flags, svgContext);
-  RefPtr<ImageContainer> container =
+
+  ImgDrawResult drawResult;
+  RefPtr<layers::ImageContainer> container;
+  Tie(drawResult, container) =
     mImage->GetImageContainerAtSize(aManager, decodeSize, svgContext, flags);
   if (!container) {
     return false;

@@ -77,7 +77,7 @@ FrozenImage::IsImageContainerAvailableAtSize(LayerManager* aManager,
   return false;
 }
 
-NS_IMETHODIMP_(already_AddRefed<ImageContainer>)
+Tuple<ImgDrawResult, RefPtr<layers::ImageContainer>>
 FrozenImage::GetImageContainerAtSize(layers::LayerManager* aManager,
                                      const IntSize& aSize,
                                      const Maybe<SVGImageContext>& aSVGContext,
@@ -88,7 +88,8 @@ FrozenImage::GetImageContainerAtSize(layers::LayerManager* aManager,
   // turns out that FrozenImage is widely used on codepaths that can actually
   // benefit from GetImageContainer, it would be a good idea to fix that method
   // for performance reasons.
-  return nullptr;
+  return MakeTuple(ImgDrawResult::NOT_SUPPORTED,
+                   RefPtr<layers::ImageContainer>(nullptr));
 }
 
 NS_IMETHODIMP_(ImgDrawResult)

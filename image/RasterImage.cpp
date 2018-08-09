@@ -652,7 +652,8 @@ RasterImage::IsImageContainerAvailable(LayerManager* aManager, uint32_t aFlags)
 NS_IMETHODIMP_(already_AddRefed<ImageContainer>)
 RasterImage::GetImageContainer(LayerManager* aManager, uint32_t aFlags)
 {
-  return GetImageContainerImpl(aManager, mSize, Nothing(), aFlags);
+  auto result = GetImageContainerImpl(aManager, mSize, Nothing(), aFlags);
+  return mozilla::Get<1>(result).forget();
 }
 
 NS_IMETHODIMP_(bool)
@@ -674,7 +675,7 @@ RasterImage::IsImageContainerAvailableAtSize(LayerManager* aManager,
   return true;
 }
 
-NS_IMETHODIMP_(already_AddRefed<ImageContainer>)
+Tuple<ImgDrawResult, RefPtr<layers::ImageContainer>>
 RasterImage::GetImageContainerAtSize(LayerManager* aManager,
                                      const IntSize& aSize,
                                      const Maybe<SVGImageContext>& aSVGContext,

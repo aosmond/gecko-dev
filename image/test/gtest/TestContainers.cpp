@@ -70,7 +70,9 @@ TEST_F(ImageContainers, RasterImageContainer)
   // Upscaling should give the native size.
   IntSize requestedSize = testCase.mSize;
   requestedSize.Scale(2, 2);
-  RefPtr<layers::ImageContainer> upscaleContainer =
+  ImgDrawResult drawResult;
+  RefPtr<layers::ImageContainer> upscaleContainer;
+  Tie(drawResult, upscaleContainer) =
     image->GetImageContainerAtSize(layerManager,
                                    requestedSize,
                                    Nothing(),
@@ -85,7 +87,8 @@ TEST_F(ImageContainers, RasterImageContainer)
   requestedSize = testCase.mSize;
   requestedSize.width /= 2;
   requestedSize.height /= 2;
-  RefPtr<layers::ImageContainer> downscaleContainer =
+  RefPtr<layers::ImageContainer> downscaleContainer;
+  Tie(drawResult, downscaleContainer) =
     image->GetImageContainerAtSize(layerManager,
                                    requestedSize,
                                    Nothing(),
@@ -96,7 +99,8 @@ TEST_F(ImageContainers, RasterImageContainer)
   EXPECT_EQ(requestedSize.height, containerSize.height);
 
   // Get at native size again. Should give same container.
-  RefPtr<layers::ImageContainer> againContainer =
+  RefPtr<layers::ImageContainer> againContainer;
+  Tie(drawResult, againContainer) =
     image->GetImageContainerAtSize(layerManager,
                                    testCase.mSize,
                                    Nothing(),

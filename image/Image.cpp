@@ -104,7 +104,7 @@ ImageResource::SetCurrentImage(ImageContainer* aContainer,
   }
 }
 
-already_AddRefed<ImageContainer>
+Tuple<ImgDrawResult, RefPtr<layers::ImageContainer>>
 ImageResource::GetImageContainerImpl(LayerManager* aManager,
                                      const IntSize& aSize,
                                      const Maybe<SVGImageContext>& aSVGContext,
@@ -121,7 +121,8 @@ ImageResource::GetImageContainerImpl(LayerManager* aManager,
 
   IntSize size = GetImageContainerSize(aManager, aSize, aFlags);
   if (size.IsEmpty()) {
-    return nullptr;
+    return MakeTuple(ImgDrawResult::NOT_READY,
+                     RefPtr<layers::ImageContainer>(nullptr));
   }
 
   if (mAnimationConsumers == 0) {
@@ -155,7 +156,7 @@ ImageResource::GetImageContainerImpl(LayerManager* aManager,
       case ImgDrawResult::SUCCESS:
       case ImgDrawResult::BAD_IMAGE:
       case ImgDrawResult::BAD_ARGS:
-        return container.forget();
+        return MakeTuple(entry->mLastDrawResult, std::move(container));
       case ImgDrawResult::NOT_READY:
       case ImgDrawResult::INCOMPLETE:
       case ImgDrawResult::TEMPORARY_ERROR:
@@ -165,7 +166,7 @@ ImageResource::GetImageContainerImpl(LayerManager* aManager,
         // Unused by GetFrameInternal
       default:
         MOZ_ASSERT_UNREACHABLE("Unhandled ImgDrawResult type!");
-        return container.forget();
+        return MakeTuple(entry->mLastDrawResult, std::move(container));
     }
   }
 
@@ -212,7 +213,7 @@ ImageResource::GetImageContainerImpl(LayerManager* aManager,
             case ImgDrawResult::SUCCESS:
             case ImgDrawResult::BAD_IMAGE:
             case ImgDrawResult::BAD_ARGS:
-              return container.forget();
+              return MakeTuple(entry->mLastDrawResult, std::move(container));
             case ImgDrawResult::NOT_READY:
             case ImgDrawResult::INCOMPLETE:
             case ImgDrawResult::TEMPORARY_ERROR:
@@ -223,7 +224,7 @@ ImageResource::GetImageContainerImpl(LayerManager* aManager,
               // Unused by GetFrameInternal
             default:
               MOZ_ASSERT_UNREACHABLE("Unhandled DrawResult type!");
-              return container.forget();
+              return MakeTuple(entry->mLastDrawResult, std::move(container));
           }
         }
         break;
@@ -245,7 +246,7 @@ ImageResource::GetImageContainerImpl(LayerManager* aManager,
 
   SetCurrentImage(container, surface, true);
   entry->mLastDrawResult = drawResult;
-  return container.forget();
+  return MakeTuple(drawResult, std::move(container));
 }
 
 void

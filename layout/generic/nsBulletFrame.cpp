@@ -479,7 +479,10 @@ BulletRenderer::CreateWebRenderCommandsForImage(nsDisplayItem* aItem,
   gfx::IntSize decodeSize =
     nsLayoutUtils::ComputeImageContainerDrawingParameters(mImage, aItem->Frame(), destRect,
                                                           aSc, flags, svgContext);
-  RefPtr<layers::ImageContainer> container =
+
+  ImgDrawResult drawResult;
+  RefPtr<layers::ImageContainer> container;
+  Tie(drawResult, container) =
     mImage->GetImageContainerAtSize(aManager, decodeSize, svgContext, flags);
   if (!container) {
     return false;

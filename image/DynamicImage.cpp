@@ -234,13 +234,14 @@ DynamicImage::IsImageContainerAvailableAtSize(LayerManager* aManager,
   return false;
 }
 
-NS_IMETHODIMP_(already_AddRefed<ImageContainer>)
+Tuple<ImgDrawResult, RefPtr<layers::ImageContainer>>
 DynamicImage::GetImageContainerAtSize(LayerManager* aManager,
                                       const IntSize& aSize,
                                       const Maybe<SVGImageContext>& aSVGContext,
                                       uint32_t aFlags)
 {
-  return nullptr;
+  return MakeTuple(ImgDrawResult::NOT_SUPPORTED,
+                   RefPtr<layers::ImageContainer>(nullptr));
 }
 
 NS_IMETHODIMP_(ImgDrawResult)

@@ -3721,7 +3721,10 @@ nsCSSBorderImageRenderer::CreateWebRenderCommands(nsDisplayItem* aItem,
       gfx::IntSize decodeSize =
         nsLayoutUtils::ComputeImageContainerDrawingParameters(img, aForFrame, destRect,
                                                               aSc, flags, svgContext);
-      RefPtr<layers::ImageContainer> container =
+
+      ImgDrawResult drawResult;
+      RefPtr<layers::ImageContainer> container;
+      Tie(drawResult, container) =
         img->GetImageContainerAtSize(aManager, decodeSize, svgContext, flags);
       if (!container) {
         return;

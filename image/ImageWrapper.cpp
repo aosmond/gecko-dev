@@ -222,7 +222,7 @@ ImageWrapper::IsImageContainerAvailableAtSize(LayerManager* aManager,
   return mInnerImage->IsImageContainerAvailableAtSize(aManager, aSize, aFlags);
 }
 
-NS_IMETHODIMP_(already_AddRefed<ImageContainer>)
+Tuple<ImgDrawResult, RefPtr<layers::ImageContainer>>
 ImageWrapper::GetImageContainerAtSize(LayerManager* aManager,
                                       const IntSize& aSize,
                                       const Maybe<SVGImageContext>& aSVGContext,
