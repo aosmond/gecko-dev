@@ -654,7 +654,8 @@ RasterImage::IsImageContainerAvailable(LayerManager* aManager, uint32_t aFlags)
 NS_IMETHODIMP_(already_AddRefed<ImageContainer>)
 RasterImage::GetImageContainer(LayerManager* aManager, uint32_t aFlags)
 {
-  return GetImageContainerImpl(aManager, mSize, Nothing(), aFlags);
+  auto result = GetImageContainerImpl(aManager, mSize, Nothing(), aFlags);
+  return mozilla::Get<1>(result).forget();
 }
 
 NS_IMETHODIMP_(bool)
@@ -685,7 +686,8 @@ RasterImage::GetImageContainerAtSize(LayerManager* aManager,
   // We do not pass in the given SVG context because in theory it could differ
   // between calls, but actually have no impact on the actual contents of the
   // image container.
-  return GetImageContainerImpl(aManager, aSize, Nothing(), aFlags);
+  auto result = GetImageContainerImpl(aManager, mSize, Nothing(), aFlags);
+  return mozilla::Get<1>(result).forget();
 }
 
 bool

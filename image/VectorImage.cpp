@@ -908,9 +908,11 @@ VectorImage::GetImageContainerAtSize(LayerManager* aManager,
   // context restriction above.
   uint32_t flags = aFlags & ~(FLAG_HIGH_QUALITY_SCALING |
                               FLAG_FORCE_PRESERVEASPECTRATIO_NONE);
-  return GetImageContainerImpl(aManager, aSize,
-                               newSVGContext ? newSVGContext : aSVGContext,
-                               flags);
+  auto result =
+    GetImageContainerImpl(aManager, aSize,
+                          newSVGContext ? newSVGContext : aSVGContext,
+                          flags);
+  return Get<1>(result).forget();
 }
 
 bool
