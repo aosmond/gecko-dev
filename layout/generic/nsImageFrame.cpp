@@ -1816,6 +1816,44 @@ nsDisplayImage::CreateWebRenderCommands(mozilla::wr::DisplayListBuilder& aBuilde
   RefPtr<layers::ImageContainer> container;
   Tie(drawResult, container) =
     mImage->GetImageContainerAtSize(aManager, decodeSize, svgContext, flags);
+
+  // While we got a container, it may contain a fully decoded surface. If that
+  // is the case, and we have an image we were previously displaying which does
+  // have a fully decoded surface, then we should prefer the previous image.
+  bool updatePrevImage = false;
+  switch (drawResult) {
+    case ImgDrawResult::NOT_READY:
+    case ImgDrawResult::INCOMPLETE:
+    case ImgDrawResult::TEMPORARY_ERROR:
+      if (mPrevImage && mPrevImage != mImage) {
+        RefPtr<ImageContainer> prevContainer;
+        Tie(drawResult, prevContainer) =
+          mPrevImage->GetImageContainerAtSize(aManager, decodeSize, svgContext, flags);
+        if (prevContainer && drawResult == ImgDrawResult::SUCCESS) {
+          container = std::move(prevContainer);
+          break;
+        }
+
+        // Previous image was unusable; we can forget about it.
+        updatePrevImage = true;
+      }
+      break;
+    default:
+      updatePrevImage = mPrevImage != mImage;
+      break;
+  }
+
+  // The previous image was not used, and is different from the current image.
+  // We should forget about it. We need to update the frame as well because the
+  // display item may get recreated.
+  if (updatePrevImage) {
+    mPrevImage = mImage;
+    if (mFrame->IsImageFrame()) {
+      nsImageFrame* f = static_cast<nsImageFrame*>(mFrame);
+      f->mPrevImage = f->mImage;
+    }
+  }
+
   if (!container) {
     return false;
   }
