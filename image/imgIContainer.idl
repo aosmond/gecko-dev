@@ -344,6 +344,7 @@ interface imgIContainer : nsISupports
                                                     [const] in nsIntSize aSize,
                                                     [const] in MaybeSVGImageContext aSVGContext,
                                                     in uint32_t aFlags,
+                                                    in imgIContainer aFallbackImage,
                                                     [const] in ImageContainerCallback aCb);
 
   /**

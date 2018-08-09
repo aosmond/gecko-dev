@@ -395,8 +395,15 @@ ClippedImage::CreateWebRenderCommands(mozilla::wr::DisplayListBuilder& aBuilder,
                                       const IntSize& aSize,
                                       const Maybe<SVGImageContext>& aSVGContext,
                                       uint32_t aFlags,
+                                      imgIContainer* aFallbackImage,
                                       const std::function<bool(ImageContainer*)>& aCb)
 {
+  if (!ShouldClip()) {
+    return InnerImage()->CreateWebRenderCommands(aBuilder, aSc, aManager, aSize,
+                                                 aSVGContext, aFlags,
+                                                 aFallbackImage, aCb);
+  }
+
   return false;
 }
 

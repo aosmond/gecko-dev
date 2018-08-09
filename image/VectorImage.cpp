@@ -920,6 +920,7 @@ VectorImage::CreateWebRenderCommands(mozilla::wr::DisplayListBuilder& aBuilder,
                                      const IntSize& aSize,
                                      const Maybe<SVGImageContext>& aSVGContext,
                                      uint32_t aFlags,
+                                     imgIContainer* aFallbackImage,
                                      const std::function<bool(ImageContainer*)>& aCb)
 {
   RefPtr<ImageContainer> container =

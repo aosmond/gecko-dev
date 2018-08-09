@@ -232,9 +232,10 @@ ImageWrapper::CreateWebRenderCommands(mozilla::wr::DisplayListBuilder& aBuilder,
                                       const IntSize& aSize,
                                       const Maybe<SVGImageContext>& aSVGContext,
                                       uint32_t aFlags,
+                                      imgIContainer* aFallbackImage,
                                       const std::function<bool(ImageContainer*)>& aCb)
 {
-  return mInnerImage->CreateWebRenderCommands(aBuilder, aSc, aManager, aSize, aSVGContext, aFlags, aCb);
+  return mInnerImage->CreateWebRenderCommands(aBuilder, aSc, aManager, aSize, aSVGContext, aFlags, aFallbackImage, aCb);
 }
 
 NS_IMETHODIMP_(already_AddRefed<ImageContainer>)

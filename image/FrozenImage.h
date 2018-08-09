@@ -62,6 +62,7 @@ public:
                             const IntSize& aSize,
                             const Maybe<SVGImageContext>& aSVGContext,
                             uint32_t aFlags,
+                            imgIContainer* aFallbackImage,
                             const std::function<bool(layers::ImageContainer*)>& aCb) override;
   NS_IMETHOD_(ImgDrawResult) Draw(gfxContext* aContext,
                                const nsIntSize& aSize,
