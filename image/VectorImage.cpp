@@ -914,6 +914,24 @@ VectorImage::GetImageContainerAtSize(LayerManager* aManager,
 }
 
 bool
+VectorImage::CreateWebRenderCommands(mozilla::wr::DisplayListBuilder& aBuilder,
+                                     const StackingContextHelper& aSc,
+                                     LayerManager* aManager,
+                                     const IntSize& aSize,
+                                     const Maybe<SVGImageContext>& aSVGContext,
+                                     uint32_t aFlags,
+                                     const std::function<bool(ImageContainer*)>& aCb)
+{
+  RefPtr<ImageContainer> container =
+    GetImageContainerAtSize(aManager, aSize, aSVGContext, aFlags);
+  if (!container) {
+    return false;
+  }
+
+  return aCb(container.get());
+}
+
+bool
 VectorImage::MaybeRestrictSVGContext(Maybe<SVGImageContext>& aNewSVGContext,
                                      const Maybe<SVGImageContext>& aSVGContext,
                                      uint32_t aFlags)

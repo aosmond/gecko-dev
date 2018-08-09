@@ -53,6 +53,14 @@ public:
                             const gfx::IntSize& aSize,
                             const Maybe<SVGImageContext>& aSVGContext,
                             uint32_t aFlags) override;
+  NS_IMETHOD_(bool)
+    CreateWebRenderCommands(mozilla::wr::DisplayListBuilder& aBuilder,
+                            const mozilla::layers::StackingContextHelper& aSc,
+                            layers::LayerManager* aManager,
+                            const IntSize& aSize,
+                            const Maybe<SVGImageContext>& aSVGContext,
+                            uint32_t aFlags,
+                            const std::function<bool(layers::ImageContainer*)>& aCb) override;
   NS_IMETHOD_(ImgDrawResult) Draw(gfxContext* aContext,
                                const nsIntSize& aSize,
                                const ImageRegion& aRegion,

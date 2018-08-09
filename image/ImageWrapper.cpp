@@ -5,6 +5,8 @@
 
 #include "ImageWrapper.h"
 #include "mozilla/gfx/2D.h"
+#include "mozilla/layers/StackingContextHelper.h"
+#include "mozilla/webrender/WebRenderAPI.h"
 #include "mozilla/RefPtr.h"
 #include "Orientation.h"
 
@@ -18,6 +20,7 @@ using gfx::SamplingFilter;
 using gfx::SourceSurface;
 using layers::LayerManager;
 using layers::ImageContainer;
+using layers::StackingContextHelper;
 
 namespace image {
 
@@ -220,6 +223,18 @@ ImageWrapper::IsImageContainerAvailableAtSize(LayerManager* aManager,
                                               uint32_t aFlags)
 {
   return mInnerImage->IsImageContainerAvailableAtSize(aManager, aSize, aFlags);
+}
+
+bool
+ImageWrapper::CreateWebRenderCommands(mozilla::wr::DisplayListBuilder& aBuilder,
+                                      const StackingContextHelper& aSc,
+                                      LayerManager* aManager,
+                                      const IntSize& aSize,
+                                      const Maybe<SVGImageContext>& aSVGContext,
+                                      uint32_t aFlags,
+                                      const std::function<bool(ImageContainer*)>& aCb)
+{
+  return mInnerImage->CreateWebRenderCommands(aBuilder, aSc, aManager, aSize, aSVGContext, aFlags, aCb);
 }
 
 NS_IMETHODIMP_(already_AddRefed<ImageContainer>)

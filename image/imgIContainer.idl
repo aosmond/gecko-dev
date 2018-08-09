@@ -24,6 +24,11 @@ namespace mozilla {
 namespace layers {
 class LayerManager;
 class ImageContainer;
+class StackingContextHelper;
+}
+
+namespace wr {
+class DisplayListBuilder;
 }
 }
 
@@ -66,6 +71,9 @@ native TempRefSourceSurface(already_AddRefed<mozilla::gfx::SourceSurface>);
 native TempRefImgIContainer(already_AddRefed<imgIContainer>);
 native nsIntSizeByVal(nsIntSize);
 [ptr] native nsIDocument(nsIDocument);
+[ref] native WrDisplayListBuilder(mozilla::wr::DisplayListBuilder);
+[ref] native StackingContextHelper(mozilla::layers::StackingContextHelper);
+[ref] native ImageContainerCallback(mozilla::image::ImageContainerCallback);
 
 
 /**
@@ -329,6 +337,14 @@ interface imgIContainer : nsISupports
                                                                      [const] in nsIntSize aSize,
                                                                      [const] in MaybeSVGImageContext aSVGContext,
                                                                      in uint32_t aFlags);
+
+  [noscript, notxpcom] bool createWebRenderCommands(in WrDisplayListBuilder aBuilder,
+                                                    [const] in StackingContextHelper aSc,
+                                                    in LayerManager aManager,
+                                                    [const] in nsIntSize aSize,
+                                                    [const] in MaybeSVGImageContext aSVGContext,
+                                                    in uint32_t aFlags,
+                                                    [const] in ImageContainerCallback aCb);
 
   /**
    * Draw the requested frame of this image onto the context specified.

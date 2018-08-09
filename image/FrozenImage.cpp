@@ -4,12 +4,15 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #include "FrozenImage.h"
+#include "mozilla/layers/StackingContextHelper.h"
+#include "mozilla/webrender/WebRenderAPI.h"
 
 namespace mozilla {
 
 using namespace gfx;
 using layers::ImageContainer;
 using layers::LayerManager;
+using layers::StackingContextHelper;
 
 namespace image {
 
@@ -89,6 +92,18 @@ FrozenImage::GetImageContainerAtSize(layers::LayerManager* aManager,
   // benefit from GetImageContainer, it would be a good idea to fix that method
   // for performance reasons.
   return nullptr;
+}
+
+bool
+FrozenImage::CreateWebRenderCommands(mozilla::wr::DisplayListBuilder& aBuilder,
+                                     const StackingContextHelper& aSc,
+                                     LayerManager* aManager,
+                                     const IntSize& aSize,
+                                     const Maybe<SVGImageContext>& aSVGContext,
+                                     uint32_t aFlags,
+                                     const std::function<bool(ImageContainer*)>& aCb)
+{
+  return false;
 }
 
 NS_IMETHODIMP_(ImgDrawResult)

@@ -8,6 +8,8 @@
 #include "gfxUtils.h"
 #include "mozilla/gfx/2D.h"
 #include "mozilla/gfx/Logging.h"
+#include "mozilla/layers/StackingContextHelper.h"
+#include "mozilla/webrender/WebRenderAPI.h"
 #include "mozilla/RefPtr.h"
 #include "ImageRegion.h"
 #include "Orientation.h"
@@ -19,6 +21,7 @@ using namespace mozilla;
 using namespace mozilla::gfx;
 using mozilla::layers::LayerManager;
 using mozilla::layers::ImageContainer;
+using mozilla::layers::StackingContextHelper;
 
 namespace mozilla {
 namespace image {
@@ -241,6 +244,18 @@ DynamicImage::GetImageContainerAtSize(LayerManager* aManager,
                                       uint32_t aFlags)
 {
   return nullptr;
+}
+
+bool
+DynamicImage::CreateWebRenderCommands(mozilla::wr::DisplayListBuilder& aBuilder,
+                                      const StackingContextHelper& aSc,
+                                      LayerManager* aManager,
+                                      const IntSize& aSize,
+                                      const Maybe<SVGImageContext>& aSVGContext,
+                                      uint32_t aFlags,
+                                      const std::function<bool(ImageContainer*)>& aCb)
+{
+  return false;
 }
 
 NS_IMETHODIMP_(ImgDrawResult)

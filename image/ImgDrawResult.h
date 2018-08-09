@@ -7,10 +7,15 @@
 #define mozilla_image_ImgDrawResult_h
 
 #include <cstdint> // for uint8_t
+#include <functional> // for std::function
 #include "mozilla/Attributes.h"
 #include "mozilla/Likely.h"
 
 namespace mozilla {
+namespace layers {
+class ImageContainer;
+}
+
 namespace image {
 
 /**
@@ -99,6 +104,8 @@ struct imgDrawingParams {
                              // image lib draw calls.
   ImgDrawResult result;         // To return results from image lib painting.
 };
+
+typedef std::function<bool(layers::ImageContainer*)> ImageContainerCallback;
 
 } // namespace image
 } // namespace mozilla

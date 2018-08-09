@@ -46,6 +46,8 @@
 #include "mozilla/Tuple.h"
 #include "mozilla/ClearOnShutdown.h"
 #include "mozilla/gfx/Scale.h"
+#include "mozilla/layers/StackingContextHelper.h"
+#include "mozilla/webrender/WebRenderAPI.h"
 
 #include "GeckoProfiler.h"
 #include "gfx2DGlue.h"
@@ -684,6 +686,24 @@ RasterImage::GetImageContainerAtSize(LayerManager* aManager,
   // between calls, but actually have no impact on the actual contents of the
   // image container.
   return GetImageContainerImpl(aManager, aSize, Nothing(), aFlags);
+}
+
+bool
+RasterImage::CreateWebRenderCommands(mozilla::wr::DisplayListBuilder& aBuilder,
+                                     const StackingContextHelper& aSc,
+                                     LayerManager* aManager,
+                                     const IntSize& aSize,
+                                     const Maybe<SVGImageContext>& aSVGContext,
+                                     uint32_t aFlags,
+                                     const std::function<bool(ImageContainer*)>& aCb)
+{
+  RefPtr<ImageContainer> container =
+    GetImageContainerAtSize(aManager, aSize, aSVGContext, aFlags);
+  if (!container) {
+    return false;
+  }
+
+  return aCb(container.get());
 }
 
 size_t
