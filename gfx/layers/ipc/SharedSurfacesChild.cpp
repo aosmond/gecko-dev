@@ -26,25 +26,19 @@ public:
                const wr::ImageKey& aImageKey)
     : mManager(aManager)
     , mImageKey(aImageKey)
-    , mValid(true)
   { }
 
   ImageKeyData(ImageKeyData&& aOther)
     : mManager(std::move(aOther.mManager))
     , mDirtyRect(std::move(aOther.mDirtyRect))
     , mImageKey(aOther.mImageKey)
-    , mValid(aOther.mValid)
-  {
-    aOtther.mValid = false;
-  }
+  { }
 
   ImageKeyData& operator=(ImageKeyData&& aOther)
   {
     mManager = std::move(aOther.mManager);
     mDirtyRect = std::move(aOther.mDirtyRect);
     mImageKey = aOther.mImageKey;
-    mValid = aOther.mValid;
-    aOther.mValid = false;
     return *this;
   }
 
@@ -70,7 +64,6 @@ public:
   RefPtr<WebRenderLayerManager> mManager;
   Maybe<IntRect> mDirtyRect;
   wr::ImageKey mImageKey;
-  bool mValid;
 };
 
 class SharedSurfacesChild::SharedUserData final
@@ -123,12 +116,20 @@ public:
     return mId;
   }
 
-  void SetBorrowedId(const wr::ExternalImageId& aId)
+  void SetBorrowedId(const wr::ExternalImageId& aId,
+                     const IntRect& aDirtyRect)
   {
     MOZ_ASSERT(!mShared);
     mId = aId;
-    for (auto& entry : mKeys) {
-      entry.mValid = false;
+    auto i = mKeys.Length();
+    while (i > 0) {
+      --i;
+      ImageKeyData& entry = mKeys[i];
+      if (entry.mManager->IsDestroyed()) {
+        mKeys.RemoveElementAt(i);
+      } else {
+        entry.MergeDirtyRect(aDirtyRect);
+      }
     }
   }
 
@@ -189,12 +190,9 @@ public:
           if (dirtyRect) {
             aResources.UpdateExternalImage(mId, entry.mImageKey,
                                            ViewAs<ImagePixel>(dirtyRect.ref()));
-          } else if (!entry.mValid) {
-            aResources.UpdateExternalImage(mId, entry.mImageKey);
           }
         }
 
-	entry.mValid = true;
         key = entry.mImageKey;
         found = true;
       } else {
@@ -378,6 +376,36 @@ SharedSurfacesChild::Share(SourceSurfaceSharedData* aSurface,
   return rv;
 }
 
+/* static */ void
+SharedSurfacesChild::UpdateAnimation(ImageContainer* aContainer,
+                                     SourceSurface* aSurface,
+                                     const IntRect& aDirtyRect)
+{
+  MOZ_ASSERT(NS_IsMainThread());
+  MOZ_ASSERT(aContainer);
+  MOZ_ASSERT(!aContainer->IsAsync());
+  MOZ_ASSERT(aSurface);
+
+  // If we aren't using shared surfaces, then is nothing to do.
+  if (aSurface->GetType() != SurfaceType::DATA_SHARED) {
+    return;
+  }
+
+  RefPtr<SharedSurfacesClient> client =
+    aContainer->EnsureSharedSurfacesClient();
+  MOZ_ASSERT(client);
+
+  auto sharedSurface = static_cast<SourceSurfaceSharedData*>(aSurface);
+  nsresult rv = SharedSurfacesChild::ShareInternal(sharedSurface, &data);
+  if (NS_FAILED(rv)) {
+    // XXX(aosmond)
+    return;
+  }
+
+  MOZ_ASSERT(data);
+  client->SetBorrowedId(data->Id(), aDirtyRect);
+}
+
 /* static */ nsresult
 SharedSurfacesChild::Share(ImageContainer* aContainer,
                            WebRenderLayerManager* aManager,
@@ -408,12 +436,17 @@ SharedSurfacesChild::Share(ImageContainer* aContainer,
   }
 
   auto sharedSurface = static_cast<SourceSurfaceSharedData*>(surface.get());
+
+  // If this container represents an animation, then the container has its own
+  // image key that we need to refer to.
   RefPtr<SharedSurfacesClient> client = aContainer->GetSharedSurfacesClient();
   if (client) {
+    SharedUserData* data = nullptr;
     nsresult rv = SharedSurfacesChild::ShareInternal(sharedSurface, &data);
     if (NS_SUCCEEDED(rv)) {
       MOZ_ASSERT(data);
-      aKey = client->UpdateKey(aManager, aResources, data->Id());
+      MOZ_ASSERT(data->Id() == client->Id());
+      aKey = client->UpdateKey(aManager, aResources, Nothing());
     }
     return rv;
   }
@@ -458,9 +491,7 @@ SharedSurfacesChild::Unshare(const wr::ExternalImageId& aId,
       continue;
     }
 
-    if (entry.mValid) {
-      entry.mManager->AddImageKeyForDiscard(entry.mImageKey);
-    }
+    entry.mManager->AddImageKeyForDiscard(entry.mImageKey);
     WebRenderBridgeChild* wrBridge = entry.mManager->WrBridge();
     if (aReleaseId && wrBridge) {
       wrBridge->DeallocExternalImageId(aId);

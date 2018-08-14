@@ -71,7 +71,8 @@ ImageResource::GetSpecTruncatedTo1k(nsCString& aSpec) const
 void
 ImageResource::SetCurrentImage(ImageContainer* aContainer,
                                SourceSurface* aSurface,
-                               bool aInTransaction)
+                               bool aInTransaction,
+                               const IntRect& aDirtyRect)
 {
   MOZ_ASSERT(NS_IsMainThread());
   MOZ_ASSERT(aContainer);
@@ -101,6 +102,10 @@ ImageResource::SetCurrentImage(ImageContainer* aContainer,
     aContainer->SetCurrentImagesInTransaction(imageList);
   } else {
     aContainer->SetCurrentImages(imageList);
+  }
+
+  if (mProgressTracker->GetProgress() & FLAG_IS_ANIMATED) {
+    SharedSurfacesChild::UpdateAnimation(aContainer, aSurface, aDirtyRect);
   }
 }
 
