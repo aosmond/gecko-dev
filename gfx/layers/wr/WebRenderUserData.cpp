@@ -76,7 +76,7 @@ WebRenderImageData::WebRenderImageData(WebRenderLayerManager* aWRManager, nsDisp
 
 WebRenderImageData::~WebRenderImageData()
 {
-  ClearImageKey();
+  ClearImageKey(/* aClearCache */ true);
 
   if (mPipelineId) {
     WrBridge()->RemovePipelineIdForCompositable(mPipelineId.ref());
@@ -84,7 +84,7 @@ WebRenderImageData::~WebRenderImageData()
 }
 
 void
-WebRenderImageData::ClearImageKey()
+WebRenderImageData::ClearImageKey(bool aClearCache /* = false */)
 {
   if (mKey) {
     // If we don't own the key, then the owner is responsible for discarding the
@@ -95,6 +95,8 @@ WebRenderImageData::ClearImageKey()
         WrBridge()->ReleaseTextureOfImage(mKey.value());
         mTextureOfImage = nullptr;
       }
+    } else if (aClearCache) {
+      //SharedSurfacesChild::ClearCache(mContainer, mWRManager);
     }
     mKey.reset();
   }

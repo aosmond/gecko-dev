@@ -71,9 +71,14 @@ public:
                         wr::IpcResourceUpdateQueue& aResources,
                         wr::ImageKey& aKey);
 
+  static void ClearCache(ImageContainer* aContainer,
+                         WebRenderLayerManager* aManager);
+
 private:
   SharedSurfacesChild() = delete;
   ~SharedSurfacesChild() = delete;
+
+  static gfx::UserDataKey sSharedKey;
 
   class ImageKeyData;
   class SharedUserData;

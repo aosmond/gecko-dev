@@ -150,7 +150,7 @@ public:
   }
 
 protected:
-  void ClearImageKey();
+  void ClearImageKey(bool aClearCache = false);
 
   RefPtr<TextureClient> mTextureOfImage;
   Maybe<wr::ImageKey> mKey;

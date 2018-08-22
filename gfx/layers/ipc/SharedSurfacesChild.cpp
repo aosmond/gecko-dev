@@ -19,6 +19,8 @@ namespace layers {
 
 using namespace mozilla::gfx;
 
+UserDataKey SharedSurfacesChild::sSharedKey;
+
 class SharedSurfacesChild::ImageKeyData final
 {
 public:
@@ -72,6 +74,7 @@ public:
   explicit SharedUserData(const wr::ExternalImageId& aId)
     : mId(aId)
     , mShared(false)
+    , mWasCleared(false)
   { }
 
   ~SharedUserData()
@@ -187,15 +190,38 @@ public:
       ImageKeyData data(aManager, key);
       mKeys.AppendElement(std::move(data));
       aResources.AddExternalImage(mId, key);
+      printf_stderr("[AO][%p] UpdateImageKey for %p (was cleared %d)\n", this, aManager, mWasCleared);
     }
 
     return key;
+  }
+
+  void ClearCache(WebRenderLayerManager* aManager)
+  {
+    auto i = mKeys.Length();
+    while (i > 0) {
+      --i;
+      ImageKeyData& entry = mKeys[i];
+      if (entry.mManager->IsDestroyed()) {
+        mKeys.RemoveElementAt(i);
+      } else if (entry.mManager == aManager) {
+        printf_stderr("[AO][%p] ClearCache for %p\n", this, aManager);
+        aManager->AddImageKeyForDiscard(entry.mImageKey);
+        WebRenderBridgeChild* wrBridge = aManager->WrBridge();
+        if (wrBridge) {
+          wrBridge->DeallocExternalImageId(mId);
+        }
+        mKeys.RemoveElementAt(i);
+	mWasCleared = true;
+      }
+    }
   }
 
 private:
   AutoTArray<ImageKeyData, 1> mKeys;
   wr::ExternalImageId mId;
   bool mShared : 1;
+  bool mWasCleared : 1;
 };
 
 /* static */ void
@@ -224,7 +250,6 @@ SharedSurfacesChild::ShareInternal(SourceSurfaceSharedData* aSurface,
     return NS_ERROR_NOT_INITIALIZED;
   }
 
-  static UserDataKey sSharedKey;
   SharedUserData* data =
     static_cast<SharedUserData*>(aSurface->GetUserData(&sSharedKey));
   if (!data) {
@@ -412,6 +437,39 @@ SharedSurfacesChild::Share(SourceSurface* aSurface,
   }
 
   return rv;
+}
+
+/* static */ void
+SharedSurfacesChild::ClearCache(ImageContainer* aContainer,
+                                WebRenderLayerManager* aManager)
+{
+  MOZ_ASSERT(NS_IsMainThread());
+  MOZ_ASSERT(aContainer);
+  MOZ_ASSERT(aManager);
+
+  if (aContainer->IsAsync()) {
+    return;
+  }
+
+  AutoTArray<ImageContainer::OwningImage,4> images;
+  aContainer->GetCurrentImages(&images);
+  if (images.IsEmpty()) {
+    return;
+  }
+
+  RefPtr<gfx::SourceSurface> surface = images[0].mImage->GetAsSourceSurface();
+  if (!surface || surface->GetType() != SurfaceType::DATA_SHARED) {
+    return;
+  }
+
+  auto sharedSurface = static_cast<SourceSurfaceSharedData*>(surface.get());
+  SharedUserData* data =
+    static_cast<SharedUserData*>(sharedSurface->GetUserData(&sSharedKey));
+  if (!data) {
+    return;
+  }
+
+  data->ClearCache(aManager);
 }
 
 /* static */ void
