@@ -34,6 +34,7 @@
 #include "mozilla/RelativeLuminanceUtils.h"
 #include "mozilla/dom/Element.h"
 #include "mozilla/dom/HTMLMeterElement.h"
+#include "mozilla/layers/ClipManager.h"
 #include "mozilla/layers/StackingContextHelper.h"
 #include "mozilla/StaticPrefs.h"
 #include "nsLookAndFeel.h"
@@ -3816,7 +3817,8 @@ nsNativeThemeCocoa::RenderWidget(const WidgetInfo& aWidgetInfo,
 }
 
 bool
-nsNativeThemeCocoa::CreateWebRenderCommandsForWidget(mozilla::wr::DisplayListBuilder& aBuilder,
+nsNativeThemeCocoa::CreateWebRenderCommandsForWidget(nsDisplayItem* aItem,
+                                                     mozilla::wr::DisplayListBuilder& aBuilder,
                                                      mozilla::wr::IpcResourceUpdateQueue& aResources,
                                                      const mozilla::layers::StackingContextHelper& aSc,
                                                      mozilla::layers::WebRenderLayerManager* aManager,
@@ -3825,8 +3827,11 @@ nsNativeThemeCocoa::CreateWebRenderCommandsForWidget(mozilla::wr::DisplayListBui
                                                      const nsRect& aRect)
 {
   nsPresContext* presContext = aFrame->PresContext();
-  wr::LayoutRect bounds = wr::ToRoundedLayoutRect(
-    LayoutDeviceRect::FromAppUnits(aRect, presContext->AppUnitsPerDevPixel()));
+  LayoutDeviceRect boundsRect =
+    LayoutDeviceRect::FromAppUnits(aRect, presContext->AppUnitsPerDevPixel());
+  wr::LayoutRect bounds = wr::ToRoundedLayoutRect(boundsRect);
+  wr::LayoutRect clip =
+    mozilla::layers::ClipManager::GetItemClipRoundedRect(aItem, boundsRect);
 
   EventStates eventState = GetContentState(aFrame, aWidgetType);
 
@@ -3843,7 +3848,7 @@ nsNativeThemeCocoa::CreateWebRenderCommandsForWidget(mozilla::wr::DisplayListBui
     case StyleAppearance::Dialog:
       if (IsWindowSheet(aFrame) && VibrancyManager::SystemSupportsVibrancy()) {
         ThemeGeometryType type = ThemeGeometryTypeForWidget(aFrame, aWidgetType);
-        aBuilder.PushRect(bounds, bounds, true,
+        aBuilder.PushRect(bounds, clip, true,
                           wr::ToColorF(VibrancyFillColor(aFrame, type)));
         return true;
       }
@@ -3861,10 +3866,10 @@ nsNativeThemeCocoa::CreateWebRenderCommandsForWidget(mozilla::wr::DisplayListBui
     case StyleAppearance::Tooltip:
       if (VibrancyManager::SystemSupportsVibrancy()) {
         ThemeGeometryType type = ThemeGeometryTypeForWidget(aFrame, aWidgetType);
-        aBuilder.PushRect(bounds, bounds, true,
+        aBuilder.PushRect(bounds, clip, true,
                           wr::ToColorF(VibrancyFillColor(aFrame, type)));
       } else {
-        aBuilder.PushRect(bounds, bounds, true,
+        aBuilder.PushRect(bounds, clip, true,
                           wr::ToColorF(kTooltipBackgroundColor));
       }
       return true;
@@ -3930,7 +3935,7 @@ nsNativeThemeCocoa::CreateWebRenderCommandsForWidget(mozilla::wr::DisplayListBui
       }
 
       // White background
-      aBuilder.PushRect(bounds, bounds, true,
+      aBuilder.PushRect(bounds, clip, true,
                         wr::ToColorF(Color(1.0, 1.0, 1.0, 1.0)));
 
       wr::BorderSide side[4] = {
@@ -3946,14 +3951,14 @@ nsNativeThemeCocoa::CreateWebRenderCommandsForWidget(mozilla::wr::DisplayListBui
         wr::ToBorderWidths(borderWidth, borderWidth, borderWidth, borderWidth);
 
       mozilla::Range<const wr::BorderSide> wrsides(side, 4);
-      aBuilder.PushBorder(bounds, bounds, true, borderWidths, wrsides, borderRadius);
+      aBuilder.PushBorder(bounds, clip, true, borderWidths, wrsides, borderRadius);
 
       return true;
     }
 
     case StyleAppearance::Listbox: {
       // White background
-      aBuilder.PushRect(bounds, bounds, true,
+      aBuilder.PushRect(bounds, clip, true,
                         wr::ToColorF(Color(1.0, 1.0, 1.0, 1.0)));
 
       wr::BorderSide side[4] = {
@@ -3969,14 +3974,14 @@ nsNativeThemeCocoa::CreateWebRenderCommandsForWidget(mozilla::wr::DisplayListBui
         wr::ToBorderWidths(borderWidth, borderWidth, borderWidth, borderWidth);
 
       mozilla::Range<const wr::BorderSide> wrsides(side, 4);
-      aBuilder.PushBorder(bounds, bounds, true, borderWidths, wrsides, borderRadius);
+      aBuilder.PushBorder(bounds, clip, true, borderWidths, wrsides, borderRadius);
       return true;
     }
 
     case StyleAppearance::MozMacSourceList:
       if (VibrancyManager::SystemSupportsVibrancy()) {
         ThemeGeometryType type = ThemeGeometryTypeForWidget(aFrame, aWidgetType);
-        aBuilder.PushRect(bounds, bounds, true,
+        aBuilder.PushRect(bounds, clip, true,
                           wr::ToColorF(VibrancyFillColor(aFrame, type)));
         return true;
       }
@@ -3987,7 +3992,7 @@ nsNativeThemeCocoa::CreateWebRenderCommandsForWidget(mozilla::wr::DisplayListBui
     case StyleAppearance::MozMacVibrantTitlebarLight:
     case StyleAppearance::MozMacVibrantTitlebarDark: {
       ThemeGeometryType type = ThemeGeometryTypeForWidget(aFrame, aWidgetType);
-      aBuilder.PushRect(bounds, bounds, true,
+      aBuilder.PushRect(bounds, clip, true,
                         wr::ToColorF(VibrancyFillColor(aFrame, type)));
       return true;
     }

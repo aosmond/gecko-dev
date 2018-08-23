@@ -387,6 +387,7 @@ nsDisplayRemote::CreateWebRenderCommands(mozilla::wr::DisplayListBuilder& aBuild
   rect += mOffset;
 
   aBuilder.PushIFrame(mozilla::wr::ToRoundedLayoutRect(rect),
+      ClipManager::GetItemClipRoundedRect(this, rect),
       !BackfaceIsHidden(),
       mozilla::wr::AsPipelineId(GetRemoteLayersId()),
       /*ignoreMissingPipelines*/ true);

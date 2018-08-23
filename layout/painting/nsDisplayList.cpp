@@ -3367,9 +3367,10 @@ nsDisplaySolidColor::CreateWebRenderCommands(mozilla::wr::DisplayListBuilder& aB
   LayoutDeviceRect bounds = LayoutDeviceRect::FromAppUnits(
         GetPaintRect(), mFrame->PresContext()->AppUnitsPerDevPixel());
   wr::LayoutRect roundedRect = wr::ToRoundedLayoutRect(bounds);
+  wr::LayoutRect clipRect = ClipManager::GetItemClipRoundedRect(this, bounds);
 
   aBuilder.PushRect(roundedRect,
-                    roundedRect,
+                    clipRect,
                     !BackfaceIsHidden(),
                     wr::ToColorF(ToDeviceColor(mColor)));
 
@@ -3420,8 +3421,9 @@ nsDisplaySolidColorRegion::CreateWebRenderCommands(mozilla::wr::DisplayListBuild
     LayoutDeviceRect layerRects = LayoutDeviceRect::FromAppUnits(
       rect, mFrame->PresContext()->AppUnitsPerDevPixel());
     wr::LayoutRect roundedRect = wr::ToRoundedLayoutRect(layerRects);
+    wr::LayoutRect clipRect = ClipManager::GetItemClipRoundedRect(this, layerRects);
     aBuilder.PushRect(roundedRect,
-                      roundedRect,
+                      clipRect,
                       !BackfaceIsHidden(),
                       wr::ToColorF(ToDeviceColor(mColor)));
   }
@@ -4502,7 +4504,7 @@ nsDisplayThemedBackground::CreateWebRenderCommands(mozilla::wr::DisplayListBuild
                                                    nsDisplayListBuilder* aDisplayListBuilder)
 {
   nsITheme *theme = StyleFrame()->PresContext()->GetTheme();
-  return theme->CreateWebRenderCommandsForWidget(aBuilder, aResources, aSc, aManager,
+  return theme->CreateWebRenderCommandsForWidget(this, aBuilder, aResources, aSc, aManager,
                                                  StyleFrame(), mAppearance, mBackgroundRect);
 }
 
@@ -4753,9 +4755,10 @@ nsDisplayBackgroundColor::CreateWebRenderCommands(mozilla::wr::DisplayListBuilde
   LayoutDeviceRect bounds = LayoutDeviceRect::FromAppUnits(
         mBackgroundRect, mFrame->PresContext()->AppUnitsPerDevPixel());
   wr::LayoutRect roundedRect = wr::ToRoundedLayoutRect(bounds);
+  wr::LayoutRect clipRect = ClipManager::GetItemClipRoundedRect(this, bounds);
 
   aBuilder.PushRect(roundedRect,
-                    roundedRect,
+                    clipRect,
                     !BackfaceIsHidden(),
                     wr::ToColorF(ToDeviceColor(mColor)));
 
@@ -4945,8 +4948,9 @@ nsDisplayClearBackground::CreateWebRenderCommands(mozilla::wr::DisplayListBuilde
   LayoutDeviceRect bounds = LayoutDeviceRect::FromAppUnits(
     nsRect(ToReferenceFrame(), mFrame->GetSize()),
     mFrame->PresContext()->AppUnitsPerDevPixel());
+  wr::LayoutRect clipRect = ClipManager::GetItemClipRoundedRect(this, bounds);
 
-  aBuilder.PushClearRect(wr::ToRoundedLayoutRect(bounds));
+  aBuilder.PushClearRect(wr::ToRoundedLayoutRect(bounds), clipRect);
 
   return true;
 }
@@ -5122,8 +5126,9 @@ nsDisplayCompositorHitTestInfo::CreateWebRenderCommands(mozilla::wr::DisplayList
     LayoutDeviceRect::FromAppUnits(mArea, mAppUnitsPerDevPixel);
 
   const wr::LayoutRect rect = wr::ToRoundedLayoutRect(devRect);
+  const wr::LayoutRect clip = ClipManager::GetItemClipRoundedRect(this, devRect);
 
-  aBuilder.PushRect(rect, rect, !BackfaceIsHidden(), wr::ToColorF(gfx::Color()));
+  aBuilder.PushRect(rect, clip, !BackfaceIsHidden(), wr::ToColorF(gfx::Color()));
   aBuilder.ClearHitTestInfo();
 
   return true;
@@ -5219,13 +5224,13 @@ nsDisplayCaret::CreateWebRenderCommands(mozilla::wr::DisplayListBuilder& aBuilde
 
   // Note, WR will pixel snap anything that is layout aligned.
   aBuilder.PushRect(caret,
-                    caret,
+                    ClipManager::GetItemClipRoundedRect(this, devCaretRect),
                     !BackfaceIsHidden(),
                     wr::ToColorF(color));
 
   if (!devHookRect.IsEmpty()) {
     aBuilder.PushRect(hook,
-                      hook,
+                      ClipManager::GetItemClipRoundedRect(this, devHookRect),
                       !BackfaceIsHidden(),
                       wr::ToColorF(color));
   }
@@ -5522,7 +5527,7 @@ nsDisplayBoxShadowOuter::CreateWebRenderCommands(mozilla::wr::DisplayListBuilder
       LayoutDeviceRect deviceBox = LayoutDeviceRect::FromAppUnits(
           shadowRect, appUnitsPerDevPixel);
       wr::LayoutRect deviceBoxRect = wr::ToRoundedLayoutRect(deviceBox);
-      wr::LayoutRect deviceClipRect = wr::ToRoundedLayoutRect(clipRect);
+      wr::LayoutRect deviceClipRect = ClipManager::GetItemClipRoundedRect(this, clipRect);
 
       LayoutDeviceSize zeroSize;
       wr::BorderRadius borderRadius = wr::ToBorderRadius(zeroSize, zeroSize,
@@ -5629,7 +5634,8 @@ nsDisplayBoxShadowInner::CanCreateWebRenderCommands(nsDisplayListBuilder* aBuild
 }
 
 /* static */ void
-nsDisplayBoxShadowInner::CreateInsetBoxShadowWebRenderCommands(mozilla::wr::DisplayListBuilder& aBuilder,
+nsDisplayBoxShadowInner::CreateInsetBoxShadowWebRenderCommands(nsDisplayItem* aItem,
+                                                               mozilla::wr::DisplayListBuilder& aBuilder,
                                                                const StackingContextHelper& aSc,
                                                                nsRegion& aVisibleRegion,
                                                                nsIFrame* aFrame,
@@ -5664,7 +5670,8 @@ nsDisplayBoxShadowInner::CreateInsetBoxShadowWebRenderCommands(mozilla::wr::Disp
       // Now translate everything to device pixels.
       LayoutDeviceRect deviceBoxRect = LayoutDeviceRect::FromAppUnits(
           shadowRect, appUnitsPerDevPixel);
-      wr::LayoutRect deviceClipRect = wr::ToRoundedLayoutRect(clipRect);
+      wr::LayoutRect deviceClipRect =
+          ClipManager::GetItemClipRoundedRect(aItem, clipRect);
       Color shadowColor = nsCSSRendering::GetShadowColor(shadowItem, aFrame, 1.0);
 
       LayoutDevicePoint shadowOffset = LayoutDevicePoint::FromAppUnits(
@@ -5711,7 +5718,7 @@ nsDisplayBoxShadowInner::CreateWebRenderCommands(mozilla::wr::DisplayListBuilder
   nsRegion visible = GetBounds(aDisplayListBuilder, &snap);
   nsPoint offset = ToReferenceFrame();
   nsRect borderRect = nsRect(offset, mFrame->GetSize());
-  nsDisplayBoxShadowInner::CreateInsetBoxShadowWebRenderCommands(aBuilder, aSc, visible,
+  nsDisplayBoxShadowInner::CreateInsetBoxShadowWebRenderCommands(this, aBuilder, aSc, visible,
                                                                  mFrame, borderRect);
 
   return true;
@@ -5982,6 +5989,7 @@ nsDisplayWrapList::CreateWebRenderCommands(mozilla::wr::DisplayListBuilder& aBui
                                            mozilla::layers::WebRenderLayerManager* aManager,
                                            nsDisplayListBuilder* aDisplayListBuilder)
 {
+  // XXX(aosmond): apply to stacking context???
   aManager->CommandBuilder().CreateWebRenderCommandsFromDisplayList(GetChildren(),
                                                                     this,
                                                                     aDisplayListBuilder,

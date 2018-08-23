@@ -1266,7 +1266,8 @@ WR_FUNC;
 
 WR_INLINE
 void wr_dp_push_clear_rect(WrState *aState,
-                           LayoutRect aRect)
+                           LayoutRect aRect,
+                           LayoutRect aClip)
 WR_FUNC;
 
 WR_INLINE
@@ -1283,6 +1284,7 @@ WR_FUNC;
 WR_INLINE
 void wr_dp_push_iframe(WrState *aState,
                        LayoutRect aRect,
+                       LayoutRect aClip,
                        bool aIsBackfaceVisible,
                        WrPipelineId aPipelineId,
                        bool aIgnoreMissingPipeline)

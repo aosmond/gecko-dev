@@ -69,6 +69,15 @@ public:
                           const Maybe<wr::WrClipId>& aClipId);
   void PopOverrideForASR(const ActiveScrolledRoot* aASR);
 
+  static LayoutDeviceRect GetItemClipRect(nsDisplayItem* aItem,
+                                          const LayoutDeviceRect& aBounds);
+
+  static wr::LayoutRect GetItemClipRoundedRect(nsDisplayItem* aItem,
+                                               const LayoutDeviceRect& aBounds)
+  {
+    return wr::ToRoundedLayoutRect(GetItemClipRect(aItem, aBounds));
+  }
+
 private:
   Maybe<wr::WrClipId> ClipIdAfterOverride(const Maybe<wr::WrClipId>& aClipId);
 

@@ -131,7 +131,8 @@ public:
                                      wr::IpcResourceUpdateQueue& aResources,
                                      bool aFallback = false);
 
-  void CreateAsyncImageWebRenderCommands(mozilla::wr::DisplayListBuilder& aBuilder,
+  void CreateAsyncImageWebRenderCommands(nsDisplayItem* aItem,
+                                         mozilla::wr::DisplayListBuilder& aBuilder,
                                          ImageContainer* aContainer,
                                          const StackingContextHelper& aSc,
                                          const LayoutDeviceRect& aBounds,

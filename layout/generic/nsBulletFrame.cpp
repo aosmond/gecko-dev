@@ -14,6 +14,7 @@
 #include "gfxUtils.h"
 #include "mozilla/gfx/2D.h"
 #include "mozilla/gfx/PathHelpers.h"
+#include "mozilla/layers/ClipManager.h"
 #include "mozilla/layers/LayersMessages.h"
 #include "mozilla/layers/StackingContextHelper.h"
 #include "mozilla/layers/WebRenderLayerManager.h"
@@ -493,9 +494,10 @@ BulletRenderer::CreateWebRenderCommandsForImage(nsDisplayItem* aItem,
   }
 
   wr::LayoutRect dest = wr::ToRoundedLayoutRect(destRect);
+  wr::LayoutRect clip = layers::ClipManager::GetItemClipRoundedRect(aItem, destRect);
 
   aBuilder.PushImage(dest,
-                     dest,
+                     clip,
                      !aItem->BackfaceIsHidden(),
                      wr::ImageRendering::Auto,
                      key.value());
@@ -517,17 +519,19 @@ BulletRenderer::CreateWebRenderCommandsForPath(nsDisplayItem* aItem,
   bool isBackfaceVisible = !aItem->BackfaceIsHidden();
   switch (mListStyleType) {
     case NS_STYLE_LIST_STYLE_CIRCLE: {
+      wr::LayoutRect clip = layers::ClipManager::GetItemClipRoundedRect(aItem, mPathRect);
       LayoutDeviceSize radii = mPathRect.Size() / 2.0;
       auto borderWidths = wr::ToBorderWidths(1.0, 1.0, 1.0, 1.0);
       wr::BorderSide side = { color, wr::BorderStyle::Solid };
       wr::BorderSide sides[4] = { side, side, side, side };
       Range<const wr::BorderSide> sidesRange(sides, 4);
-      aBuilder.PushBorder(dest, dest, isBackfaceVisible, borderWidths,
+      aBuilder.PushBorder(dest, clip, isBackfaceVisible, borderWidths,
                           sidesRange,
                           wr::ToBorderRadius(radii, radii, radii, radii));
       return true;
     }
     case NS_STYLE_LIST_STYLE_DISC: {
+      wr::LayoutRect clip = layers::ClipManager::GetItemClipRoundedRect(aItem, mPathRect);
       nsTArray<wr::ComplexClipRegion> clips;
       clips.AppendElement(wr::ToComplexClipRegion(
         RoundedRect(mPathRect.ToUnknownRect(),
@@ -535,12 +539,13 @@ BulletRenderer::CreateWebRenderCommandsForPath(nsDisplayItem* aItem,
       ));
       auto clipId = aBuilder.DefineClip(Nothing(), dest, &clips, nullptr);
       aBuilder.PushClip(clipId);
-      aBuilder.PushRect(dest, dest, isBackfaceVisible, color);
+      aBuilder.PushRect(dest, clip, isBackfaceVisible, color);
       aBuilder.PopClip();
       return true;
     }
     case NS_STYLE_LIST_STYLE_SQUARE: {
-      aBuilder.PushRect(dest, dest, isBackfaceVisible, color);
+      wr::LayoutRect clip = layers::ClipManager::GetItemClipRoundedRect(aItem, mPathRect);
+      aBuilder.PushRect(dest, clip, isBackfaceVisible, color);
       return true;
     }
     default:

@@ -418,8 +418,9 @@ nsDisplayCanvasBackgroundColor::CreateWebRenderCommands(mozilla::wr::DisplayList
           bgClipRect, appUnitsPerDevPixel);
 
   wr::LayoutRect roundedRect = wr::ToRoundedLayoutRect(rect);
+  wr::LayoutRect clipRect = ClipManager::GetItemClipRoundedRect(this, rect);
   aBuilder.PushRect(roundedRect,
-                    roundedRect,
+                    clipRect,
                     !BackfaceIsHidden(),
                     wr::ToColorF(ToDeviceColor(mColor)));
   return true;

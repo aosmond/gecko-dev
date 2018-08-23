@@ -13,6 +13,7 @@
 #include "mozilla/layers/WebRenderLayerManager.h"
 #include "mozilla/webrender/WebRenderAPI.h"
 #include "nsDisplayList.h"
+#include "nsStyleStructInlines.h"
 #include "UnitTransforms.h"
 
 #define CLIP_LOG(...)
@@ -138,6 +139,64 @@ ClipManager::ClipIdAfterOverride(const Maybe<wr::WrClipId>& aClipId)
   return it->second.top();
 }
 
+/* static */ LayoutDeviceRect
+ClipManager::GetItemClipRect(nsDisplayItem* aItem,
+                             const LayoutDeviceRect& aBounds)
+{
+  const DisplayItemClipChain* clip = aItem->GetClipChain();
+  const ActiveScrolledRoot* asr = aItem->GetActiveScrolledRoot();
+  DisplayItemType type = aItem->GetType();
+  if (type == DisplayItemType::TYPE_STICKY_POSITION) {
+    // For sticky position items, the ASR is computed differently depending
+    // on whether the item has a fixed descendant or not. But for WebRender
+    // purposes we always want to use the ASR that would have been used if it
+    // didn't have fixed descendants, which is stored as the "container ASR" on
+    // the sticky item.
+    asr = static_cast<nsDisplayStickyPosition*>(aItem)->GetContainerASR();
+  }
+
+  if (!clip || clip->mASR != asr || clip->mClip.GetRoundedRectCount() > 0) {
+    // We included the clip as part of the clip chain for this display item,
+    // already, so there is nothing more to do.
+    return aBounds;
+  }
+
+  switch (type) {
+    case DisplayItemType::TYPE_WRAP_LIST:
+    case DisplayItemType::TYPE_TRANSFORM:
+    case DisplayItemType::TYPE_PERSPECTIVE:
+    case DisplayItemType::TYPE_MASK:
+    case DisplayItemType::TYPE_OPACITY:
+    case DisplayItemType::TYPE_OWN_LAYER:
+    case DisplayItemType::TYPE_FIXED_POSITION:
+    case DisplayItemType::TYPE_STICKY_POSITION:
+    case DisplayItemType::TYPE_FILTER:
+    case DisplayItemType::TYPE_SVG_WRAPPER:
+      return aBounds;
+    case DisplayItemType::TYPE_TEXT:
+      if (aItem->Frame()->StyleText()->HasTextShadow()) {
+        return aBounds;
+      }
+      break;
+    default:
+      break;
+  }
+
+  // Zoom display items report their bounds etc using the parent document's
+  // APD because zoom items act as a conversion layer between the two different
+  // APDs.
+  int32_t auPerDevPixel = aItem->Frame()->PresContext()->AppUnitsPerDevPixel();
+  if (aItem->GetType() == DisplayItemType::TYPE_ZOOM) {
+    auPerDevPixel = static_cast<nsDisplayZoom*>(aItem)->GetParentAppUnitsPerDevPixel();
+  }
+
+  // The leaf of the clip chain was not put in mItemClipStack, so now we need
+  // to take it into account for the clip rect for this display item.
+  LayoutDeviceRect clipRect = LayoutDeviceRect::FromAppUnits(
+    clip->mClip.GetClipRect(), auPerDevPixel);
+  return aBounds.Intersect(clipRect);
+}
+
 void
 ClipManager::BeginItem(nsDisplayItem* aItem,
                        const StackingContextHelper& aStackingContext)
@@ -146,13 +205,38 @@ ClipManager::BeginItem(nsDisplayItem* aItem,
 
   const DisplayItemClipChain* clip = aItem->GetClipChain();
   const ActiveScrolledRoot* asr = aItem->GetActiveScrolledRoot();
-  if (aItem->GetType() == DisplayItemType::TYPE_STICKY_POSITION) {
+  DisplayItemType type = aItem->GetType();
+  if (type == DisplayItemType::TYPE_STICKY_POSITION) {
     // For sticky position items, the ASR is computed differently depending
     // on whether the item has a fixed descendant or not. But for WebRender
     // purposes we always want to use the ASR that would have been used if it
     // didn't have fixed descendants, which is stored as the "container ASR" on
     // the sticky item.
     asr = static_cast<nsDisplayStickyPosition*>(aItem)->GetContainerASR();
+  }
+
+  if (clip && clip->mASR == asr && clip->mClip.GetRoundedRectCount() == 0) {
+    switch (type) {
+      case DisplayItemType::TYPE_WRAP_LIST:
+      case DisplayItemType::TYPE_TRANSFORM:
+      case DisplayItemType::TYPE_PERSPECTIVE:
+      case DisplayItemType::TYPE_MASK:
+      case DisplayItemType::TYPE_OPACITY:
+      case DisplayItemType::TYPE_OWN_LAYER:
+      case DisplayItemType::TYPE_FIXED_POSITION:
+      case DisplayItemType::TYPE_STICKY_POSITION:
+      case DisplayItemType::TYPE_FILTER:
+      case DisplayItemType::TYPE_SVG_WRAPPER:
+        break;
+      case DisplayItemType::TYPE_TEXT:
+        if (aItem->Frame()->StyleText()->HasTextShadow()) {
+          break;
+        }
+        MOZ_FALLTHROUGH;
+      default:
+        clip = clip->mParent;
+        break;
+    }
   }
 
   ItemClips clips(asr, clip);

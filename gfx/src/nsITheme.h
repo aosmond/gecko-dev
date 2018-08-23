@@ -19,6 +19,7 @@ class gfxContext;
 class nsAttrValue;
 class nsPresContext;
 class nsDeviceContext;
+class nsDisplayItem;
 class nsIFrame;
 class nsAtom;
 class nsIWidget;
@@ -92,7 +93,8 @@ public:
    *         given widget type, false if DrawWidgetBackground need sto be called
    *         instead.
    */
-  virtual bool CreateWebRenderCommandsForWidget(mozilla::wr::DisplayListBuilder& aBuilder,
+  virtual bool CreateWebRenderCommandsForWidget(nsDisplayItem* aItem,
+                                                mozilla::wr::DisplayListBuilder& aBuilder,
                                                 mozilla::wr::IpcResourceUpdateQueue& aResources,
                                                 const mozilla::layers::StackingContextHelper& aSc,
                                                 mozilla::layers::WebRenderLayerManager* aManager,

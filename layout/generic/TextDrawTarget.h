@@ -8,6 +8,7 @@
 #define TextDrawTarget_h
 
 #include "mozilla/gfx/2D.h"
+#include "mozilla/layers/ClipManager.h"
 #include "mozilla/layers/WebRenderLayerManager.h"
 #include "mozilla/layers/WebRenderBridgeChild.h"
 #include "mozilla/webrender/WebRenderAPI.h"
@@ -71,6 +72,8 @@ public:
     // antialiased pixels beyond the measured text extents.
     layoutClipRect.Inflate(1);
     mSize = IntSize::Ceil(layoutClipRect.Width(), layoutClipRect.Height());
+
+    layoutClipRect = layers::ClipManager::GetItemClipRect(aItem, layoutClipRect);
     mClipStack.AppendElement(layoutClipRect);
 
     mBackfaceVisible = !aItem->BackfaceIsHidden();
@@ -328,7 +331,17 @@ public:
                  wr::ImageRendering aFilter,
                  const wr::ColorF& aColor)
   {
-    mBuilder.PushImage(aBounds, aClip, true, aFilter, aKey, true, aColor);
+    wr::LayoutRect clip = ClipRect();
+    wr::LayoutRect merge;
+    merge.origin.x = std::max(clip.origin.x, aClip.origin.x);
+    merge.origin.y = std::max(clip.origin.y, aClip.origin.y);
+    merge.size.width = std::min(clip.origin.x - merge.origin.x + clip.size.width, aClip.origin.x - merge.origin.x + aClip.size.width);
+    merge.size.height = std::min(clip.origin.y - merge.origin.y + clip.size.height, aClip.origin.y - merge.origin.y + aClip.size.height);
+    if (merge.size.width < 0 || merge.size.height < 0) {
+      merge.size.width = 0;
+      merge.size.height = 0;
+    }
+    mBuilder.PushImage(aBounds, merge, true, aFilter, aKey, true, aColor);
   }
 
 private:

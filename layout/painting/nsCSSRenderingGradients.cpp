@@ -1160,7 +1160,8 @@ nsCSSGradientRenderer::BuildWebRenderParameters(float aOpacity,
 }
 
 void
-nsCSSGradientRenderer::BuildWebRenderDisplayItems(wr::DisplayListBuilder& aBuilder,
+nsCSSGradientRenderer::BuildWebRenderDisplayItems(nsDisplayItem* aItem,
+                                                  wr::DisplayListBuilder& aBuilder,
                                                   const layers::StackingContextHelper& aSc,
                                                   const nsRect& aDest,
                                                   const nsRect& aFillArea,
@@ -1186,13 +1187,14 @@ nsCSSGradientRenderer::BuildWebRenderDisplayItems(wr::DisplayListBuilder& aBuild
                               FindTileStart(aFillArea.y, aDest.y, aRepeatSize.height));
 
   // Translate the parameters into device coordinates
-  LayoutDeviceRect clipBounds = LayoutDevicePixel::FromAppUnits(aFillArea, appUnitsPerDevPixel);
+  LayoutDeviceRect fillArea = LayoutDevicePixel::FromAppUnits(aFillArea, appUnitsPerDevPixel);
+  LayoutDeviceRect clipBounds = mozilla::layers::ClipManager::GetItemClipRect(aItem, fillArea);
   LayoutDeviceRect firstTileBounds = LayoutDevicePixel::FromAppUnits(nsRect(firstTile, aDest.Size()), appUnitsPerDevPixel);
   LayoutDeviceSize tileRepeat = LayoutDevicePixel::FromAppUnits(aRepeatSize, appUnitsPerDevPixel);
 
   // Calculate the bounds of the gradient display item, which starts at the first
   // tile and extends to the end of clip bounds
-  LayoutDevicePoint tileToClip = clipBounds.BottomRight() - firstTileBounds.TopLeft();
+  LayoutDevicePoint tileToClip = fillArea.BottomRight() - firstTileBounds.TopLeft();
   LayoutDeviceRect gradientBounds = LayoutDeviceRect(firstTileBounds.TopLeft(),
                                                      LayoutDeviceSize(tileToClip.x, tileToClip.y));
 

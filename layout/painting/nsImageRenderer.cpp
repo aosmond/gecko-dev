@@ -594,7 +594,7 @@ nsImageRenderer::BuildWebRenderDisplayItems(nsPresContext* aPresContext,
         nsCSSGradientRenderer::Create(aPresContext, mForFrame->Style(),
                                       mGradientData, mSize);
 
-      renderer.BuildWebRenderDisplayItems(aBuilder, aSc, aDest, aFill,
+      renderer.BuildWebRenderDisplayItems(aItem, aBuilder, aSc, aDest, aFill,
                                           aRepeatSize, aSrc, !aItem->BackfaceIsHidden(), aOpacity);
       break;
     }
@@ -641,7 +641,7 @@ nsImageRenderer::BuildWebRenderDisplayItems(nsPresContext* aPresContext,
                  aFill.XMost() - firstTilePos.x, aFill.YMost() - firstTilePos.y),
           appUnitsPerDevPixel);
       wr::LayoutRect fill = wr::ToRoundedLayoutRect(fillRect);
-      wr::LayoutRect clip = wr::ToRoundedLayoutRect(
+      wr::LayoutRect clip = ClipManager::GetItemClipRoundedRect(aItem,
           LayoutDeviceRect::FromAppUnits(aFill, appUnitsPerDevPixel));
 
       LayoutDeviceSize gapSize = LayoutDeviceSize::FromAppUnits(

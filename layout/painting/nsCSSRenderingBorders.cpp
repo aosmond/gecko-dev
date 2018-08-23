@@ -3435,24 +3435,18 @@ nsCSSBorderRenderer::CreateWebRenderCommands(nsDisplayItem* aItem,
                                                      LayoutDeviceSize::FromUnknownSize(mBorderRadii[3]),
                                                      LayoutDeviceSize::FromUnknownSize(mBorderRadii[2]));
 
+  LayoutDeviceRect clipRect = layers::ClipManager::GetItemClipRect(aItem, outerRect);
   if (mLocalClip) {
-    LayoutDeviceRect clip = LayoutDeviceRect::FromUnknownRect(mLocalClip.value());
-    wr::LayoutRect clipRect = wr::ToRoundedLayoutRect(clip);
-    wr::WrClipId clipId = aBuilder.DefineClip(Nothing(), clipRect);
-    aBuilder.PushClip(clipId);
+    clipRect = clipRect.Intersect(LayoutDeviceRect::FromUnknownRect(mLocalClip.value()));
   }
 
   Range<const wr::BorderSide> wrsides(side, 4);
   aBuilder.PushBorder(roundedRect,
-                      roundedRect,
+                      wr::ToRoundedLayoutRect(clipRect),
                       mBackfaceIsVisible,
                       wr::ToBorderWidths(mBorderWidths[0], mBorderWidths[1], mBorderWidths[2], mBorderWidths[3]),
                       wrsides,
                       borderRadius);
-
-  if (mLocalClip) {
-    aBuilder.PopClip();
-  }
 }
 
 /* static */Maybe<nsCSSBorderImageRenderer>
@@ -3698,12 +3692,13 @@ nsCSSBorderImageRenderer::CreateWebRenderCommands(nsDisplayItem* aItem,
     mArea, appUnitsPerDevPixel);
   wr::LayoutRect dest = wr::ToRoundedLayoutRect(destRect);
 
-  wr::LayoutRect clip = dest;
+  LayoutDeviceRect clipRect = layers::ClipManager::GetItemClipRect(aItem, destRect);
   if (!mClip.IsEmpty()) {
-    LayoutDeviceRect clipRect = LayoutDeviceRect::FromAppUnits(
+    LayoutDeviceRect localClipRect = LayoutDeviceRect::FromAppUnits(
       mClip, appUnitsPerDevPixel);
-    clip = wr::ToRoundedLayoutRect(clipRect);
+    clipRect = clipRect.Intersect(localClipRect);
   }
+  wr::LayoutRect clip = wr::ToRoundedLayoutRect(clipRect);
 
   switch (mImageRenderer.GetType()) {
     case eStyleImageType_Image:

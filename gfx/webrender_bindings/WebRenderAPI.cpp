@@ -996,11 +996,12 @@ DisplayListBuilder::PushRect(const wr::LayoutRect& aBounds,
 }
 
 void
-DisplayListBuilder::PushClearRect(const wr::LayoutRect& aBounds)
+DisplayListBuilder::PushClearRect(const wr::LayoutRect& aBounds,
+                                  const wr::LayoutRect& aClip)
 {
   WRDL_LOG("PushClearRect b=%s\n", mWrState,
       Stringify(aBounds).c_str());
-  wr_dp_push_clear_rect(mWrState, aBounds);
+  wr_dp_push_clear_rect(mWrState, aBounds, aClip);
 }
 
 void
@@ -1133,11 +1134,12 @@ DisplayListBuilder::PushYCbCrInterleavedImage(const wr::LayoutRect& aBounds,
 
 void
 DisplayListBuilder::PushIFrame(const wr::LayoutRect& aBounds,
+                               const wr::LayoutRect& aClip,
                                bool aIsBackfaceVisible,
                                PipelineId aPipeline,
                                bool aIgnoreMissingPipeline)
 {
-  wr_dp_push_iframe(mWrState, aBounds, aIsBackfaceVisible, aPipeline, aIgnoreMissingPipeline);
+  wr_dp_push_iframe(mWrState, aBounds, aClip, aIsBackfaceVisible, aPipeline, aIgnoreMissingPipeline);
 }
 
 void

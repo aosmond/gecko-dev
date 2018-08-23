@@ -157,7 +157,7 @@ nsDisplayButtonBoxShadowOuter::CreateWebRenderCommands(
 
   LayoutDeviceRect clipRect =
     LayoutDeviceRect::FromAppUnits(GetPaintRect(), appUnitsPerDevPixel);
-  wr::LayoutRect deviceClipRect = wr::ToRoundedLayoutRect(clipRect);
+  wr::LayoutRect deviceClipRect = ClipManager::GetItemClipRoundedRect(this, clipRect);
 
   bool hasBorderRadius;
   Unused << nsCSSRendering::HasBoxShadowNativeTheme(mFrame, hasBorderRadius);
@@ -268,7 +268,8 @@ nsDisplayButtonBorder::CreateWebRenderCommands(mozilla::wr::DisplayListBuilder& 
   nsRect buttonRect = nsRect(ToReferenceFrame(), mFrame->GetSize());
   bool snap;
   nsRegion visible = GetBounds(aDisplayListBuilder, &snap);
-  nsDisplayBoxShadowInner::CreateInsetBoxShadowWebRenderCommands(aBuilder,
+  nsDisplayBoxShadowInner::CreateInsetBoxShadowWebRenderCommands(this,
+                                                                 aBuilder,
                                                                  aSc,
                                                                  visible,
                                                                  mFrame,

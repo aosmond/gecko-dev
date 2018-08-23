@@ -2266,10 +2266,12 @@ nsDisplaySelectionOverlay::CreateWebRenderCommands(mozilla::wr::DisplayListBuild
                                                   mozilla::layers::WebRenderLayerManager* aManager,
                                                   nsDisplayListBuilder* aDisplayListBuilder)
 {
-  wr::LayoutRect bounds = wr::ToRoundedLayoutRect(
+  LayoutDeviceRect boundsRect =
     LayoutDeviceRect::FromAppUnits(nsRect(ToReferenceFrame(), Frame()->GetSize()),
-                                   mFrame->PresContext()->AppUnitsPerDevPixel()));
-  aBuilder.PushRect(bounds, bounds, !BackfaceIsHidden(),
+                                   mFrame->PresContext()->AppUnitsPerDevPixel());
+  wr::LayoutRect bounds = wr::ToRoundedLayoutRect(boundsRect);
+  wr::LayoutRect clip = ClipManager::GetItemClipRoundedRect(this, boundsRect);
+  aBuilder.PushRect(bounds, clip, !BackfaceIsHidden(),
                     wr::ToColorF(ComputeColor()));
   return true;
 }

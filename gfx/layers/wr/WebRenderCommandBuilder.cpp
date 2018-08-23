@@ -1496,7 +1496,8 @@ WebRenderCommandBuilder::CreateImageKey(nsDisplayItem* aItem,
     // TODO!
     // We appear to be using the image bridge for a lot (most/all?) of
     // layers-free image handling and that breaks frame consistency.
-    imageData->CreateAsyncImageWebRenderCommands(aBuilder,
+    imageData->CreateAsyncImageWebRenderCommands(aItem,
+                                                 aBuilder,
                                                  aContainer,
                                                  aSc,
                                                  rect,
@@ -1540,9 +1541,10 @@ WebRenderCommandBuilder::PushImage(nsDisplayItem* aItem,
     return false;
   }
 
+  auto clip = ClipManager::GetItemClipRoundedRect(aItem, aRect);
   auto r = wr::ToRoundedLayoutRect(aRect);
   gfx::SamplingFilter sampleFilter = nsLayoutUtils::GetSamplingFilterForFrame(aItem->Frame());
-  aBuilder.PushImage(r, r, !aItem->BackfaceIsHidden(), wr::ToImageRendering(sampleFilter), key.value());
+  aBuilder.PushImage(r, clip, !aItem->BackfaceIsHidden(), wr::ToImageRendering(sampleFilter), key.value());
 
   return true;
 }
@@ -1922,9 +1924,10 @@ WebRenderCommandBuilder::PushItemAsImage(nsDisplayItem* aItem,
   }
 
   wr::LayoutRect dest = wr::ToRoundedLayoutRect(imageRect);
+  wr::LayoutRect clip = ClipManager::GetItemClipRoundedRect(aItem, imageRect);
   gfx::SamplingFilter sampleFilter = nsLayoutUtils::GetSamplingFilterForFrame(aItem->Frame());
   aBuilder.PushImage(dest,
-                     dest,
+                     clip,
                      !aItem->BackfaceIsHidden(),
                      wr::ToImageRendering(sampleFilter),
                      fallbackData->GetKey().value());

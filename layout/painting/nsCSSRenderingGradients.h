@@ -81,7 +81,8 @@ public:
    *               to the next origin of a tile
    * aSrc - the area of the gradient that will fill aDest
    */
-  void BuildWebRenderDisplayItems(wr::DisplayListBuilder& aBuilder,
+  void BuildWebRenderDisplayItems(nsDisplayItem* aItem,
+                                  wr::DisplayListBuilder& aBuilder,
                                   const layers::StackingContextHelper& aSc,
                                   const nsRect& aDest,
                                   const nsRect& aFill,

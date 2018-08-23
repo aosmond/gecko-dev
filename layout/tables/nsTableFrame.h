@@ -299,7 +299,8 @@ public:
   bool BCRecalcNeeded(ComputedStyle* aOldComputedStyle,
                         ComputedStyle* aNewComputedStyle);
   void PaintBCBorders(DrawTarget& aDrawTarget, const nsRect& aDirtyRect);
-  void CreateWebRenderCommandsForBCBorders(mozilla::wr::DisplayListBuilder& aBuilder,
+  void CreateWebRenderCommandsForBCBorders(nsDisplayItem* aItem,
+                                           mozilla::wr::DisplayListBuilder& aBuilder,
                                            const mozilla::layers::StackingContextHelper& aSc,
                                            const nsRect& aVisibleRect,
                                            const nsPoint& aOffsetToReferenceFrame);

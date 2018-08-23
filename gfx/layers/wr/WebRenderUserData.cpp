@@ -200,7 +200,8 @@ WebRenderImageData::GetImageClient()
 }
 
 void
-WebRenderImageData::CreateAsyncImageWebRenderCommands(mozilla::wr::DisplayListBuilder& aBuilder,
+WebRenderImageData::CreateAsyncImageWebRenderCommands(nsDisplayItem* aItem,
+                                                      mozilla::wr::DisplayListBuilder& aBuilder,
                                                       ImageContainer* aContainer,
                                                       const StackingContextHelper& aSc,
                                                       const LayoutDeviceRect& aBounds,
@@ -238,7 +239,8 @@ WebRenderImageData::CreateAsyncImageWebRenderCommands(mozilla::wr::DisplayListBu
   // where it will be done when we build the display list for the iframe.
   // That happens in AsyncImagePipelineManager.
   wr::LayoutRect r = wr::ToRoundedLayoutRect(aBounds);
-  aBuilder.PushIFrame(r, aIsBackfaceVisible, mPipelineId.ref(), /*ignoreMissingPipelines*/ false);
+  wr::LayoutRect clip = layers::ClipManager::GetItemClipRoundedRect(aItem, aBounds);
+  aBuilder.PushIFrame(r, clip, aIsBackfaceVisible, mPipelineId.ref(), /*ignoreMissingPipelines*/ false);
 
   WrBridge()->AddWebRenderParentCommand(OpUpdateAsyncImagePipeline(mPipelineId.value(),
                                                                    aSCBounds,

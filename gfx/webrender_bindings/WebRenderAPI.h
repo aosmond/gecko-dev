@@ -344,7 +344,8 @@ public:
                 bool aIsBackfaceVisible,
                 const wr::ColorF& aColor);
 
-  void PushClearRect(const wr::LayoutRect& aBounds);
+  void PushClearRect(const wr::LayoutRect& aBounds,
+                     const wr::LayoutRect& aClip);
 
   void PushLinearGradient(const wr::LayoutRect& aBounds,
                           const wr::LayoutRect& aClip,
@@ -409,6 +410,7 @@ public:
                                  wr::ImageRendering aFilter);
 
   void PushIFrame(const wr::LayoutRect& aBounds,
+                  const wr::LayoutRect& aClip,
                   bool aIsBackfaceVisible,
                   wr::PipelineId aPipeline,
                   bool aIgnoreMissingPipeline);

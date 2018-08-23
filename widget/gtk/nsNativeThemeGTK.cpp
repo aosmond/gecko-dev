@@ -39,6 +39,7 @@
 #include "mozilla/gfx/HelpersCairo.h"
 #include "mozilla/gfx/PathHelpers.h"
 #include "mozilla/Preferences.h"
+#include "mozilla/layers/ClipManager.h"
 #include "mozilla/layers/StackingContextHelper.h"
 #include "mozilla/StaticPrefs.h"
 
@@ -1232,7 +1233,8 @@ nsNativeThemeGTK::DrawWidgetBackground(gfxContext* aContext,
 }
 
 bool
-nsNativeThemeGTK::CreateWebRenderCommandsForWidget(mozilla::wr::DisplayListBuilder& aBuilder,
+nsNativeThemeGTK::CreateWebRenderCommandsForWidget(nsDisplayItem* aItem,
+                                                   mozilla::wr::DisplayListBuilder& aBuilder,
                                                    mozilla::wr::IpcResourceUpdateQueue& aResources,
                                                    const mozilla::layers::StackingContextHelper& aSc,
                                                    mozilla::layers::WebRenderLayerManager* aManager,
@@ -1241,13 +1243,15 @@ nsNativeThemeGTK::CreateWebRenderCommandsForWidget(mozilla::wr::DisplayListBuild
                                                    const nsRect& aRect)
 {
   nsPresContext* presContext = aFrame->PresContext();
-  wr::LayoutRect bounds = wr::ToRoundedLayoutRect(
-    LayoutDeviceRect::FromAppUnits(aRect, presContext->AppUnitsPerDevPixel()));
+  LayoutDeviceRect boundsRect =
+    LayoutDeviceRect::FromAppUnits(aRect, presContext->AppUnitsPerDevPixel());
+  wr::LayoutRect bounds = wr::ToRoundedLayoutRect(boundsRect);
+  wr::LayoutRect clip = mozilla::layers::ClipManager::GetItemClipRoundedRect(aItem, boundsRect);
 
   switch (aWidgetType) {
   case StyleAppearance::Window:
   case StyleAppearance::Dialog:
-    aBuilder.PushRect(bounds, bounds, true,
+    aBuilder.PushRect(bounds, clip, true,
                       wr::ToColorF(Color::FromABGR(
                         LookAndFeel::GetColor(LookAndFeel::eColorID_WindowBackground,
                                               NS_RGBA(0, 0, 0, 0)))));

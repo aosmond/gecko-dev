@@ -47,6 +47,7 @@
 #include <algorithm>
 
 #include "gfxPrefs.h"
+#include "mozilla/layers/ClipManager.h"
 #include "mozilla/layers/StackingContextHelper.h"
 #include "mozilla/layers/WebRenderLayerManager.h"
 
@@ -1292,7 +1293,8 @@ nsDisplayTableBorderCollapse::CreateWebRenderCommands(mozilla::wr::DisplayListBu
                                                       mozilla::layers::WebRenderLayerManager* aManager,
                                                       nsDisplayListBuilder* aDisplayListBuilder)
 {
-  static_cast<nsTableFrame *>(mFrame)->CreateWebRenderCommandsForBCBorders(aBuilder,
+  static_cast<nsTableFrame *>(mFrame)->CreateWebRenderCommandsForBCBorders(this,
+                                                                          aBuilder,
                                                                           aSc,
                                                                           GetPaintRect(),
                                                                           ToReferenceFrame());
@@ -6525,6 +6527,7 @@ struct BCBlockDirSeg
              BCPixelSize            aInlineSegBSize);
   void CreateWebRenderCommands(BCPaintBorderIterator& aIter,
                                BCPixelSize aInlineSegBSize,
+                               nsDisplayItem* aItem,
                                wr::DisplayListBuilder& aBuilder,
                                const layers::StackingContextHelper& aSc,
                                const nsPoint& aPt,
@@ -6580,6 +6583,7 @@ struct BCInlineDirSeg
   Maybe<BCBorderParameters> BuildBorderParameters(BCPaintBorderIterator& aIter);
   void Paint(BCPaintBorderIterator& aIter, DrawTarget& aDrawTarget);
   void CreateWebRenderCommands(BCPaintBorderIterator& aIter,
+                               nsDisplayItem* aItem,
                                wr::DisplayListBuilder& aBuilder,
                                const layers::StackingContextHelper& aSc,
                                const nsPoint& aPt,
@@ -6618,15 +6622,18 @@ struct BCPaintData
 
 struct BCCreateWebRenderCommandsData
 {
-  BCCreateWebRenderCommandsData(wr::DisplayListBuilder& aBuilder,
+  BCCreateWebRenderCommandsData(nsDisplayItem* aItem,
+                                wr::DisplayListBuilder& aBuilder,
                                 const layers::StackingContextHelper& aSc,
                                 const nsPoint& aOffsetToReferenceFrame)
-    : mBuilder(aBuilder)
+    : mItem(aItem)
+    , mBuilder(aBuilder)
     , mSc(aSc)
     , mOffsetToReferenceFrame(aOffsetToReferenceFrame)
   {
   }
 
+  nsDisplayItem* mItem;
   wr::DisplayListBuilder& mBuilder;
   const layers::StackingContextHelper& mSc;
   const nsPoint& mOffsetToReferenceFrame;
@@ -6641,11 +6648,12 @@ struct BCPaintBorderAction
   {
   }
 
-  BCPaintBorderAction(wr::DisplayListBuilder& aBuilder,
+  BCPaintBorderAction(nsDisplayItem* aItem,
+                      wr::DisplayListBuilder& aBuilder,
                       const layers::StackingContextHelper& aSc,
                       const nsPoint& aOffsetToReferenceFrame)
     : mMode(Mode::CREATE_WEBRENDER_COMMANDS)
-    , mCreateWebRenderCommandsData(aBuilder, aSc, aOffsetToReferenceFrame)
+    , mCreateWebRenderCommandsData(aItem, aBuilder, aSc, aOffsetToReferenceFrame)
   {
     mMode = Mode::CREATE_WEBRENDER_COMMANDS;
   }
@@ -7500,6 +7508,7 @@ BCBlockDirSeg::Paint(BCPaintBorderIterator& aIter,
 void
 BCBlockDirSeg::CreateWebRenderCommands(BCPaintBorderIterator& aIter,
                                        BCPixelSize aInlineSegBSize,
+                                       nsDisplayItem* aItem,
                                        wr::DisplayListBuilder& aBuilder,
                                        const layers::StackingContextHelper& aSc,
                                        const nsPoint& aOffset,
@@ -7542,6 +7551,7 @@ BCBlockDirSeg::CreateWebRenderCommands(BCPaintBorderIterator& aIter,
                                                                                param->mAppUnitsPerDevPixel));
 
   wr::LayoutRect roundedRect = wr::ToRoundedLayoutRect(borderRect);
+  wr::LayoutRect clipRect = layers::ClipManager::GetItemClipRoundedRect(aItem, borderRect);
   wr::BorderSide wrSide[4];
   NS_FOR_CSS_SIDES(i) {
     wrSide[i] = wr::ToBorderSide(ToDeviceColor(param->mBorderColor), NS_STYLE_BORDER_STYLE_NONE);
@@ -7558,7 +7568,7 @@ BCBlockDirSeg::CreateWebRenderCommands(BCPaintBorderIterator& aIter,
                                                      roundedRect.size.width);
   Range<const wr::BorderSide> wrsides(wrSide, 4);
   aBuilder.PushBorder(roundedRect,
-                      roundedRect,
+                      clipRect,
                       param->mBackfaceIsVisible,
                       borderWidths,
                       wrsides,
@@ -7794,6 +7804,7 @@ BCInlineDirSeg::Paint(BCPaintBorderIterator& aIter, DrawTarget& aDrawTarget)
 
 void
 BCInlineDirSeg::CreateWebRenderCommands(BCPaintBorderIterator& aIter,
+                                        nsDisplayItem* aItem,
                                         wr::DisplayListBuilder& aBuilder,
                                         const layers::StackingContextHelper& aSc,
                                         const nsPoint& aPt,
@@ -7829,6 +7840,7 @@ BCInlineDirSeg::CreateWebRenderCommands(BCPaintBorderIterator& aIter,
   LayoutDeviceRect borderRect = LayoutDeviceRect::FromUnknownRect(NSRectToRect(param->mBorderRect + aPt,
                                                                                param->mAppUnitsPerDevPixel));
   wr::LayoutRect roundedRect = wr::ToRoundedLayoutRect(borderRect);
+  wr::LayoutRect clipRect = layers::ClipManager::GetItemClipRoundedRect(aItem, borderRect);
   wr::BorderSide wrSide[4];
   NS_FOR_CSS_SIDES(i) {
     wrSide[i] = wr::ToBorderSide(ToDeviceColor(param->mBorderColor), NS_STYLE_BORDER_STYLE_NONE);
@@ -7845,7 +7857,7 @@ BCInlineDirSeg::CreateWebRenderCommands(BCPaintBorderIterator& aIter,
                                                      roundedRect.size.height);
   Range<const wr::BorderSide> wrsides(wrSide, 4);
   aBuilder.PushBorder(roundedRect,
-                      roundedRect,
+                      clipRect,
                       param->mBackfaceIsVisible,
                       borderWidths,
                       wrsides,
@@ -7944,6 +7956,7 @@ BCPaintBorderIterator::AccumulateOrDoActionInlineDirSegment(BCPaintBorderAction&
         } else {
           MOZ_ASSERT(aAction.mMode == BCPaintBorderAction::Mode::CREATE_WEBRENDER_COMMANDS);
           mInlineSeg.CreateWebRenderCommands(*this,
+                                             aAction.mCreateWebRenderCommandsData.mItem,
                                              aAction.mCreateWebRenderCommandsData.mBuilder,
                                              aAction.mCreateWebRenderCommandsData.mSc,
                                              aAction.mCreateWebRenderCommandsData.mOffsetToReferenceFrame,
@@ -7997,6 +8010,7 @@ BCPaintBorderIterator::AccumulateOrDoActionBlockDirSegment(BCPaintBorderAction& 
           MOZ_ASSERT(aAction.mMode == BCPaintBorderAction::Mode::CREATE_WEBRENDER_COMMANDS);
           blockDirSeg.CreateWebRenderCommands(*this,
                                               inlineSegBSize,
+                                              aAction.mCreateWebRenderCommandsData.mItem,
                                               aAction.mCreateWebRenderCommandsData.mBuilder,
                                               aAction.mCreateWebRenderCommandsData.mSc,
                                               aAction.mCreateWebRenderCommandsData.mOffsetToReferenceFrame,
@@ -8072,12 +8086,13 @@ nsTableFrame::PaintBCBorders(DrawTarget& aDrawTarget, const nsRect& aDirtyRect)
 }
 
 void
-nsTableFrame::CreateWebRenderCommandsForBCBorders(wr::DisplayListBuilder& aBuilder,
+nsTableFrame::CreateWebRenderCommandsForBCBorders(nsDisplayItem* aItem,
+                                                  wr::DisplayListBuilder& aBuilder,
                                                   const mozilla::layers::StackingContextHelper& aSc,
                                                   const nsRect& aVisibleRect,
                                                   const nsPoint& aOffsetToReferenceFrame)
 {
-  BCPaintBorderAction action(aBuilder, aSc, aOffsetToReferenceFrame);
+  BCPaintBorderAction action(aItem, aBuilder, aSc, aOffsetToReferenceFrame);
   // We always draw whole table border for webrender. Passing the visible rect
   // dirty rect.
   IterateBCBorders(action, aVisibleRect - aOffsetToReferenceFrame);
@@ -8122,8 +8137,10 @@ nsTableFrame::CreateWebRenderCommandsForBCBorders(wr::DisplayListBuilder& aBuild
   if (!allBorderRect.IsEmpty()) {
     Range<const wr::BorderSide> wrsides(wrSide, 4);
     wr::LayoutRect allRoundedRect = wr::ToRoundedLayoutRect(allBorderRect);
+    wr::LayoutRect clipRect =
+      layers::ClipManager::GetItemClipRoundedRect(aItem, allBorderRect);
     aBuilder.PushBorder(allRoundedRect,
-                        allRoundedRect,
+                        clipRect,
                         backfaceIsVisible,
                         wrWidths,
                         wrsides,
