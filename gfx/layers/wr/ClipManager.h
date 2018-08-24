@@ -82,6 +82,8 @@ private:
                   int32_t aAppUnitsPerDevPixel,
                   const StackingContextHelper& aSc);
 
+  int32_t GetItemAppUnitsPerDevPixel(nsDisplayItem* aItem);
+
   WebRenderLayerManager* MOZ_NON_OWNING_REF mManager;
   wr::DisplayListBuilder* mBuilder;
 
@@ -147,6 +149,7 @@ private:
   // we are currently processing and items deeper on the stack are for that
   // display item's ancestors.
   std::stack<ItemClips> mItemClipStack;
+  std::stack<Maybe<LayoutDeviceRect>> mItemClipLeafStack;
 };
 
 } // namespace layers

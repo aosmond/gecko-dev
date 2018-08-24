@@ -138,6 +138,18 @@ ClipManager::ClipIdAfterOverride(const Maybe<wr::WrClipId>& aClipId)
   return it->second.top();
 }
 
+int32_t
+ClipManager::GetItemAppUnitsPerDevPixel(nsDisplayItem* aItem)
+{
+  // Zoom display items report their bounds etc using the parent document's
+  // APD because zoom items act as a conversion layer between the two different
+  // APDs.
+  if (aItem->GetType() == DisplayItemType::TYPE_ZOOM) {
+    return static_cast<nsDisplayZoom*>(aItem)->GetParentAppUnitsPerDevPixel();
+  }
+  return aItem->Frame()->PresContext()->AppUnitsPerDevPixel();
+}
+
 void
 ClipManager::BeginItem(nsDisplayItem* aItem,
                        const StackingContextHelper& aStackingContext)
@@ -146,13 +158,48 @@ ClipManager::BeginItem(nsDisplayItem* aItem,
 
   const DisplayItemClipChain* clip = aItem->GetClipChain();
   const ActiveScrolledRoot* asr = aItem->GetActiveScrolledRoot();
-  if (aItem->GetType() == DisplayItemType::TYPE_STICKY_POSITION) {
+  DisplayItemType type = aItem->GetType();
+  if (type == DisplayItemType::TYPE_STICKY_POSITION) {
     // For sticky position items, the ASR is computed differently depending
     // on whether the item has a fixed descendant or not. But for WebRender
     // purposes we always want to use the ASR that would have been used if it
     // didn't have fixed descendants, which is stored as the "container ASR" on
     // the sticky item.
     asr = static_cast<nsDisplayStickyPosition*>(aItem)->GetContainerASR();
+  }
+
+  const DisplayItemClip* clipLeaf = nullptr;
+  if (clip && clip->mASR == asr && clip->mClip.GetRoundedRectCount() == 0) {
+    switch (type) {
+      case DisplayItemType::TYPE_WRAP_LIST:
+      case DisplayItemType::TYPE_TRANSFORM:
+      case DisplayItemType::TYPE_PERSPECTIVE:
+      case DisplayItemType::TYPE_MASK:
+      case DisplayItemType::TYPE_OPACITY:
+      case DisplayItemType::TYPE_OWN_LAYER:
+      case DisplayItemType::TYPE_FIXED_POSITION:
+      case DisplayItemType::TYPE_STICKY_POSITION:
+      case DisplayItemType::TYPE_FILTER:
+      case DisplayItemType::TYPE_SVG_WRAPPER:
+        break;
+      default:
+        clipLeaf = clip->mClip;
+        clip = clip->mParent;
+        extractClip = true;
+	break;
+    }
+  }
+
+  int32_t auPerDevPixel;
+  if (clipLeaf) {
+    // The leaf of the clip chain was not put in mItemClipStack, so now we need
+    // to take it into account for the clip rect for this display item.
+    auPerDevPixel = GetItemAppUnitsPerDevPixel(aItem);
+    LayoutDeviceRect clipRect = LayoutDeviceRect::FromAppUnits(
+      clip->mClip.GetClipRect(), auPerDevPixel);
+    mItemClipLeafStack.push(Some(clipRect));
+  } else {
+    mItemClipLeafStack.push(Nothing());
   }
 
   ItemClips clips(asr, clip);
@@ -172,14 +219,6 @@ ClipManager::BeginItem(nsDisplayItem* aItem,
   mItemClipStack.top().Unapply(mBuilder);
   mItemClipStack.pop();
 
-  // Zoom display items report their bounds etc using the parent document's
-  // APD because zoom items act as a conversion layer between the two different
-  // APDs.
-  int32_t auPerDevPixel = aItem->Frame()->PresContext()->AppUnitsPerDevPixel();
-  if (aItem->GetType() == DisplayItemType::TYPE_ZOOM) {
-    auPerDevPixel = static_cast<nsDisplayZoom*>(aItem)->GetParentAppUnitsPerDevPixel();
-  }
-
   // There are two ASR chains here that we need to be fully defined. One is the
   // ASR chain pointed to by |asr|. The other is the
   // ASR chain pointed to by clip->mASR. We pick the leafmost
@@ -188,13 +227,16 @@ ClipManager::BeginItem(nsDisplayItem* aItem,
   // ASRs that we care about for this item, but will not actually push
   // anything onto the WR stack.
   const ActiveScrolledRoot* leafmostASR = asr;
-  if (clip) {
+  if (clipLeaf) {
     leafmostASR = ActiveScrolledRoot::PickDescendant(leafmostASR, clip->mASR);
   }
   Maybe<wr::WrClipId> leafmostId = DefineScrollLayers(leafmostASR, aItem, aStackingContext);
 
   // Define all the clips in the item's clip chain, and obtain a clip chain id
   // for it.
+  if (!extractClip) {
+    auPerDevPixel = GetItemAppUnitsPerDevPixel(aItem);
+  }
   clips.mClipChainId = DefineClipChain(clip, auPerDevPixel, aStackingContext);
 
   if (clip && clip->mASR == asr) {
