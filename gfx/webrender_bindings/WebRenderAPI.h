@@ -7,6 +7,7 @@
 #ifndef MOZILLA_LAYERS_WEBRENDERAPI_H
 #define MOZILLA_LAYERS_WEBRENDERAPI_H
 
+#include <stack>
 #include <vector>
 #include <unordered_map>
 #include <unordered_set>
@@ -296,6 +297,21 @@ public:
   void Finalize(wr::LayoutSize& aOutContentSize,
                 wr::BuiltDisplayList& aOutDisplayList);
 
+  void PushItemClipLeaf(const wr::LayoutRect& aClip)
+  {
+    mItemClipLeafStack.push(Some(aClip));
+  }
+
+  void PushItemClipEmptyLeaf()
+  {
+    mItemClipLeafStack.push(Nothing());
+  }
+
+  void PopItemClipLeaf()
+  {
+    mItemClipLeafStack.pop();
+  }
+
   Maybe<wr::WrClipId> PushStackingContext(
           const wr::LayoutRect& aBounds, // TODO: We should work with strongly typed rects
           const wr::WrClipId* aClipNodeId,
@@ -523,12 +539,25 @@ public:
   };
 
 protected:
+  wr::LayoutRect MergeClipLeaf(const wr::LayoutRect& aClip)
+  {
+    if (mItemClipLeafStack.empty() || mItemClipLeafStack.top().isNothing()) {
+      return aClip;
+    }
+    return wr::IntersectLayoutRect(*mItemClipLeafStack.top(), aClip);
+  }
+
   wr::WrState* mWrState;
 
   // Track each scroll id that we encountered. We use this structure to
   // ensure that we don't define a particular scroll layer multiple times,
   // as that results in undefined behaviour in WR.
   std::unordered_map<layers::FrameMetrics::ViewID, wr::WrClipId> mScrollIds;
+
+  // Contains the current leaf of the clip chain to be merged with the
+  // display item's clip rect when pushing an item. May be set to Nothing() if
+  // there is clip rect to merge with.
+  std::stack<Maybe<wr::LayoutRect>> mItemClipLeafStack;
 
   FixedPosScrollTargetTracker* mActiveFixedPosTracker;
 
