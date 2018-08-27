@@ -13,6 +13,7 @@
 #include "mozilla/layers/WebRenderLayerManager.h"
 #include "mozilla/webrender/WebRenderAPI.h"
 #include "nsDisplayList.h"
+#include "nsStyleStructInlines.h"
 #include "UnitTransforms.h"
 
 #define CLIP_LOG(...)
@@ -146,13 +147,70 @@ ClipManager::BeginItem(nsDisplayItem* aItem,
 
   const DisplayItemClipChain* clip = aItem->GetClipChain();
   const ActiveScrolledRoot* asr = aItem->GetActiveScrolledRoot();
-  if (aItem->GetType() == DisplayItemType::TYPE_STICKY_POSITION) {
+  DisplayItemType type = aItem->GetType();
+  if (type == DisplayItemType::TYPE_STICKY_POSITION) {
     // For sticky position items, the ASR is computed differently depending
     // on whether the item has a fixed descendant or not. But for WebRender
     // purposes we always want to use the ASR that would have been used if it
     // didn't have fixed descendants, which is stored as the "container ASR" on
     // the sticky item.
     asr = static_cast<nsDisplayStickyPosition*>(aItem)->GetContainerASR();
+  }
+
+  int32_t auPerDevPixel = INT32_MIN;
+  if (clip && clip->mASR == asr && clip->mClip.GetRoundedRectCount() == 0) {
+    bool useLeaf;
+    switch (type) {
+      case DisplayItemType::TYPE_BLEND_CONTAINER:
+      case DisplayItemType::TYPE_BLEND_MODE:
+      case DisplayItemType::TYPE_FILTER:
+      case DisplayItemType::TYPE_FIXED_POSITION:
+      case DisplayItemType::TYPE_MASK:
+      case DisplayItemType::TYPE_OPACITY:
+      case DisplayItemType::TYPE_OWN_LAYER:
+      case DisplayItemType::TYPE_PERSPECTIVE:
+      case DisplayItemType::TYPE_RESOLUTION:
+      case DisplayItemType::TYPE_SCROLL_INFO_LAYER:
+      case DisplayItemType::TYPE_STICKY_POSITION:
+      case DisplayItemType::TYPE_SUBDOCUMENT:
+      case DisplayItemType::TYPE_SVG_WRAPPER:
+      case DisplayItemType::TYPE_TABLE_BLEND_CONTAINER:
+      case DisplayItemType::TYPE_TABLE_BLEND_MODE:
+      case DisplayItemType::TYPE_TABLE_FIXED_POSITION:
+      case DisplayItemType::TYPE_TRANSFORM:
+      case DisplayItemType::TYPE_WRAP_LIST:
+        useLeaf = false;
+        break;
+      case DisplayItemType::TYPE_ZOOM:
+        // Zoom display items report their bounds etc using the parent
+        // document's APD because zoom items act as a conversion layer between
+        // the two different APDs.
+        auPerDevPixel = static_cast<nsDisplayZoom*>(aItem)->GetParentAppUnitsPerDevPixel();
+        useLeaf = true;
+	break;
+      case DisplayItemType::TYPE_TEXT:
+        if (aItem->Frame()->StyleText()->HasTextShadow()) {
+          useLeaf = false;
+          break;
+        }
+        MOZ_FALLTHROUGH;
+      default:
+        auPerDevPixel = aItem->Frame()->PresContext()->AppUnitsPerDevPixel();
+        useLeaf = true;
+        break;
+    }
+
+    if (useLeaf) {
+      LayoutDeviceRect clipRect = LayoutDeviceRect::FromAppUnits(
+        clip->mClip.GetClipRect(), auPerDevPixel);
+      mBuilder->PushItemClipLeaf(wr::ToRoundedLayoutRect(clipRect));
+
+      clip = clip->mParent;
+    } else {
+      mBuilder->PushItemClipEmptyLeaf();
+    }
+  } else {
+    mBuilder->PushItemClipEmptyLeaf();
   }
 
   ItemClips clips(asr, clip);
@@ -172,12 +230,15 @@ ClipManager::BeginItem(nsDisplayItem* aItem,
   mItemClipStack.top().Unapply(mBuilder);
   mItemClipStack.pop();
 
-  // Zoom display items report their bounds etc using the parent document's
-  // APD because zoom items act as a conversion layer between the two different
-  // APDs.
-  int32_t auPerDevPixel = aItem->Frame()->PresContext()->AppUnitsPerDevPixel();
-  if (aItem->GetType() == DisplayItemType::TYPE_ZOOM) {
-    auPerDevPixel = static_cast<nsDisplayZoom*>(aItem)->GetParentAppUnitsPerDevPixel();
+  if (auPerDevPixel == INT32_MIN) {
+    // Zoom display items report their bounds etc using the parent document's
+    // APD because zoom items act as a conversion layer between the two different
+    // APDs.
+    if (type == DisplayItemType::TYPE_ZOOM) {
+      auPerDevPixel = static_cast<nsDisplayZoom*>(aItem)->GetParentAppUnitsPerDevPixel();
+    } else {
+      auPerDevPixel = aItem->Frame()->PresContext()->AppUnitsPerDevPixel();
+    }
   }
 
   // There are two ASR chains here that we need to be fully defined. One is the
@@ -242,6 +303,12 @@ ClipManager::BeginItem(nsDisplayItem* aItem,
   mItemClipStack.push(clips);
 
   CLIP_LOG("done setup for %p\n", aItem);
+}
+
+void
+ClipManager::EndItem()
+{
+  mBuilder->PopItemClipLeaf();
 }
 
 Maybe<wr::WrClipId>

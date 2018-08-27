@@ -1026,6 +1026,7 @@ Grouper::ConstructGroups(nsDisplayListBuilder* aDisplayListBuilder,
         item->CreateWebRenderCommands(aBuilder, aResources, aSc, aCommandBuilder->mManager,
                                       mDisplayListBuilder);
       sIndent--;
+      mClipManager.EndItem();
       MOZ_RELEASE_ASSERT(createdWRCommands, "active transforms should always succeed at creating WebRender commands");
 
       RefPtr<WebRenderGroupData> groupData =
@@ -1420,6 +1421,8 @@ WebRenderCommandBuilder::CreateWebRenderCommandsFromDisplayList(nsDisplayList* a
         mBuilderDumpIndex = aBuilder.Dump(mDumpIndent + 1, Some(mBuilderDumpIndex), Nothing());
       }
     }
+
+    mClipManager.EndItem();
 
     if (apzEnabled) {
       if (forceNewLayerData) {

@@ -63,6 +63,7 @@ public:
 
   void BeginItem(nsDisplayItem* aItem,
                  const StackingContextHelper& aStackingContext);
+  void EndItem();
   ~ClipManager();
 
   void PushOverrideForASR(const ActiveScrolledRoot* aASR,
