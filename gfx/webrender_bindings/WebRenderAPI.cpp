@@ -810,6 +810,9 @@ DisplayListBuilder::PushStackingContext(const wr::LayoutRect& aBounds,
                                         bool aIsBackfaceVisible,
                                         const wr::GlyphRasterSpace& aRasterSpace)
 {
+  MOZ_ASSERT(mClipChainLeaf.isNothing(),
+             "Non-empty leaf from clip chain given, but not used with SC!");
+
   wr::LayoutTransform matrix;
   if (aTransform) {
     matrix = ToLayoutTransform(*aTransform);
@@ -966,20 +969,27 @@ DisplayListBuilder::DefineScrollLayer(const layers::FrameMetrics::ViewID& aViewI
 }
 
 void
-DisplayListBuilder::PushClipAndScrollInfo(const wr::WrClipId& aScrollId,
-                                          const wr::WrClipChainId* aClipChainId)
+DisplayListBuilder::PushClipAndScrollInfo(const wr::WrClipId* aScrollId,
+                                          const wr::WrClipChainId* aClipChainId,
+                                          const Maybe<wr::LayoutRect>& aClipChainLeaf)
 {
-  WRDL_LOG("PushClipAndScroll s=%zu c=%s\n", mWrState, aScrollId.id,
-      aClipChainId ? Stringify(aClipChainId->id).c_str() : "none");
-  wr_dp_push_clip_and_scroll_info(mWrState, aScrollId.id,
-      aClipChainId ? &(aClipChainId->id) : nullptr);
+  if (aScrollId) {
+    WRDL_LOG("PushClipAndScroll s=%zu c=%s\n", mWrState, aScrollId->id,
+        aClipChainId ? Stringify(aClipChainId->id).c_str() : "none");
+    wr_dp_push_clip_and_scroll_info(mWrState, aScrollId->id,
+        aClipChainId ? &(aClipChainId->id) : nullptr);
+  }
+  mClipChainLeaf = aClipChainLeaf;
 }
 
 void
-DisplayListBuilder::PopClipAndScrollInfo()
+DisplayListBuilder::PopClipAndScrollInfo(const wr::WrClipId* aScrollId)
 {
-  WRDL_LOG("PopClipAndScroll\n", mWrState);
-  wr_dp_pop_clip_and_scroll_info(mWrState);
+  if (aScrollId) {
+    WRDL_LOG("PopClipAndScroll\n", mWrState);
+    wr_dp_pop_clip_and_scroll_info(mWrState);
+  }
+  mClipChainLeaf.reset();
 }
 
 void
@@ -988,19 +998,22 @@ DisplayListBuilder::PushRect(const wr::LayoutRect& aBounds,
                              bool aIsBackfaceVisible,
                              const wr::ColorF& aColor)
 {
+  wr::LayoutRect clip = MergeClipLeaf(aClip);
   WRDL_LOG("PushRect b=%s cl=%s c=%s\n", mWrState,
       Stringify(aBounds).c_str(),
-      Stringify(aClip).c_str(),
+      Stringify(clip).c_str(),
       Stringify(aColor).c_str());
-  wr_dp_push_rect(mWrState, aBounds, aClip, aIsBackfaceVisible, aColor);
+  wr_dp_push_rect(mWrState, aBounds, clip,
+                  aIsBackfaceVisible, aColor);
 }
 
 void
 DisplayListBuilder::PushClearRect(const wr::LayoutRect& aBounds)
 {
-  WRDL_LOG("PushClearRect b=%s\n", mWrState,
-      Stringify(aBounds).c_str());
-  wr_dp_push_clear_rect(mWrState, aBounds);
+  wr::LayoutRect clip = MergeClipLeaf(aBounds);
+  WRDL_LOG("PushClearRect b=%s c=%s\n", mWrState,
+      Stringify(aBounds).c_str(), Stringify(clip).c_str());
+  wr_dp_push_clear_rect(mWrState, aBounds, clip);
 }
 
 void
@@ -1015,7 +1028,8 @@ DisplayListBuilder::PushLinearGradient(const wr::LayoutRect& aBounds,
                                        const wr::LayoutSize aTileSpacing)
 {
   wr_dp_push_linear_gradient(mWrState,
-                             aBounds, aClip, aIsBackfaceVisible,
+                             aBounds, MergeClipLeaf(aClip),
+                             aIsBackfaceVisible,
                              aStartPoint, aEndPoint,
                              aStops.Elements(), aStops.Length(),
                              aExtendMode,
@@ -1034,7 +1048,8 @@ DisplayListBuilder::PushRadialGradient(const wr::LayoutRect& aBounds,
                                        const wr::LayoutSize aTileSpacing)
 {
   wr_dp_push_radial_gradient(mWrState,
-                             aBounds, aClip, aIsBackfaceVisible,
+                             aBounds, MergeClipLeaf(aClip),
+                             aIsBackfaceVisible,
                              aCenter, aRadius,
                              aStops.Elements(), aStops.Length(),
                              aExtendMode,
@@ -1053,7 +1068,8 @@ DisplayListBuilder::PushImage(const wr::LayoutRect& aBounds,
   wr::LayoutSize size;
   size.width = aBounds.size.width;
   size.height = aBounds.size.height;
-  PushImage(aBounds, aClip, aIsBackfaceVisible, size, size, aFilter, aImage, aPremultipliedAlpha, aColor);
+  PushImage(aBounds, aClip, aIsBackfaceVisible, size, size,
+            aFilter, aImage, aPremultipliedAlpha, aColor);
 }
 
 void
@@ -1067,11 +1083,14 @@ DisplayListBuilder::PushImage(const wr::LayoutRect& aBounds,
                               bool aPremultipliedAlpha,
                               const wr::ColorF& aColor)
 {
+  wr::LayoutRect clip = MergeClipLeaf(aClip);
   WRDL_LOG("PushImage b=%s cl=%s s=%s t=%s\n", mWrState,
       Stringify(aBounds).c_str(),
-      Stringify(aClip).c_str(), Stringify(aStretchSize).c_str(),
+      Stringify(clip).c_str(), Stringify(aStretchSize).c_str(),
       Stringify(aTileSpacing).c_str());
-  wr_dp_push_image(mWrState, aBounds, aClip, aIsBackfaceVisible, aStretchSize, aTileSpacing, aFilter, aImage, aPremultipliedAlpha, aColor);
+  wr_dp_push_image(mWrState, aBounds, clip, aIsBackfaceVisible,
+                   aStretchSize, aTileSpacing, aFilter, aImage,
+                   aPremultipliedAlpha, aColor);
 }
 
 void
@@ -1086,7 +1105,7 @@ DisplayListBuilder::PushYCbCrPlanarImage(const wr::LayoutRect& aBounds,
 {
   wr_dp_push_yuv_planar_image(mWrState,
                               aBounds,
-                              aClip,
+                              MergeClipLeaf(aClip),
                               aIsBackfaceVisible,
                               aImageChannel0,
                               aImageChannel1,
@@ -1106,7 +1125,7 @@ DisplayListBuilder::PushNV12Image(const wr::LayoutRect& aBounds,
 {
   wr_dp_push_yuv_NV12_image(mWrState,
                             aBounds,
-                            aClip,
+                            MergeClipLeaf(aClip),
                             aIsBackfaceVisible,
                             aImageChannel0,
                             aImageChannel1,
@@ -1124,7 +1143,7 @@ DisplayListBuilder::PushYCbCrInterleavedImage(const wr::LayoutRect& aBounds,
 {
   wr_dp_push_yuv_interleaved_image(mWrState,
                                    aBounds,
-                                   aClip,
+                                   MergeClipLeaf(aClip),
                                    aIsBackfaceVisible,
                                    aImageChannel0,
                                    aColorSpace,
@@ -1137,7 +1156,8 @@ DisplayListBuilder::PushIFrame(const wr::LayoutRect& aBounds,
                                PipelineId aPipeline,
                                bool aIgnoreMissingPipeline)
 {
-  wr_dp_push_iframe(mWrState, aBounds, aIsBackfaceVisible, aPipeline, aIgnoreMissingPipeline);
+  wr_dp_push_iframe(mWrState, aBounds, MergeClipLeaf(aBounds),
+                    aIsBackfaceVisible, aPipeline, aIgnoreMissingPipeline);
 }
 
 void
@@ -1152,7 +1172,7 @@ DisplayListBuilder::PushBorder(const wr::LayoutRect& aBounds,
   if (aSides.length() != 4) {
     return;
   }
-  wr_dp_push_border(mWrState, aBounds, aClip, aIsBackfaceVisible,
+  wr_dp_push_border(mWrState, aBounds, MergeClipLeaf(aClip), aIsBackfaceVisible,
                     aWidths, aSides[0], aSides[1], aSides[2], aSides[3], aRadius);
 }
 
@@ -1169,9 +1189,9 @@ DisplayListBuilder::PushBorderImage(const wr::LayoutRect& aBounds,
                                     const wr::RepeatMode& aRepeatHorizontal,
                                     const wr::RepeatMode& aRepeatVertical)
 {
-  wr_dp_push_border_image(mWrState, aBounds, aClip, aIsBackfaceVisible,
-                          aWidths, aImage, aWidth, aHeight, aSlice, aOutset,
-                          aRepeatHorizontal, aRepeatVertical);
+  wr_dp_push_border_image(mWrState, aBounds, MergeClipLeaf(aClip),
+                          aIsBackfaceVisible, aWidths, aImage, aWidth, aHeight,
+                          aSlice, aOutset, aRepeatHorizontal, aRepeatVertical);
 }
 
 void
@@ -1188,8 +1208,9 @@ DisplayListBuilder::PushBorderGradient(const wr::LayoutRect& aBounds,
                                        wr::ExtendMode aExtendMode,
                                        const wr::SideOffsets2D<float>& aOutset)
 {
-  wr_dp_push_border_gradient(mWrState, aBounds, aClip, aIsBackfaceVisible,
-                             aWidths, aWidth, aHeight, aSlice, aStartPoint, aEndPoint,
+  wr_dp_push_border_gradient(mWrState, aBounds, MergeClipLeaf(aClip),
+                             aIsBackfaceVisible, aWidths, aWidth, aHeight,
+                             aSlice, aStartPoint, aEndPoint,
                              aStops.Elements(), aStops.Length(),
                              aExtendMode, aOutset);
 }
@@ -1206,8 +1227,8 @@ DisplayListBuilder::PushBorderRadialGradient(const wr::LayoutRect& aBounds,
                                              const wr::SideOffsets2D<float>& aOutset)
 {
   wr_dp_push_border_radial_gradient(
-    mWrState, aBounds, aClip, aIsBackfaceVisible, aWidths, aCenter,
-    aRadius, aStops.Elements(), aStops.Length(),
+    mWrState, aBounds, MergeClipLeaf(aClip), aIsBackfaceVisible,
+    aWidths, aCenter, aRadius, aStops.Elements(), aStops.Length(),
     aExtendMode, aOutset);
 }
 
@@ -1220,7 +1241,8 @@ DisplayListBuilder::PushText(const wr::LayoutRect& aBounds,
                              Range<const wr::GlyphInstance> aGlyphBuffer,
                              const wr::GlyphOptions* aGlyphOptions)
 {
-  wr_dp_push_text(mWrState, aBounds, aClip, aIsBackfaceVisible,
+  wr_dp_push_text(mWrState, aBounds, MergeClipLeaf(aClip),
+                  aIsBackfaceVisible,
                   aColor,
                   aFontKey,
                   &aGlyphBuffer[0], aGlyphBuffer.length(),
@@ -1232,9 +1254,10 @@ DisplayListBuilder::PushLine(const wr::LayoutRect& aClip,
                              bool aIsBackfaceVisible,
                              const wr::Line& aLine)
 {
- wr_dp_push_line(mWrState, &aClip, aIsBackfaceVisible,
-                 &aLine.bounds, aLine.wavyLineThickness, aLine.orientation,
-                 &aLine.color, aLine.style);
+  wr::LayoutRect clip = MergeClipLeaf(aClip);
+  wr_dp_push_line(mWrState, &clip, aIsBackfaceVisible,
+                  &aLine.bounds, aLine.wavyLineThickness, aLine.orientation,
+                  &aLine.color, aLine.style);
 }
 
 void
@@ -1243,7 +1266,8 @@ DisplayListBuilder::PushShadow(const wr::LayoutRect& aRect,
                                bool aIsBackfaceVisible,
                                const wr::Shadow& aShadow)
 {
-  wr_dp_push_shadow(mWrState, aRect, aClip, aIsBackfaceVisible, aShadow);
+  wr_dp_push_shadow(mWrState, aRect, MergeClipLeaf(aClip),
+                    aIsBackfaceVisible, aShadow);
 }
 
 void
@@ -1264,8 +1288,8 @@ DisplayListBuilder::PushBoxShadow(const wr::LayoutRect& aRect,
                                   const wr::BorderRadius& aBorderRadius,
                                   const wr::BoxShadowClipMode& aClipMode)
 {
-  wr_dp_push_box_shadow(mWrState, aRect, aClip, aIsBackfaceVisible,
-                        aBoxBounds, aOffset, aColor,
+  wr_dp_push_box_shadow(mWrState, aRect, MergeClipLeaf(aClip),
+                        aIsBackfaceVisible, aBoxBounds, aOffset, aColor,
                         aBlurRadius, aSpreadRadius, aBorderRadius,
                         aClipMode);
 }
