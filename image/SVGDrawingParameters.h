@@ -32,7 +32,8 @@ struct SVGDrawingParameters
                        uint32_t aFlags,
                        float aOpacity)
     : context(aContext)
-    , size(aSize.width, aSize.height)
+    , size(aSize)
+    , drawSize(aSize)
     , region(aRegion)
     , samplingFilter(aSamplingFilter)
     , svgContext(aSVGContext)
@@ -50,7 +51,8 @@ struct SVGDrawingParameters
   }
 
   gfxContext*                   context;
-  IntSize                       size;
+  IntSize                       size; // Size to prepare a surface at.
+  IntSize                       drawSize; // Size to draw the given surface at.
   ImageRegion                   region;
   SamplingFilter                samplingFilter;
   const Maybe<SVGImageContext>& svgContext;

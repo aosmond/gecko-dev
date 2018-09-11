@@ -92,7 +92,7 @@ private:
                                 uint32_t aFlags) override;
 
   /// Attempt to find a matching cached surface in the SurfaceCache.
-  already_AddRefed<SourceSurface>
+  Tuple<RefPtr<SourceSurface>, IntSize>
     LookupCachedSurface(const IntSize& aSize,
                         const Maybe<SVGImageContext>& aSVGContext,
                         uint32_t aFlags);

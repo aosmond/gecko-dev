@@ -255,6 +255,7 @@ public:
     : mLocked(false)
     , mFactor2Mode(false)
     , mFactor2Pruned(false)
+    , mFactor2MatchAR(false)
   { }
 
   MOZ_DECLARE_REFCOUNTED_TYPENAME(ImageSurfaceCache)
@@ -279,6 +280,7 @@ public:
 
     RefPtr<CachedSurface> surface;
     mSurfaces.Remove(aSurface->GetSurfaceKey(), getter_AddRefs(surface));
+    printf_stderr("[AO][%p] remove %dx%d (surfaces %u)\n", this, aSurface->GetSurfaceKey().Size().width, aSurface->GetSurfaceKey().Size().height, mSurfaces.Count());
     AfterMaybeRemove();
     return surface.forget();
   }
@@ -447,7 +449,7 @@ public:
     Image* image = static_cast<Image*>(current->GetImageKey());
     size_t nativeSizes = image->GetNativeSizesLength();
     if (nativeSizes == 0) {
-      return;
+      thresholdSurfaces += 1;
     }
 
     // Increase the threshold by the number of native sizes. This ensures that
@@ -471,6 +473,7 @@ public:
     }
 
     // We have a valid size, we can change modes.
+    mFactor2MatchAR = nativeSizes == 0;
     mFactor2Mode = true;
   }
 
@@ -508,6 +511,7 @@ public:
       RefPtr<CachedSurface> compactMatch;
       mSurfaces.Get(compactKey, getter_AddRefs(compactMatch));
       if (compactMatch && compactMatch->IsDecoded()) {
+        printf_stderr("[AO][%p] pruning size %dx%d\n", this, currentSize.width, currentSize.height);
         aRemoveCallback(current);
         iter.Remove();
       } else {
@@ -521,6 +525,7 @@ public:
     // substitution.)
     if (!hasNotFactorSize) {
       mFactor2Pruned = true;
+      printf_stderr("[AO][%p] pruning complete\n", this);
     }
 
     // We should never leave factor of 2 mode due to pruning in of itself, but
@@ -533,6 +538,7 @@ public:
   {
     // When not in factor of 2 mode, we can always decode at the given size.
     if (!mFactor2Mode) {
+      printf_stderr("[AO][%p] not in factor of 2 mode (surfaces %u)\n", this, mSurfaces.Count());
       return aSize;
     }
 
@@ -557,6 +563,66 @@ public:
       return aSize;
     }
 
+    printf_stderr("[AO][%p] native size %dx%d\n", this, factorSize.width, factorSize.height);
+    if (mFactor2MatchAR) {
+      // Ensure the aspect ratio matches the native size before forcing the
+      // caller to accept a factor of 2 size. The difference between the aspect
+      // ratios is:
+      //
+      //     delta = nativeWidth/nativeHeight - desiredWidth/desiredHeight
+      //
+      //     delta*nativeHeight*desiredHeight = nativeWidth*desiredHeight
+      //                                      - desiredHeight*nativeHeight
+      //
+      // Using the maximum accepted delta as a constant, we can avoid the
+      // floating point division and just compare after some integer ops.
+      int32_t delta = factorSize.width * aSize.height - aSize.width * factorSize.height;
+      int32_t maxDelta = (factorSize.height * aSize.height) >> 4;
+      if (delta > maxDelta || delta < -maxDelta) {
+        printf_stderr("[AO][%p] keeping size %dx%d, native %dx%d (delta %d, max %d)\n", this, aSize.width, aSize.height, factorSize.width, factorSize.height, delta, maxDelta);
+        return aSize;
+      }
+
+      // If the requested size is bigger than the native size, we actually need
+      // to grow the native size.
+      if (factorSize.width < aSize.width) {
+        int32_t maxUpscaleSize = gfxPrefs::ImageCacheFactor2MaxUpscaleSize();
+
+        // The native size is the same or bigger than what we are willing to
+        // upscale to. We should just return the native size and accept the hit.
+        if (maxUpscaleSize <= factorSize.width ||
+            maxUpscaleSize <= factorSize.height) {
+          printf_stderr("[AO][%p] size %dx%d -> %dx%d (delta %d, max %d, max upscale %d)\n", this, aSize.width, aSize.height, factorSize.width, factorSize.height, delta, maxDelta, maxUpscaleSize);
+          return factorSize;
+        }
+
+        // Keep growing the proposed size until we either hit the desired size,
+        // or we reach the configured limit.
+        while (true) {
+          factorSize.width *= 2;
+          factorSize.height *= 2;
+
+          if (maxUpscaleSize < factorSize.width ||
+              maxUpscaleSize < factorSize.height) {
+            // The proposed size has exceeded what we are willing to upscale to.
+            // Revert back to the previous size.
+            factorSize.width /= 2;
+            factorSize.height /= 2;
+            break;
+          } else if (factorSize.width >= aSize.width) {
+            // The proposed size has finally exceeded the desired size. Perfect!
+            break;
+          }
+        }
+
+        printf_stderr("[AO][%p] size %dx%d -> %dx%d (delta %d, max %d, max upscale %d)\n", this, aSize.width, aSize.height, factorSize.width, factorSize.height, delta, maxDelta, maxUpscaleSize);
+        return factorSize;
+      }
+
+      // Otherwise we can find the best fit as normal.
+      printf_stderr("[AO][%p] size %dx%d (delta %d, max %d)\n", this, aSize.width, aSize.height, delta, maxDelta);
+    }
+
     // Start with the native size as the best first guess.
     IntSize bestSize = factorSize;
     factorSize.width /= 2;
@@ -576,6 +642,7 @@ public:
       factorSize.height /= 2;
     }
 
+    printf_stderr("[AO][%p] size %dx%d -> %dx%d\n", this, aSize.width, aSize.height, bestSize.width, bestSize.height);
     return bestSize;
   }
 
@@ -660,20 +727,24 @@ private:
       // locked), then we need to reset the factor of 2 state because it
       // requires at least one surface present to get the native size
       // information from the image.
-      mFactor2Mode = mFactor2Pruned = false;
+      mFactor2Mode = mFactor2Pruned = mFactor2MatchAR = false;
+      printf_stderr("[AO][%p] factor 2 mode reset\n", this);
     }
   }
 
   SurfaceTable      mSurfaces;
 
-  bool              mLocked;
+  bool              mLocked : 1;
 
   // True in "factor of 2" mode.
-  bool              mFactor2Mode;
+  bool              mFactor2Mode : 1;
 
   // True if all non-factor of 2 surfaces have been removed from the cache. Note
   // that this excludes unsubstitutable sizes.
-  bool              mFactor2Pruned;
+  bool              mFactor2Pruned : 1;
+
+  // True if the surfaces must match the aspect ratio to use factor of 2 mode.
+  bool              mFactor2MatchAR : 1;
 };
 
 /**
