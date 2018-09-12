@@ -552,6 +552,16 @@ public:
   virtual int32_t GetMaxTextureSize() const = 0;
 
   /**
+   * returns the maximum texture size on this layer backend, as supported by
+   * the underlying hardware, without tiling, or INT32_MAX if there is no
+   * maximum
+   */
+  virtual int32_t GetMaxHwTextureSize() const
+  {
+    return GetMaxTextureSize();
+  }
+
+  /**
    * Return the name of the layer manager's backend.
    */
   virtual void GetBackendName(nsAString& aName) = 0;

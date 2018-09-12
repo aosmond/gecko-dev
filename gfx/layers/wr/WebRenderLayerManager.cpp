@@ -149,6 +149,12 @@ WebRenderLayerManager::GetCompositorBridgeChild()
   return WrBridge()->GetCompositorBridgeChild();
 }
 
+int32_t
+WebRenderLayerManager::GetMaxHwTextureSize() const
+{
+  return WrBridge()->GetMaxTextureSize();
+}
+
 uint32_t
 WebRenderLayerManager::StartFrameTimeRecording(int32_t aBufferSize)
 {

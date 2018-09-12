@@ -887,9 +887,15 @@ VectorImage::IsImageContainerAvailableAtSize(LayerManager* aManager,
                                              const IntSize& aSize,
                                              uint32_t aFlags)
 {
-  // Since we only support image containers with WebRender, and it can handle
-  // textures larger than the hw max texture size, we don't need to check aSize.
-  return !aSize.IsEmpty() && IsImageContainerAvailable(aManager, aFlags);
+  if (aSize.IsEmpty() || !IsImageContainerAvailable(aManager, aFlags)) {
+    return false;
+  }
+
+  // If the SVG is sufficiently big that we will need to tile in WebRender,
+  // then let's use fallback for now to avoid drawing the whole image if
+  // possible.
+  int32_t maxTextureSize = aManager->GetMaxHwTextureSize();
+  return aSize.width <= maxTextureSize && aSize.height <= maxTextureSize;
 }
 
 //******************************************************************************
