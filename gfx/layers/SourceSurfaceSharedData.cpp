@@ -107,6 +107,10 @@ SourceSurfaceSharedData::AddSizeOfExcludingThis(MallocSizeOf aMallocSizeOf,
   if (!mClosed) {
     ++aExtHandlesOut;
   }
+  Maybe<wr::ExternalImageId> extId = SharedSurfacesChild::GetExternalId(this);
+  if (extId) {
+    aExtIdOut = wr::AsUint64(extId.ref());
+  }
 }
 
 uint8_t*
