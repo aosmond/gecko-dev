@@ -959,7 +959,8 @@ imgFrame::AddSizeOfExcludingThis(MallocSizeOf aMallocSizeOf,
   if (mRawSurface) {
     metadata.heap += aMallocSizeOf(mRawSurface);
     mRawSurface->AddSizeOfExcludingThis(aMallocSizeOf, metadata.heap,
-                                        metadata.nonHeap, metadata.handles);
+                                        metadata.nonHeap, metadata.handles,
+                                        metadata.externalId);
   }
 
   aCallback(metadata);

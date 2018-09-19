@@ -97,7 +97,8 @@ void
 SourceSurfaceSharedData::AddSizeOfExcludingThis(MallocSizeOf aMallocSizeOf,
                                                 size_t& aHeapSizeOut,
                                                 size_t& aNonHeapSizeOut,
-                                                size_t& aExtHandlesOut) const
+                                                size_t& aExtHandlesOut,
+                                                size_t& aExtIdOut) const
 {
   MutexAutoLock lock(mMutex);
   if (mBuf) {
