@@ -37,9 +37,10 @@ ImageWrapper::SizeOfSourceWithComputedFallback(SizeOfState& aState) const
 
 void
 ImageWrapper::CollectSizeOfSurfaces(nsTArray<SurfaceMemoryCounter>& aCounters,
+                                    layers::SharedSurfacesMemoryTable& aSharedSurfaces,
                                     MallocSizeOf aMallocSizeOf) const
 {
-  mInnerImage->CollectSizeOfSurfaces(aCounters, aMallocSizeOf);
+  mInnerImage->CollectSizeOfSurfaces(aCounters, aSharedSurfaces, aMallocSizeOf);
 }
 
 void

@@ -25,6 +25,10 @@
 #include "SVGImageContext.h"         // for SVGImageContext
 
 namespace mozilla {
+namespace layers {
+class SharedSurfacesMemoryTable;
+}
+
 namespace image {
 
 class Image;
@@ -435,6 +439,7 @@ struct SurfaceCache
    */
   static void CollectSizeOfSurfaces(const ImageKey    aImageKey,
                                     nsTArray<SurfaceMemoryCounter>& aCounters,
+                                    layers::SharedSurfacesMemoryTable& aSharedSurfaces,
                                     MallocSizeOf      aMallocSizeOf);
 
   /**

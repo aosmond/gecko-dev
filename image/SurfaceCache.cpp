@@ -609,6 +609,7 @@ public:
 
   template<typename Function>
   void CollectSizeOfSurfaces(nsTArray<SurfaceMemoryCounter>& aCounters,
+                             layers::SharedSurfacesMemoryTable& aSharedSurfaces,
                              MallocSizeOf                    aMallocSizeOf,
                              Function&&                      aRemoveCallback)
   {
@@ -1180,6 +1181,7 @@ public:
 
   void CollectSizeOfSurfaces(const ImageKey                  aImageKey,
                              nsTArray<SurfaceMemoryCounter>& aCounters,
+                             layers::SharedSurfacesMemoryTable& aSharedSurfaces,
                              MallocSizeOf                    aMallocSizeOf,
                              const StaticMutexAutoLock&      aAutoLock)
   {
@@ -1189,7 +1191,7 @@ public:
     }
 
     // Report all surfaces in the per-image cache.
-    cache->CollectSizeOfSurfaces(aCounters, aMallocSizeOf,
+    cache->CollectSizeOfSurfaces(aCounters, aSharedSurfaces, aMallocSizeOf,
       [this, &aAutoLock](NotNull<CachedSurface*> aSurface) -> void {
       StopTracking(aSurface, /* aIsTracked */ true, aAutoLock);
       // Individual surfaces must be freed outside the lock.
@@ -1605,6 +1607,7 @@ SurfaceCache::DiscardAll()
 /* static */ void
 SurfaceCache::CollectSizeOfSurfaces(const ImageKey                  aImageKey,
                                     nsTArray<SurfaceMemoryCounter>& aCounters,
+                                    layers::SharedSurfacesMemoryTable& aSharedSurfaces,
                                     MallocSizeOf                    aMallocSizeOf)
 {
   nsTArray<RefPtr<CachedSurface>> discard;
@@ -1614,7 +1617,8 @@ SurfaceCache::CollectSizeOfSurfaces(const ImageKey                  aImageKey,
       return;
     }
 
-    sInstance->CollectSizeOfSurfaces(aImageKey, aCounters, aMallocSizeOf, lock);
+    sInstance->CollectSizeOfSurfaces(aImageKey, aCounters, aSharedSurfaces,
+                                     aMallocSizeOf, lock);
     sInstance->TakeDiscard(discard, lock);
   }
 }

@@ -39,6 +39,7 @@ DynamicImage::SizeOfSourceWithComputedFallback(SizeOfState& aState) const
 
 void
 DynamicImage::CollectSizeOfSurfaces(nsTArray<SurfaceMemoryCounter>& aCounters,
+                                    layers::SharedSurfacesMemoryTable& aSharedSurfaces,
                                     MallocSizeOf aMallocSizeOf) const
 {
   // We can't report anything useful because gfxDrawable doesn't expose this

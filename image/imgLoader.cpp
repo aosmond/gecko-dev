@@ -120,12 +120,12 @@ public:
       for (auto iter = mKnownLoaders[i]->mChromeCache.Iter(); !iter.Done(); iter.Next()) {
         imgCacheEntry* entry = iter.UserData();
         RefPtr<imgRequest> req = entry->GetRequest();
-        RecordCounterForRequest(req, &chrome, !entry->HasNoProxies());
+        RecordCounterForRequest(req, &chrome, !entry->HasNoProxies(), aSharedSurfaces);
       }
       for (auto iter = mKnownLoaders[i]->mCache.Iter(); !iter.Done(); iter.Next()) {
         imgCacheEntry* entry = iter.UserData();
         RefPtr<imgRequest> req = entry->GetRequest();
-        RecordCounterForRequest(req, &content, !entry->HasNoProxies());
+        RecordCounterForRequest(req, &content, !entry->HasNoProxies(), aSharedSurfaces);
       }
       MutexAutoLock lock(mKnownLoaders[i]->mUncachedImagesMutex);
       for (auto iter = mKnownLoaders[i]->mUncachedImages.Iter();
@@ -133,7 +133,7 @@ public:
            iter.Next()) {
         nsPtrHashKey<imgRequest>* entry = iter.Get();
         RefPtr<imgRequest> req = entry->GetKey();
-        RecordCounterForRequest(req, &uncached, req->HasConsumers());
+        RecordCounterForRequest(req, &uncached, req->HasConsumers(), aSharedSurfaces);
       }
     }
 
@@ -179,7 +179,9 @@ public:
         // go in the "explicit" tree -- so we use moz_malloc_size_of instead of
         // ImagesMallocSizeOf to prevent DMD from seeing it reported twice.
         SizeOfState state(moz_malloc_size_of);
-        ImageMemoryCounter counter(image, state, /* aIsUsed = */ true);
+        layers::SharedSurfacesMemoryTable sharedSurfaces;
+        ImageMemoryCounter counter(image, state, /* aIsUsed = */ true,
+                                   sharedSurfaces);
 
         n += counter.Values().DecodedHeap();
         n += counter.Values().DecodedNonHeap();
@@ -493,7 +495,8 @@ private:
 
   static void RecordCounterForRequest(imgRequest* aRequest,
                                       nsTArray<ImageMemoryCounter>* aArray,
-                                      bool aIsUsed)
+                                      bool aIsUsed,
+                                      layers::SharedSurfacesMemoryTable& aSharedSurfaces)
   {
     RefPtr<image::Image> image = aRequest->GetImage();
     if (!image) {
@@ -501,7 +504,7 @@ private:
     }
 
     SizeOfState state(ImagesMallocSizeOf);
-    ImageMemoryCounter counter(image, state, aIsUsed);
+    ImageMemoryCounter counter(image, state, aIsUsed, aSharedSurfaces);
 
     aArray->AppendElement(std::move(counter));
   }

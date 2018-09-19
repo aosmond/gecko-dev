@@ -10,6 +10,7 @@
 #include "mozilla/SizeOfState.h"
 #include "mozilla/TimeStamp.h"
 #include "mozilla/Tuple.h"        // for Tie
+#include "mozilla/layers/SharedSurfacesParent.h"
 
 namespace mozilla {
 namespace image {
@@ -20,7 +21,8 @@ namespace image {
 
 ImageMemoryCounter::ImageMemoryCounter(Image* aImage,
                                        SizeOfState& aState,
-                                       bool aIsUsed)
+                                       bool aIsUsed,
+                                       layers::SharedSurfacesMemoryTable& aSharedSurfaces)
   : mIsUsed(aIsUsed)
 {
   MOZ_ASSERT(aImage);
@@ -41,7 +43,7 @@ ImageMemoryCounter::ImageMemoryCounter(Image* aImage,
 
   // Populate memory counters for source and decoded data.
   mValues.SetSource(aImage->SizeOfSourceWithComputedFallback(aState));
-  aImage->CollectSizeOfSurfaces(mSurfaces, aState.mMallocSizeOf);
+  aImage->CollectSizeOfSurfaces(mSurfaces, aSharedSurfaces, aState.mMallocSizeOf);
 
   // Compute totals.
   for (const SurfaceMemoryCounter& surfaceCounter : mSurfaces) {

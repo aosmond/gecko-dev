@@ -720,9 +720,11 @@ RasterImage::SizeOfSourceWithComputedFallback(SizeOfState& aState) const
 
 void
 RasterImage::CollectSizeOfSurfaces(nsTArray<SurfaceMemoryCounter>& aCounters,
+                                   layers::SharedSurfacesMemoryTable& aSharedSurfaces,
                                    MallocSizeOf aMallocSizeOf) const
 {
-  SurfaceCache::CollectSizeOfSurfaces(ImageKey(this), aCounters, aMallocSizeOf);
+  SurfaceCache::CollectSizeOfSurfaces(ImageKey(this), aCounters,
+                                      aSharedSurfaces, aMallocSizeOf);
   if (mFrameAnimator) {
     mFrameAnimator->CollectSizeOfCompositingSurfaces(aCounters, aMallocSizeOf);
   }

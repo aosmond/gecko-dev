@@ -21,6 +21,10 @@ class nsIRequest;
 class nsIInputStream;
 
 namespace mozilla {
+namespace layers {
+class SharedSurfacesMemoryTable;
+}
+
 namespace image {
 
 class Image;
@@ -104,7 +108,8 @@ private:
 
 struct ImageMemoryCounter
 {
-  ImageMemoryCounter(Image* aImage, SizeOfState& aState, bool aIsUsed);
+  ImageMemoryCounter(Image* aImage, SizeOfState& aState, bool aIsUsed,
+                     layers::SharedSurfacesMemoryTable& aSharedSurfaces);
 
   nsCString& URI() { return mURI; }
   const nsCString& URI() const { return mURI; }
@@ -183,6 +188,7 @@ public:
    * SurfaceMemoryCounter, stored in @aCounters.
    */
   virtual void CollectSizeOfSurfaces(nsTArray<SurfaceMemoryCounter>& aCounters,
+                                     layers::SharedSurfacesMemoryTable& aSharedSurfaces,
                                      MallocSizeOf aMallocSizeOf) const = 0;
 
   virtual void IncrementAnimationConsumers() = 0;

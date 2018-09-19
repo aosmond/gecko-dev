@@ -170,6 +170,7 @@ public:
   virtual size_t SizeOfSourceWithComputedFallback(SizeOfState& aState)
     const override;
   virtual void CollectSizeOfSurfaces(nsTArray<SurfaceMemoryCounter>& aCounters,
+                                     layers::SharedSurfacesMemoryTable& aSharedSurfaces,
                                      MallocSizeOf aMallocSizeOf) const override;
 
   /* Triggers discarding. */

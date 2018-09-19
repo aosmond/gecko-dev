@@ -445,9 +445,11 @@ VectorImage::SizeOfSourceWithComputedFallback(SizeOfState& aState) const
 
 void
 VectorImage::CollectSizeOfSurfaces(nsTArray<SurfaceMemoryCounter>& aCounters,
+                                   layers::SharedSurfacesMemoryTable& aSharedSurfaces,
                                    MallocSizeOf aMallocSizeOf) const
 {
-  SurfaceCache::CollectSizeOfSurfaces(ImageKey(this), aCounters, aMallocSizeOf);
+  SurfaceCache::CollectSizeOfSurfaces(ImageKey(this), aCounters,
+                                      aSharedSurfaces, aMallocSizeOf);
 }
 
 nsresult
