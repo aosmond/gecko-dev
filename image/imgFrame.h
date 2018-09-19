@@ -206,9 +206,13 @@ public:
   void FinalizeSurface();
   already_AddRefed<SourceSurface> GetSourceSurface();
 
-  void AddSizeOfExcludingThis(MallocSizeOf aMallocSizeOf, size_t& aHeapSizeOut,
-                              size_t& aNonHeapSizeOut,
-                              size_t& aExtHandlesOut) const;
+  typedef std::function<void(size_t aHeapSize,
+                             size_t aNonHeapSize,
+                             size_t aExtHandles,
+                             uint64_t aExtId)> AddSizeOfCb;
+
+  void AddSizeOfExcludingThis(MallocSizeOf aMallocSizeOf,
+                              const AddSizeOfCb& aCallback) const;
 
 private: // methods
 

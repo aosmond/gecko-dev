@@ -204,8 +204,13 @@ public:
       size_t heap = 0;
       size_t nonHeap = 0;
       size_t handles = 0;
-      aCachedSurface->mProvider
-        ->AddSizeOfExcludingThis(mMallocSizeOf, heap, nonHeap, handles);
+      aCachedSurface->mProvider->AddSizeOfExcludingThis(mMallocSizeOf,
+        [&](size_t aHeapSize, size_t aNonHeapSize, size_t aExtHandles, uint64_t aExtId) {
+          heap += aHeapSize;
+          nonHeap += aNonHeapSize;
+          handles += aExtHandles;
+        }
+      );
       counter.Values().SetDecodedHeap(heap);
       counter.Values().SetDecodedNonHeap(nonHeap);
       counter.Values().SetExternalHandles(handles);

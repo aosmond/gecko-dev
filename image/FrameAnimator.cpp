@@ -568,7 +568,14 @@ DoCollectSizeOfCompositingSurfaces(const RawAccessFrameRef& aSurface,
 
   // Extract the surface's memory usage information.
   size_t heap = 0, nonHeap = 0, handles = 0;
-  aSurface->AddSizeOfExcludingThis(aMallocSizeOf, heap, nonHeap, handles);
+  aSurface->AddSizeOfExcludingThis(aMallocSizeOf,
+    [&](size_t aHeapSize, size_t aNonHeapSize, size_t aExtHandles, size_t aExtId) {
+      heap += aHeapSize;
+      nonHeap += aNonHeapSize;
+      handles += aExtHandles;
+      MOZ_ASSERT(aExtId == 0);
+    }
+  );
   counter.Values().SetDecodedHeap(heap);
   counter.Values().SetDecodedNonHeap(nonHeap);
   counter.Values().SetExternalHandles(handles);
