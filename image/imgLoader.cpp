@@ -86,21 +86,24 @@ public:
     MOZ_ASSERT(NS_IsMainThread());
     layers::CompositorManagerChild* manager = CompositorManagerChild::GetInstance();
     if (!manager) {
-      layers::SharedSurfacesMemoryTable sharedSurfaces;
+      layers::SharedSurfacesMemoryTable sharedSurfaces(base::GetCurrentProcId());
       FinishCollectReports(aHandleReport, aData, aAnonymize, sharedSurfaces);
       return NS_OK;
     }
+
+    base::ProcessId compositorPid = manager->OtherPid();
 
     RefPtr<imgMemoryReporter> self(this);
     nsCOMPtr<nsIHandleReportCallback> handleReport(aHandleReport);
     nsCOMPtr<nsISupports> data(aData);
     manager->SendReportSharedSurfacesMemory(
       [=](layers::SharedSurfacesMemoryReport aReport) {
-        layers::SharedSurfacesMemoryTable sharedSurfaces(std::move(aReport));
+        layers::SharedSurfacesMemoryTable sharedSurfaces(compositorPid,
+                                                         std::move(aReport));
         self->FinishCollectReports(handleReport, data, aAnonymize, sharedSurfaces);
       },
       [=](mozilla::ipc::ResponseRejectReason aReason) {
-        layers::SharedSurfacesMemoryTable sharedSurfaces;
+        layers::SharedSurfacesMemoryTable sharedSurfaces(compositorPid);
         self->FinishCollectReports(handleReport, data, aAnonymize, sharedSurfaces);
       }
     );
@@ -139,14 +142,18 @@ public:
 
     // Note that we only need to anonymize content image URIs.
 
-    ReportCounterArray(aHandleReport, aData, chrome, "images/chrome");
+    ReportCounterArray(aHandleReport, aData, chrome, "images/chrome",
+                       /* aAnonymize */ false, aSharedSurfaces);
 
     ReportCounterArray(aHandleReport, aData, content, "images/content",
-                       aAnonymize);
+                       aAnonymize, aSharedSurfaces);
 
     // Uncached images may be content or chrome, so anonymize them.
     ReportCounterArray(aHandleReport, aData, uncached, "images/uncached",
-                       aAnonymize);
+                       aAnonymize, aSharedSurfaces);
+
+    // Report any shared surfaces that were not merged with the surface cache.
+    ReportSharedSurfaces(aHandleReport, aData, aSharedSurfaces);
 
     nsCOMPtr<nsIMemoryReporterManager> imgr =
       do_GetService("@mozilla.org/memory-reporter-manager;1");
@@ -241,7 +248,8 @@ private:
                           nsISupports* aData,
                           nsTArray<ImageMemoryCounter>& aCounterArray,
                           const char* aPathPrefix,
-                          bool aAnonymize = false)
+                          bool aAnonymize,
+                          layers::SharedSurfacesMemoryTable& aSharedSurfaces)
   {
     MemoryTotal summaryTotal;
     MemoryTotal nonNotableTotal;
@@ -266,7 +274,8 @@ private:
       summaryTotal += counter;
 
       if (counter.IsNotable()) {
-        ReportImage(aHandleReport, aData, aPathPrefix, counter);
+        ReportImage(aHandleReport, aData, aPathPrefix,
+                    counter, aSharedSurfaces);
       } else {
         nonNotableTotal += counter;
       }
@@ -281,10 +290,41 @@ private:
                 aPathPrefix, "", summaryTotal);
   }
 
+  static void ReportSharedSurfaces(nsIHandleReportCallback* aHandleReport,
+                                   nsISupports* aData,
+                                   layers::SharedSurfacesMemoryTable& aSharedSurfaces)
+  {
+    nsAutoCString processName;
+    if (base::GetCurrentProcId() != aSharedSurfaces.mGPUPid) {
+      processName.AppendPrintf("GPU (pid %u)", aSharedSurfaces.mGPUPid);
+    }
+
+    for (auto i = aSharedSurfaces.mSurfaces.ConstIter(); !i.Done(); i.Next()) {
+      nsAutoCString pathPrefix(NS_LITERAL_CSTRING("explicit/image/webrender/uncached/"));
+      pathPrefix.AppendPrintf("%016lx", i.Key());
+      pathPrefix.AppendLiteral("/image(");
+      pathPrefix.AppendInt(i.Data().mSize.width);
+      pathPrefix.AppendLiteral("x");
+      pathPrefix.AppendInt(i.Data().mSize.height);
+      pathPrefix.AppendLiteral(", gpuConsumers:");
+      pathPrefix.AppendInt(i.Data().mConsumers);
+      pathPrefix.AppendLiteral(")/");
+
+      size_t surfaceSize =
+        mozilla::ipc::SharedMemory::PageAlignedSize(i.Data().mSize.width *
+                                                    i.Data().mStride);
+      ReportValue(aHandleReport, aData, KIND_NONHEAP, pathPrefix,
+                  "decoded-nonheap",
+                  "Decoded image data stored in shared memory.",
+                  surfaceSize);
+    }
+  }
+
   static void ReportImage(nsIHandleReportCallback* aHandleReport,
                           nsISupports* aData,
                           const char* aPathPrefix,
-                          const ImageMemoryCounter& aCounter)
+                          const ImageMemoryCounter& aCounter,
+                          layers::SharedSurfacesMemoryTable& aSharedSurfaces)
   {
     nsAutoCString pathPrefix(NS_LITERAL_CSTRING("explicit/"));
     pathPrefix.Append(aPathPrefix);
@@ -306,7 +346,7 @@ private:
 
     pathPrefix.AppendLiteral(")/");
 
-    ReportSurfaces(aHandleReport, aData, pathPrefix, aCounter);
+    ReportSurfaces(aHandleReport, aData, pathPrefix, aCounter, aSharedSurfaces);
 
     ReportSourceValue(aHandleReport, aData, pathPrefix, aCounter.Values());
   }
@@ -314,7 +354,8 @@ private:
   static void ReportSurfaces(nsIHandleReportCallback* aHandleReport,
                              nsISupports* aData,
                              const nsACString& aPathPrefix,
-                             const ImageMemoryCounter& aCounter)
+                             const ImageMemoryCounter& aCounter,
+                             layers::SharedSurfacesMemoryTable& aSharedSurfaces)
   {
     for (const SurfaceMemoryCounter& counter : aCounter.Surfaces()) {
       nsAutoCString surfacePathPrefix(aPathPrefix);
@@ -335,8 +376,20 @@ private:
       surfacePathPrefix.AppendInt(counter.Key().Size().height);
 
       if (counter.Values().ExternalHandles() > 0) {
-        surfacePathPrefix.AppendLiteral(", external:");
+        surfacePathPrefix.AppendLiteral(", handles:");
         surfacePathPrefix.AppendInt(uint32_t(counter.Values().ExternalHandles()));
+      }
+
+      uint64_t extId = counter.Values().ExternalId();
+      if (extId) {
+        surfacePathPrefix.AppendPrintf(", external_id:%016lx", extId);
+        auto gpuEntry = aSharedSurfaces.mSurfaces.GetAndRemove(extId);
+        if (gpuEntry) {
+          surfacePathPrefix.AppendLiteral(", gpu_consumers:");
+          surfacePathPrefix.AppendInt(gpuEntry->mConsumers);
+        } else {
+          surfacePathPrefix.AppendLiteral(", gpu_missing");
+        }
       }
 
       if (counter.Type() == SurfaceMemoryCounterType::NORMAL) {
@@ -478,7 +531,8 @@ private:
                           const nsACString& aPathPrefix,
                           const char* aPathSuffix,
                           const char* aDescription,
-                          size_t aValue)
+                          size_t aValue,
+                          const char* aProcessName = "")
   {
     if (aValue == 0) {
       return;
@@ -486,9 +540,10 @@ private:
 
     nsAutoCString desc(aDescription);
     nsAutoCString path(aPathPrefix);
+    nsAutoCString processName(aProcessName);
     path.Append(aPathSuffix);
 
-    aHandleReport->Callback(EmptyCString(), path, aKind, UNITS_BYTES,
+    aHandleReport->Callback(processName, path, aKind, UNITS_BYTES,
                             aValue, desc, aData);
   }
 

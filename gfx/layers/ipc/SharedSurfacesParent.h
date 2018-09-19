@@ -54,11 +54,14 @@ public:
     uint32_t mConsumers;
   };
 
-  SharedSurfacesMemoryTable()
+  explicit SharedSurfacesMemoryTable(base::ProcessId aGPUPid)
+    : mGPUPid(aGPUPid)
   { }
 
-  explicit SharedSurfacesMemoryTable(SharedSurfacesMemoryReport&& aReport)
-    : mSurfaces(aReport.mSurfaces.Length())
+  explicit SharedSurfacesMemoryTable(base::ProcessId aGPUPid,
+                                     SharedSurfacesMemoryReport&& aReport)
+    : mGPUPid(aGPUPid)
+    , mSurfaces(aReport.mSurfaces.Length())
   {
     SharedSurfacesMemoryReport report(std::move(aReport));
     for (const auto& s : report.mSurfaces) {
@@ -67,6 +70,7 @@ public:
     }
   }
 
+  base::ProcessId mGPUPid;
   nsDataHashtable<nsUint64HashKey, SurfaceEntry> mSurfaces;
 };
 
