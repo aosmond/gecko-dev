@@ -44,6 +44,32 @@ public:
   nsTArray<SurfaceEntry> mSurfaces;
 };
 
+class SharedSurfacesMemoryTable final
+{
+public:
+  class SurfaceEntry final {
+  public:
+    gfx::IntSize mSize;
+    int32_t mStride;
+    uint32_t mConsumers;
+  };
+
+  SharedSurfacesMemoryTable()
+  { }
+
+  explicit SharedSurfacesMemoryTable(SharedSurfacesMemoryReport&& aReport)
+    : mSurfaces(aReport.mSurfaces.Length())
+  {
+    SharedSurfacesMemoryReport report(std::move(aReport));
+    for (const auto& s : report.mSurfaces) {
+      mSurfaces.Put(wr::AsUint64(s.mId), SurfaceEntry {
+        s.mSize, s.mStride, s.mConsumers });
+    }
+  }
+
+  nsDataHashtable<nsUint64HashKey, SurfaceEntry> mSurfaces;
+};
+
 class SharedSurfacesParent final
 {
 public:
