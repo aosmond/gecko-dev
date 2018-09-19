@@ -30,6 +30,20 @@ namespace layers {
 
 class SharedSurfacesChild;
 
+class SharedSurfacesMemoryReport final
+{
+public:
+  class SurfaceEntry final {
+  public:
+    wr::ExternalImageId mId;
+    gfx::IntSize mSize;
+    int32_t mStride;
+    uint32_t mConsumers;
+  };
+
+  nsTArray<SurfaceEntry> mSurfaces;
+};
+
 class SharedSurfacesParent final
 {
 public:
@@ -54,6 +68,9 @@ public:
 
   static void DestroyProcess(base::ProcessId aPid);
 
+  static void AccumulateMemoryReport(base::ProcessId aPid,
+                                     SharedSurfacesMemoryReport& aReport);
+
   ~SharedSurfacesParent();
 
 private:
@@ -74,5 +91,30 @@ private:
 
 } // namespace layers
 } // namespace mozilla
+
+namespace IPC {
+
+template<>
+struct ParamTraits<mozilla::layers::SharedSurfacesMemoryReport>
+{
+  typedef mozilla::layers::SharedSurfacesMemoryReport paramType;
+
+  static void Write(Message* aMsg, const paramType& aParam) {
+    WriteParam(aMsg, aParam.mSurfaces);
+  }
+
+  static bool Read(const Message* aMsg, PickleIterator* aIter, paramType* aResult)
+  {
+    return ReadParam(aMsg, aIter, &aResult->mSurfaces);
+  }
+};
+
+template<>
+struct ParamTraits<mozilla::layers::SharedSurfacesMemoryReport::SurfaceEntry>
+  : public PlainOldDataSerializer<mozilla::layers::SharedSurfacesMemoryReport::SurfaceEntry>
+{
+};
+
+} // namespace IPC
 
 #endif

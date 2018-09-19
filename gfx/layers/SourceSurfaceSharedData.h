@@ -85,6 +85,12 @@ public:
     return --mConsumers == 0;
   }
 
+  uint32_t GetConsumers() const
+  {
+    MOZ_ASSERT(mConsumers > 0);
+    return mConsumers;
+  }
+
 private:
   size_t GetDataLength() const
   {
