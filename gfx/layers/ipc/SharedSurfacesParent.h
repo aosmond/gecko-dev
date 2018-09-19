@@ -35,13 +35,12 @@ class SharedSurfacesMemoryReport final
 public:
   class SurfaceEntry final {
   public:
-    wr::ExternalImageId mId;
     gfx::IntSize mSize;
     int32_t mStride;
     uint32_t mConsumers;
   };
 
-  nsTArray<SurfaceEntry> mSurfaces;
+  nsDataHashtable<nsUint64HashKey, SurfaceEntry> mSurfaces;
 };
 
 class SharedSurfacesParent final
@@ -94,18 +93,36 @@ private:
 
 namespace IPC {
 
-template<>
-struct ParamTraits<mozilla::layers::SharedSurfacesMemoryReport>
+template<class KeyClass, class DataType>
+struct ParamTraits<nsDataHashtable<KeyClass, DataType>>
 {
-  typedef mozilla::layers::SharedSurfacesMemoryReport paramType;
+  typedef nsDataHashtable<KeyClass, DataType> paramType;
 
-  static void Write(Message* aMsg, const paramType& aParam) {
-    WriteParam(aMsg, aParam.mSurfaces);
+  static void Write(Message* aMsg, const paramType& aParam)
+  {
+    WriteParam(aMsg, aParam.Count());
+    for (auto i = aParam.ConstIter(); !i.Done(); i.Next()) {
+      WriteParam(aMsg, i.Key());
+      WriteParam(aMsg, i.Data());
+    }
   }
 
   static bool Read(const Message* aMsg, PickleIterator* aIter, paramType* aResult)
   {
-    return ReadParam(aMsg, aIter, &aResult->mSurfaces);
+    uint32_t count;
+    if (!ReadParam(aMsg, aIter, &count)) {
+      return false;
+    }
+    while (count > 0) {
+      typename mozilla::RemoveConst<typename mozilla::RemoveReference<typename KeyClass::KeyType>::Type>::Type key;
+      DataType data;
+      if (!ReadParam(aMsg, aIter, &key) &&
+          !ReadParam(aMsg, aIter, &data)) {
+        return false;
+      }
+      aResult->Put(key, std::move(data));
+    }
+    return true;
   }
 };
 
@@ -113,6 +130,22 @@ template<>
 struct ParamTraits<mozilla::layers::SharedSurfacesMemoryReport::SurfaceEntry>
   : public PlainOldDataSerializer<mozilla::layers::SharedSurfacesMemoryReport::SurfaceEntry>
 {
+};
+
+template<>
+struct ParamTraits<mozilla::layers::SharedSurfacesMemoryReport>
+{
+  typedef mozilla::layers::SharedSurfacesMemoryReport paramType;
+
+  static void Write(Message* aMsg, const paramType& aParam)
+  {
+    WriteParam(aMsg, aParam.mSurfaces);
+  }
+
+  static bool Read(const Message* aMsg, PickleIterator* aIter, paramType* aResult)
+  {
+    return ReadParam(aMsg, aIter, &aResult->mSurfaces);
+  }
 };
 
 } // namespace IPC

@@ -218,9 +218,8 @@ SharedSurfacesParent::AccumulateMemoryReport(base::ProcessId aPid,
   for (auto i = sInstance->mSurfaces.ConstIter(); !i.Done(); i.Next()) {
     SourceSurfaceSharedDataWrapper* surface = i.Data();
     if (surface->GetCreatorPid() == aPid) {
-      aReport.mSurfaces.AppendElement(SharedSurfacesMemoryReport::SurfaceEntry {
-        i.Key(), surface->GetSize(), surface->Stride(),
-        surface->GetConsumers() });
+      aReport.mSurfaces.Put(i.Key(), SharedSurfacesMemoryReport::SurfaceEntry {
+        surface->GetSize(), surface->Stride(), surface->GetConsumers() });
     }
   }
 }
