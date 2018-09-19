@@ -307,6 +307,18 @@ CompositorManagerParent::RecvReportMemory(ReportMemoryResolver&& aResolver)
   MemoryReport aggregate;
   PodZero(&aggregate);
 
+  SharedSurfacesMemoryReport sharedSurfReport;
+  SharedSurfacesParent::AccumulateMemoryReport(OtherPid(), sharedSurfReport);
+
+  // We only accumulate the renderer usage for the parent process, not the
+  // individual content processes.
+  gfx::GPUParent* gpu = gfx::GPUParent::GetSingleton();
+  base::ProcessId parentPid = gpu ? gpu->OtherPid() : base::GetCurrentProcId();
+  if (parentPid != OtherPid()) {
+    aResolver(Tuple<const MemoryReport&, const SharedSurfacesMemoryReport&>(aggregate, sharedSurfReport));
+    return IPC_OK();
+  }
+
   // Accumulate RenderBackend usage.
   nsTArray<PCompositorBridgeParent*> compositorBridges;
   ManagedPCompositorBridgeParent(compositorBridges);
@@ -321,8 +333,9 @@ CompositorManagerParent::RecvReportMemory(ReportMemoryResolver&& aResolver)
   // an intermediate MozPromise instead.
   wr::RenderThread::AccumulateMemoryReport(aggregate)->Then(
     CompositorThreadHolder::Loop()->SerialEventTarget(), __func__,
-    [resolver = std::move(aResolver)](MemoryReport aReport) {
-      resolver(aReport);
+    [resolver = std::move(aResolver), sharedSurfReport = std::move(sharedSurfReport)](MemoryReport aReport) {
+      resolver(Tuple<const MemoryReport&, const SharedSurfacesMemoryReport&>(aReport, sharedSurfReport));
+      //resolver(MakeTuple(aReport, std::move(sharedSurfReport)));
     },
     [](bool) {
       MOZ_ASSERT_UNREACHABLE("MemoryReport promises are never rejected");

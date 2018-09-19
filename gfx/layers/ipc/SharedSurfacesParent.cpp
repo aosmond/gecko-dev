@@ -204,5 +204,26 @@ SharedSurfacesParent::Remove(const wr::ExternalImageId& aId)
   MOZ_ASSERT(rv);
 }
 
+/* static */ void
+SharedSurfacesParent::AccumulateMemoryReport(base::ProcessId aPid,
+                                             SharedSurfacesMemoryReport& aReport)
+{
+  StaticMutexAutoLock lock(sMutex);
+  if (!sInstance) {
+    return;
+  }
+
+  // Note that the destruction of a parent may not be cheap if it still has a
+  // lot of surfaces still bound that require unmapping.
+  for (auto i = sInstance->mSurfaces.ConstIter(); !i.Done(); i.Next()) {
+    SourceSurfaceSharedDataWrapper* surface = i.Data();
+    if (surface->GetCreatorPid() == aPid) {
+      aReport.mSurfaces.AppendElement(SharedSurfacesMemoryReport::SurfaceEntry {
+        i.Key(), surface->GetSize(), surface->Stride(),
+        surface->GetConsumers() });
+    }
+  }
+}
+
 } // namespace layers
 } // namespace mozilla

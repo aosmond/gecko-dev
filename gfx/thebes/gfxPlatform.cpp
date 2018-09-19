@@ -655,28 +655,42 @@ private:
 //
 // [1] See https://bugzilla.mozilla.org/show_bug.cgi?id=1480293#c1
 struct WebRenderMemoryReporterHelper {
-  WebRenderMemoryReporterHelper(nsIHandleReportCallback* aCallback, nsISupports* aData)
+  WebRenderMemoryReporterHelper(nsIHandleReportCallback* aCallback,
+                                nsISupports* aData,
+                                base::ProcessId aCompositorPid)
     : mCallback(aCallback), mData(aData)
-  {}
-  nsCOMPtr<nsIHandleReportCallback> mCallback;
-  nsCOMPtr<nsISupports> mData;
-
-  void Report(size_t aBytes, const char* aName) const
   {
     // Generally, memory reporters pass the empty string as the process name to
     // indicate "current process". However, if we're using a GPU process, the
     // measurements will actually take place in that process, and it's easier to
     // just note that here rather than trying to invoke the memory reporter in
     // the GPU process.
-    nsAutoCString processName;
-    if (gfxConfig::IsEnabled(Feature::GPU_PROCESS)) {
-      GPUParent::GetGPUProcessName(processName);
+    if (aCompositorPid != base::GetCurrentProcId()) {
+      nsPrintfCString processName("GPU (pid %u)", aCompositorPid);
+      mGPUProcessName.Assign(processName);
     }
+  }
+  nsCOMPtr<nsIHandleReportCallback> mCallback;
+  nsCOMPtr<nsISupports> mData;
+  nsAutoCString mGPUProcessName;
 
+  void Report(size_t aBytes, const char* aName) const
+  {
     nsPrintfCString path("explicit/gfx/webrender/%s", aName);
-    mCallback->Callback(processName, path,
+    mCallback->Callback(mGPUProcessName, path,
                         nsIMemoryReporter::KIND_HEAP, nsIMemoryReporter::UNITS_BYTES,
                         aBytes, EmptyCString(), mData);
+  }
+
+  void Report(const SharedSurfacesMemoryReport& aReport) const
+  {
+    printf_stderr("[AO][%5d] CollectReports -- %lu surfaces\n", base::GetCurrentProcId(), aReport.mSurfaces.Length());
+    for (const auto& s : aReport.mSurfaces) {
+      int64_t bytes = mozilla::ipc::SharedMemory::PageAlignedSize(s.mSize.height * s.mStride);
+      nsPrintfCString path("explicit/images/webrender/shared(external_id=%016lX)/surface(%dx%d, consumers=%d)",
+	wr::AsUint64(s.mId), s.mSize.width, s.mSize.height, s.mConsumers);
+      mCallback->Callback(mGPUProcessName, path, nsIMemoryReporter::KIND_NONHEAP, nsIMemoryReporter::UNITS_BYTES, bytes, EmptyCString(), mData);
+    }
   }
 };
 
@@ -696,7 +710,6 @@ NS_IMETHODIMP
 WebRenderMemoryReporter::CollectReports(nsIHandleReportCallback* aHandleReport,
                                         nsISupports* aData, bool aAnonymize)
 {
-  MOZ_ASSERT(XRE_IsParentProcess());
   MOZ_ASSERT(NS_IsMainThread());
   layers::CompositorManagerChild* manager = CompositorManagerChild::GetInstance();
   if (!manager) {
@@ -704,15 +717,20 @@ WebRenderMemoryReporter::CollectReports(nsIHandleReportCallback* aHandleReport,
     return NS_OK;
   }
 
-  WebRenderMemoryReporterHelper helper(aHandleReport, aData);
+  WebRenderMemoryReporterHelper helper(aHandleReport, aData, manager->OtherPid());
   manager->SendReportMemory(
-    [=](wr::MemoryReport aReport) {
-      helper.Report(aReport.primitive_stores, "primitive-stores");
-      helper.Report(aReport.clip_stores, "clip-stores");
-      helper.Report(aReport.gpu_cache_metadata, "gpu-cache/metadata");
-      helper.Report(aReport.gpu_cache_cpu_mirror, "gpu-cache/cpu-mirror");
-      helper.Report(aReport.render_tasks, "render-tasks");
-      helper.Report(aReport.hit_testers, "hit-testers");
+    [=](Tuple<wr::MemoryReport, SharedSurfacesMemoryReport> aResult) {
+      wr::MemoryReport wrReport = Get<0>(std::move(aResult));
+      SharedSurfacesMemoryReport surfacesReport = Get<1>(std::move(aResult));
+      if (XRE_IsParentProcess()) {
+        helper.Report(wrReport.primitive_stores, "primitive-stores");
+        helper.Report(wrReport.clip_stores, "clip-stores");
+        helper.Report(wrReport.gpu_cache_metadata, "gpu-cache/metadata");
+        helper.Report(wrReport.gpu_cache_cpu_mirror, "gpu-cache/cpu-mirror");
+        helper.Report(wrReport.render_tasks, "render-tasks");
+        helper.Report(wrReport.hit_testers, "hit-testers");
+      }
+      helper.Report(surfacesReport);
       FinishAsyncMemoryReport();
     },
     [](mozilla::ipc::ResponseRejectReason aReason) {
@@ -916,7 +934,7 @@ gfxPlatform::Init()
     }
 
     RegisterStrongMemoryReporter(new GfxMemoryImageReporter());
-    if (XRE_IsParentProcess() && gfxVars::UseWebRender()) {
+    if (gfxVars::UseWebRender()) {
       RegisterStrongAsyncMemoryReporter(new WebRenderMemoryReporter());
     }
 
