@@ -946,26 +946,23 @@ imgFrame::AddSizeOfExcludingThis(MallocSizeOf aMallocSizeOf,
 {
   MonitorAutoLock lock(mMonitor);
 
-  size_t heapSize = 0;
-  size_t nonHeapSize = 0;
-  size_t extHandles = 0;
-  uint64_t extId = 0;
+  AddSizeOfCbData metadata;
   if (mPalettedImageData) {
-    heapSize += aMallocSizeOf(mPalettedImageData);
+    metadata.heap += aMallocSizeOf(mPalettedImageData);
   }
   if (mLockedSurface) {
-    heapSize += aMallocSizeOf(mLockedSurface);
+    metadata.heap += aMallocSizeOf(mLockedSurface);
   }
   if (mOptSurface) {
-    heapSize += aMallocSizeOf(mOptSurface);
+    metadata.heap += aMallocSizeOf(mOptSurface);
   }
   if (mRawSurface) {
-    heapSize += aMallocSizeOf(mRawSurface);
-    mRawSurface->AddSizeOfExcludingThis(aMallocSizeOf, heapSize,
-                                        nonHeapSize, extHandles);
+    metadata.heap += aMallocSizeOf(mRawSurface);
+    mRawSurface->AddSizeOfExcludingThis(aMallocSizeOf, metadata.heap,
+                                        metadata.nonHeap, metadata.handles);
   }
 
-  aCallback(heapSize, nonHeapSize, extHandles, extId);
+  aCallback(metadata);
 }
 
 } // namespace image

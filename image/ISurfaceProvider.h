@@ -65,6 +65,7 @@ public:
   /// important that it be constant over the lifetime of this object.
   virtual size_t LogicalSizeInBytes() const = 0;
 
+  typedef imgFrame::AddSizeOfCbData AddSizeOfCbData;
   typedef imgFrame::AddSizeOfCb AddSizeOfCb;
 
   /// @return the actual number of bytes of memory this ISurfaceProvider is

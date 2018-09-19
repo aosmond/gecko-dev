@@ -213,9 +213,16 @@ AnimationSurfaceProvider::AddSizeOfExcludingThis(MallocSizeOf aMallocSizeOf,
   // that we must be careful to always use the same ordering elsewhere.
   MutexAutoLock lock(mFramesMutex);
 
+  size_t i = 0;
   for (const RawAccessFrameRef& frame : mFrames.Frames()) {
+    ++i;
     if (frame) {
-      frame->AddSizeOfExcludingThis(aMallocSizeOf, aCallback);
+      frame->AddSizeOfExcludingThis(aMallocSizeOf,
+        [&](AddSizeOfCbData& aMetadata) {
+          aMetadata.index = i;
+          aCallback(aMetadata);
+        }
+      );
     }
   }
 }

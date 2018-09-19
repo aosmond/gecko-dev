@@ -206,10 +206,19 @@ public:
   void FinalizeSurface();
   already_AddRefed<SourceSurface> GetSourceSurface();
 
-  typedef std::function<void(size_t aHeapSize,
-                             size_t aNonHeapSize,
-                             size_t aExtHandles,
-                             uint64_t aExtId)> AddSizeOfCb;
+  struct AddSizeOfCbData {
+    AddSizeOfCbData()
+      : heap(0), nonHeap(0), handles(0), index(0), externalId(0)
+    { }
+
+    size_t heap;
+    size_t nonHeap;
+    size_t handles;
+    size_t index;
+    uint64_t externalId;
+  };
+
+  typedef std::function<void(AddSizeOfCbData& aMetadata)> AddSizeOfCb;
 
   void AddSizeOfExcludingThis(MallocSizeOf aMallocSizeOf,
                               const AddSizeOfCb& aCallback) const;
