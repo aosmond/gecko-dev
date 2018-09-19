@@ -46,6 +46,8 @@
 #include "nsReadableUtils.h"
 #include "mozilla/dom/ContentParent.h"
 #include "mozilla/dom/nsMixedContentBlocker.h"
+#include "mozilla/layers/CompositorManagerChild.h"
+#include "mozilla/layers/SharedSurfacesParent.h"
 
 #include "nsIApplicationCache.h"
 #include "nsIApplicationCacheContainer.h"
@@ -81,10 +83,39 @@ public:
   NS_IMETHOD CollectReports(nsIHandleReportCallback* aHandleReport,
                             nsISupports* aData, bool aAnonymize) override
   {
+    MOZ_ASSERT(NS_IsMainThread());
+    layers::CompositorManagerChild* manager = CompositorManagerChild::GetInstance();
+    if (!manager) {
+      layers::SharedSurfacesMemoryTable sharedSurfaces;
+      FinishCollectReports(aHandleReport, aData, aAnonymize, sharedSurfaces);
+      return NS_OK;
+    }
+
+    RefPtr<imgMemoryReporter> self(this);
+    nsCOMPtr<nsIHandleReportCallback> handleReport(aHandleReport);
+    nsCOMPtr<nsISupports> data(aData);
+    manager->SendReportSharedSurfacesMemory(
+      [=](layers::SharedSurfacesMemoryReport aReport) {
+        layers::SharedSurfacesMemoryTable sharedSurfaces(std::move(aReport));
+        self->FinishCollectReports(handleReport, data, aAnonymize, sharedSurfaces);
+      },
+      [=](mozilla::ipc::ResponseRejectReason aReason) {
+        layers::SharedSurfacesMemoryTable sharedSurfaces;
+        self->FinishCollectReports(handleReport, data, aAnonymize, sharedSurfaces);
+      }
+    );
+    return NS_OK;
+  }
+
+  void FinishCollectReports(nsIHandleReportCallback* aHandleReport,
+                            nsISupports* aData, bool aAnonymize,
+                            layers::SharedSurfacesMemoryTable& aSharedSurfaces)
+  {
     nsTArray<ImageMemoryCounter> chrome;
     nsTArray<ImageMemoryCounter> content;
     nsTArray<ImageMemoryCounter> uncached;
 
+    printf_stderr("[AO][%5d] FinishCollectReports -- %u shared surfaces\n", base::GetCurrentProcId(), aSharedSurfaces.mSurfaces.Count());
     for (uint32_t i = 0; i < mKnownLoaders.Length(); i++) {
       for (auto iter = mKnownLoaders[i]->mChromeCache.Iter(); !iter.Done(); iter.Next()) {
         imgCacheEntry* entry = iter.UserData();
@@ -117,7 +148,11 @@ public:
     ReportCounterArray(aHandleReport, aData, uncached, "images/uncached",
                        aAnonymize);
 
-    return NS_OK;
+    nsCOMPtr<nsIMemoryReporterManager> imgr =
+      do_GetService("@mozilla.org/memory-reporter-manager;1");
+    if (imgr) {
+      imgr->EndReport();
+    }
   }
 
   static int64_t ImagesContentUsedUncompressedDistinguishedAmount()
@@ -1359,7 +1394,7 @@ void imgLoader::GlobalInit()
   sCacheMaxSize = cachesize > 0 ? cachesize : 0;
 
   sMemReporter = new imgMemoryReporter();
-  RegisterStrongMemoryReporter(sMemReporter);
+  RegisterStrongAsyncMemoryReporter(sMemReporter);
   RegisterImagesContentUsedUncompressedDistinguishedAmount(
     imgMemoryReporter::ImagesContentUsedUncompressedDistinguishedAmount);
 
