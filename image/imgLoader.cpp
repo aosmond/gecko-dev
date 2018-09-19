@@ -341,9 +341,10 @@ private:
 
       if (counter.Type() == SurfaceMemoryCounterType::NORMAL) {
         PlaybackType playback = counter.Key().Playback();
-        surfacePathPrefix.Append(playback == PlaybackType::eAnimated
-                                 ? " (animation)"
-                                 : "");
+	if (playback == PlaybackType::eAnimated) {
+          surfacePathPrefix.AppendPrintf(" (animation %4u)",
+                                         uint32_t(counter.Values().FrameIndex()));
+        }
 
         if (counter.Key().Flags() != DefaultSurfaceFlags()) {
           surfacePathPrefix.AppendLiteral(", flags:");
