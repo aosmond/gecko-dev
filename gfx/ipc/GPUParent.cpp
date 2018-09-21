@@ -14,6 +14,7 @@
 #include "GLContextProvider.h"
 #include "GPUProcessHost.h"
 #include "GPUProcessManager.h"
+#include "imgLoader.h"
 #include "mozilla/Assertions.h"
 #include "mozilla/Telemetry.h"
 #include "mozilla/TimeStamp.h"
@@ -268,6 +269,7 @@ GPUParent::RecvInit(nsTArray<GfxPrefSetting>&& prefs,
   // Make sure to do this *after* we update gfxVars above.
   if (gfxVars::UseWebRender()) {
     wr::RenderThread::Start();
+    imgLoader::RegisterWebRenderMemoryReporter();
   }
 
   VRManager::ManagerInit();
@@ -537,6 +539,8 @@ GPUParent::ActorDestroy(ActorDestroyReason aWhy)
   if (wr::RenderThread::Get()) {
     wr::RenderThread::ShutDown();
   }
+
+  imgLoader::DeregisterWebRenderMemoryReporter();
 
   // Shut down the default GL context provider.
   gl::GLContextProvider::Shutdown();

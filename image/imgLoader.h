@@ -31,6 +31,7 @@ class imgINotificationObserver;
 class nsILoadGroup;
 class imgCacheExpirationTracker;
 class imgMemoryReporter;
+class imgWrMemoryReporter;
 
 namespace mozilla {
 namespace image {
@@ -257,6 +258,9 @@ public:
    */
   static imgLoader* PrivateBrowsingLoader();
 
+  static void RegisterWebRenderMemoryReporter();
+  static void DeregisterWebRenderMemoryReporter();
+
   /**
    * Gecko code should use NormalLoader() or PrivateBrowsingLoader() to get the
    * appropriate image loader.
@@ -475,6 +479,7 @@ private: // data
   static double sCacheTimeWeight;
   static uint32_t sCacheMaxSize;
   static imgMemoryReporter* sMemReporter;
+  static imgWrMemoryReporter* sWrMemReporter;
 
   nsCString mAcceptHeader;
 

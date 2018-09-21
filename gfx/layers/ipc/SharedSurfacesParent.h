@@ -36,6 +36,7 @@ class SharedSurfacesMemoryReport final
 public:
   class SurfaceEntry final {
   public:
+    base::ProcessId mCreatorPid;
     gfx::IntSize mSize;
     int32_t mStride;
     uint32_t mConsumers;
@@ -72,6 +73,8 @@ public:
 
   static void AccumulateMemoryReport(base::ProcessId aPid,
                                      SharedSurfacesMemoryReport& aReport);
+
+  static bool AccumulateMemoryReport(SharedSurfacesMemoryReport& aReport);
 
   ~SharedSurfacesParent();
 

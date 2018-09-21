@@ -124,10 +124,14 @@ struct ImageMemoryCounter
 
   bool IsNotable() const
   {
+#if 0
     const size_t NotableThreshold = 16 * 1024;
     size_t total = mValues.Source() + mValues.DecodedHeap()
                                     + mValues.DecodedNonHeap();
     return total >= NotableThreshold;
+#else
+    return true;
+#endif
   }
 
 private:

@@ -84,6 +84,7 @@ public:
                             nsISupports* aData, bool aAnonymize) override
   {
     MOZ_ASSERT(NS_IsMainThread());
+
     layers::CompositorManagerChild* manager = CompositorManagerChild::GetInstance();
     if (!manager) {
       layers::SharedSurfacesMemoryReport sharedSurfaces;
@@ -149,7 +150,7 @@ public:
                        aAnonymize, aSharedSurfaces);
 
     // Report any shared surfaces that were not merged with the surface cache.
-    ReportSharedSurfaces(aHandleReport, aData, aSharedSurfaces);
+    ReportSharedSurfaces(aHandleReport, aData, /* aForGPU */ false, aSharedSurfaces);
 
     nsCOMPtr<nsIMemoryReporterManager> imgr =
       do_GetService("@mozilla.org/memory-reporter-manager;1");
@@ -199,6 +200,17 @@ public:
   void UnregisterLoader(imgLoader* aLoader)
   {
     mKnownLoaders.RemoveElement(aLoader);
+  }
+
+  static void ReportSharedSurfaces(nsIHandleReportCallback* aHandleReport,
+                                   nsISupports* aData,
+                                   bool aIsForGPU,
+                                   layers::SharedSurfacesMemoryReport& aSharedSurfaces)
+  {
+    for (auto i = aSharedSurfaces.mSurfaces.begin();
+         i != aSharedSurfaces.mSurfaces.end(); ++i) {
+      ReportSharedSurface(aHandleReport, aData, aIsForGPU, i->first, i->second);
+    }
   }
 
 private:
@@ -286,38 +298,51 @@ private:
                 aPathPrefix, "", summaryTotal);
   }
 
-  static void ReportSharedSurfaces(nsIHandleReportCallback* aHandleReport,
-                                   nsISupports* aData,
-                                   layers::SharedSurfacesMemoryReport& aSharedSurfaces)
+  static void ReportSharedSurface(nsIHandleReportCallback* aHandleReport,
+                                  nsISupports* aData,
+                                  bool aIsForGPU,
+                                  uint64_t aExternalId,
+                                  const layers::SharedSurfacesMemoryReport::SurfaceEntry& aEntry)
   {
-    nsAutoCString processName;
-    layers::CompositorManagerChild* manager = CompositorManagerChild::GetInstance();
-    if (manager) {
-      manager->OtherProcessName(processName);
+    nsAutoCString pathPrefix;
+    if (aIsForGPU) {
+      if (aEntry.mCreatorPid != base::GetCurrentProcId()) {
+        pathPrefix.AppendLiteral("gfx/webrender/images/mapped_from_owner/");
+      } else {
+        pathPrefix.AppendLiteral("gfx/webrender/images/owner_cache_missing/");
+      }
+    } else {
+      pathPrefix.AppendLiteral("gfx/webrender/images/owner_cache_missing/");
     }
 
-    for (auto i = aSharedSurfaces.mSurfaces.begin();
-         i != aSharedSurfaces.mSurfaces.end(); ++i) {
-      nsAutoCString pathPrefix(NS_LITERAL_CSTRING("explicit/image/webrender/uncached/"));
-      pathPrefix.AppendPrintf("%016lx", i->first);
-      pathPrefix.AppendLiteral("/image(");
-      pathPrefix.AppendInt(i->second.mSize.width);
-      pathPrefix.AppendLiteral("x");
-      pathPrefix.AppendInt(i->second.mSize.height);
-      pathPrefix.AppendLiteral(", gpuConsumers:");
-      pathPrefix.AppendInt(i->second.mConsumers);
-      pathPrefix.AppendLiteral(", producerRef:");
-      pathPrefix.AppendInt(i->second.mProducerRef);
-      pathPrefix.AppendLiteral(")/");
-
-      size_t surfaceSize =
-        mozilla::ipc::SharedMemory::PageAlignedSize(i->second.mSize.width *
-                                                    i->second.mStride);
-      ReportValue(aHandleReport, aData, KIND_NONHEAP, pathPrefix,
-                  "decoded-nonheap",
-                  "Decoded image data stored in shared memory.",
-                  surfaceSize);
+    if (aIsForGPU) {
+      pathPrefix.AppendLiteral("pid=");
+      pathPrefix.AppendInt(aEntry.mCreatorPid);
+      pathPrefix.AppendLiteral("/");
     }
+
+    if (gfxPrefs::ImageMemDebugReporting()) {
+      pathPrefix.AppendPrintf("%016lx/", aExternalId);
+    }
+
+    pathPrefix.AppendLiteral("image(");
+    pathPrefix.AppendInt(aEntry.mSize.width);
+    pathPrefix.AppendLiteral("x");
+    pathPrefix.AppendInt(aEntry.mSize.height);
+    pathPrefix.AppendLiteral(", gpuConsumers:");
+    pathPrefix.AppendInt(aEntry.mConsumers);
+    pathPrefix.AppendLiteral(", producerRef:");
+    pathPrefix.AppendInt(aEntry.mProducerRef);
+    pathPrefix.AppendLiteral(")/");
+
+    size_t surfaceSize =
+      mozilla::ipc::SharedMemory::PageAlignedSize(aEntry.mSize.height *
+                                                  aEntry.mStride);
+    int32_t kind = aIsForGPU ? KIND_NONHEAP : KIND_OTHER;
+    ReportValue(aHandleReport, aData, kind, pathPrefix,
+                "decoded-nonheap",
+                "Decoded image data stored in shared memory.",
+                surfaceSize);
   }
 
   static void ReportImage(nsIHandleReportCallback* aHandleReport,
@@ -382,15 +407,21 @@ private:
 
       uint64_t extId = counter.Values().ExternalId();
       if (extId) {
-        surfacePathPrefix.AppendPrintf(", external_id:%016lx", extId);
         auto gpuEntry = aSharedSurfaces.mSurfaces.find(extId);
+
+        if (gfxPrefs::ImageMemDebugReporting()) {
+          surfacePathPrefix.AppendPrintf(", external_id:%016lx", extId);
+          if (gpuEntry != aSharedSurfaces.mSurfaces.end()) {
+            surfacePathPrefix.AppendLiteral(", gpu_consumers:");
+            surfacePathPrefix.AppendInt(gpuEntry->second.mConsumers);
+          } else {
+            surfacePathPrefix.AppendLiteral(", gpu_missing");
+          }
+        }
+
         if (gpuEntry != aSharedSurfaces.mSurfaces.end()) {
           MOZ_ASSERT(gpuEntry->second.mProducerRef);
-          surfacePathPrefix.AppendLiteral(", gpu_consumers:");
-          surfacePathPrefix.AppendInt(gpuEntry->second.mConsumers);
           aSharedSurfaces.mSurfaces.erase(gpuEntry);
-        } else {
-          surfacePathPrefix.AppendLiteral(", gpu_missing");
         }
       }
 
@@ -566,6 +597,30 @@ private:
 };
 
 NS_IMPL_ISUPPORTS(imgMemoryReporter, nsIMemoryReporter)
+
+class imgWrMemoryReporter final : public nsIMemoryReporter
+{
+public:
+  NS_DECL_ISUPPORTS
+
+  imgWrMemoryReporter()
+  { }
+
+  NS_IMETHOD CollectReports(nsIHandleReportCallback* aHandleReport,
+                            nsISupports* aData, bool aAnonymize) override
+  {
+    layers::SharedSurfacesMemoryReport report;
+    layers::SharedSurfacesParent::AccumulateMemoryReport(report);
+    imgMemoryReporter::ReportSharedSurfaces(aHandleReport, aData, /* aIsForGPU */ true, report);
+    return NS_OK;
+  }
+
+private:
+  virtual ~imgWrMemoryReporter()
+  { }
+};
+
+NS_IMPL_ISUPPORTS(imgWrMemoryReporter, nsIMemoryReporter)
 
 NS_IMPL_ISUPPORTS(nsProgressNotificationProxy,
                   nsIProgressEventSink,
@@ -1333,6 +1388,7 @@ imgCacheExpirationTracker::NotifyExpired(imgCacheEntry* entry)
 double imgLoader::sCacheTimeWeight;
 uint32_t imgLoader::sCacheMaxSize;
 imgMemoryReporter* imgLoader::sMemReporter;
+imgWrMemoryReporter* imgLoader::sWrMemReporter;
 
 NS_IMPL_ISUPPORTS(imgLoader, imgILoader, nsIContentSniffer, imgICache,
                   nsISupportsWeakReference, nsIObserver)
@@ -1371,6 +1427,24 @@ imgLoader::PrivateBrowsingLoader()
     gPrivateBrowsingLoader->RespectPrivacyNotifications();
   }
   return gPrivateBrowsingLoader;
+}
+
+/* static */ void
+imgLoader::RegisterWebRenderMemoryReporter()
+{
+  if (!sWrMemReporter) {
+    sWrMemReporter = new imgWrMemoryReporter();
+    RegisterStrongMemoryReporter(sWrMemReporter);
+  }
+}
+
+/* static */ void
+imgLoader::DeregisterWebRenderMemoryReporter()
+{
+  if (sWrMemReporter) {
+    UnregisterStrongMemoryReporter(sWrMemReporter);
+    sWrMemReporter = nullptr;
+  }
 }
 
 imgLoader::imgLoader()

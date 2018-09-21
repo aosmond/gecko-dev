@@ -6,6 +6,7 @@
 
 #include "SharedSurfacesParent.h"
 #include "mozilla/DebugOnly.h"
+#include "mozilla/gfx/GPUProcessManager.h"
 #include "mozilla/layers/SourceSurfaceSharedData.h"
 #include "mozilla/layers/CompositorThread.h"
 #include "mozilla/webrender/RenderSharedSurfaceTextureHost.h"
@@ -214,17 +215,43 @@ SharedSurfacesParent::AccumulateMemoryReport(base::ProcessId aPid,
     return;
   }
 
-  // Note that the destruction of a parent may not be cheap if it still has a
-  // lot of surfaces still bound that require unmapping.
   for (auto i = sInstance->mSurfaces.ConstIter(); !i.Done(); i.Next()) {
     SourceSurfaceSharedDataWrapper* surface = i.Data();
     if (surface->GetCreatorPid() == aPid) {
       aReport.mSurfaces.insert(std::make_pair(i.Key(),
         SharedSurfacesMemoryReport::SurfaceEntry {
-          surface->GetSize(), surface->Stride(),
+          aPid, surface->GetSize(), surface->Stride(),
           surface->GetConsumers(), surface->GetProducerRef() }));
     }
   }
+}
+
+/* static */ bool
+SharedSurfacesParent::AccumulateMemoryReport(SharedSurfacesMemoryReport& aReport)
+{
+  if (XRE_IsParentProcess()) {
+    GPUProcessManager* gpm = GPUProcessManager::Get();
+    if (!gpm || gpm->GPUProcessPid() != -1) {
+      return false;
+    }
+  } else if (!XRE_IsGPUProcess()) {
+    return false;
+  }
+
+  StaticMutexAutoLock lock(sMutex);
+  if (!sInstance) {
+    return true;
+  }
+
+  for (auto i = sInstance->mSurfaces.ConstIter(); !i.Done(); i.Next()) {
+    SourceSurfaceSharedDataWrapper* surface = i.Data();
+    aReport.mSurfaces.insert(std::make_pair(i.Key(),
+      SharedSurfacesMemoryReport::SurfaceEntry {
+        surface->GetCreatorPid(), surface->GetSize(), surface->Stride(),
+        surface->GetConsumers(), surface->GetProducerRef() }));
+  }
+
+  return true;
 }
 
 } // namespace layers
