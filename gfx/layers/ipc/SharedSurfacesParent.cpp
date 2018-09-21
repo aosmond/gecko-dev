@@ -219,9 +219,10 @@ SharedSurfacesParent::AccumulateMemoryReport(base::ProcessId aPid,
   for (auto i = sInstance->mSurfaces.ConstIter(); !i.Done(); i.Next()) {
     SourceSurfaceSharedDataWrapper* surface = i.Data();
     if (surface->GetCreatorPid() == aPid) {
-      aReport.mSurfaces.AppendElement(SharedSurfacesMemoryReport::SurfaceEntry {
-        i.Key(), surface->GetSize(), surface->Stride(),
-        surface->GetConsumers(), surface->GetProducerRef() });
+      aReport.mSurfaces.insert(std::make_pair(i.Key(),
+        SharedSurfacesMemoryReport::SurfaceEntry {
+          surface->GetSize(), surface->Stride(),
+          surface->GetConsumers(), surface->GetProducerRef() }));
     }
   }
 }
