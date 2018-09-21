@@ -213,6 +213,35 @@ CompositorManagerChild::CompositorManagerChild(Endpoint<PCompositorManagerChild>
 }
 
 void
+CompositorManagerChild::OtherProcessName(nsACString& aStr)
+{
+  base::ProcessId pid = OtherPid();
+
+  // If the remote is our own PID, that means the compositor lives in the parent
+  // process, because the GPU process can't have a CompositorManagerChild.
+  if (pid == base::GetCurrentProcId()) {
+    MOZ_ASSERT(XRE_IsParentProcess());
+    aStr.Truncate();
+    return;
+  }
+
+  // If we are a content process, then we know ContentChild's remote is the
+  // parent process.
+  if (XRE_IsContentProcess()) {
+    dom::ContentChild* contentChild = dom::ContentChild::GetSingleton();
+    if (contentChild && pid == contentChild->OtherPid()) {
+      aStr.AssignLiteral("Main Process");
+      return;
+    }
+  }
+
+  // If we don't match ContentChild's remote, or we cannot confirm, just assume
+  // we have a GPU process.
+  aStr.Truncate();
+  aStr.AppendPrintf("GPU (pid %d)", pid);
+}
+
+void
 CompositorManagerChild::DeallocPCompositorManagerChild()
 {
   MOZ_ASSERT(!mCanSend);

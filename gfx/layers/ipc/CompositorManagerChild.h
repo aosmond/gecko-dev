@@ -85,6 +85,8 @@ public:
     return wr::ToExternalImageId(id);
   }
 
+  void OtherProcessName(nsACString& aStr);
+
   void ActorDestroy(ActorDestroyReason aReason) override;
 
   void HandleFatalError(const char* aMsg) const override;
