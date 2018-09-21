@@ -308,6 +308,8 @@ private:
       pathPrefix.AppendInt(i.Data().mSize.height);
       pathPrefix.AppendLiteral(", gpuConsumers:");
       pathPrefix.AppendInt(i.Data().mConsumers);
+      pathPrefix.AppendLiteral(", producerRef:");
+      pathPrefix.AppendInt(i.Data().mProducerRef);
       pathPrefix.AppendLiteral(")/");
 
       size_t surfaceSize =
@@ -385,6 +387,7 @@ private:
         surfacePathPrefix.AppendPrintf(", external_id:%016lx", extId);
         auto gpuEntry = aSharedSurfaces.mSurfaces.GetAndRemove(extId);
         if (gpuEntry) {
+          MOZ_ASSERT(gpuEntry->mProducerRef);
           surfacePathPrefix.AppendLiteral(", gpu_consumers:");
           surfacePathPrefix.AppendInt(gpuEntry->mConsumers);
         } else {

@@ -85,7 +85,7 @@ SharedSurfacesParent::Acquire(const wr::ExternalImageId& aId)
 }
 
 /* static */ bool
-SharedSurfacesParent::Release(const wr::ExternalImageId& aId)
+SharedSurfacesParent::Release(const wr::ExternalImageId& aId, bool aByProducer)
 {
   StaticMutexAutoLock lock(sMutex);
   if (!sInstance) {
@@ -99,7 +99,7 @@ SharedSurfacesParent::Release(const wr::ExternalImageId& aId)
     return false;
   }
 
-  if (surface->RemoveConsumer()) {
+  if (surface->RemoveConsumer(aByProducer)) {
     wr::RenderThread::Get()->UnregisterExternalImage(id);
     sInstance->mSurfaces.Remove(id);
   }
@@ -143,7 +143,7 @@ SharedSurfacesParent::RemoveSameProcess(const wr::ExternalImageId& aId)
 {
   MOZ_ASSERT(XRE_IsParentProcess());
   MOZ_ASSERT(NS_IsMainThread());
-  Release(aId);
+  Release(aId, /* aByProducer */ true);
 }
 
 /* static */ void
@@ -158,7 +158,8 @@ SharedSurfacesParent::DestroyProcess(base::ProcessId aPid)
   // lot of surfaces still bound that require unmapping.
   for (auto i = sInstance->mSurfaces.Iter(); !i.Done(); i.Next()) {
     SourceSurfaceSharedDataWrapper* surface = i.Data();
-    if (surface->GetCreatorPid() == aPid && surface->RemoveConsumer()) {
+    if (surface->GetCreatorPid() == aPid &&
+        surface->RemoveConsumer(/* aProducerRef */ true)) {
       wr::RenderThread::Get()->UnregisterExternalImage(i.Key());
       i.Remove();
     }
@@ -200,7 +201,7 @@ SharedSurfacesParent::Add(const wr::ExternalImageId& aId,
 /* static */ void
 SharedSurfacesParent::Remove(const wr::ExternalImageId& aId)
 {
-  DebugOnly<bool> rv = Release(aId);
+  DebugOnly<bool> rv = Release(aId, /* aByProducer */ true);
   MOZ_ASSERT(rv);
 }
 
@@ -220,7 +221,7 @@ SharedSurfacesParent::AccumulateMemoryReport(base::ProcessId aPid,
     if (surface->GetCreatorPid() == aPid) {
       aReport.mSurfaces.AppendElement(SharedSurfacesMemoryReport::SurfaceEntry {
         i.Key(), surface->GetSize(), surface->Stride(),
-        surface->GetConsumers() });
+        surface->GetConsumers(), surface->GetProducerRef() });
     }
   }
 }

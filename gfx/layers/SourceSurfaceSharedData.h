@@ -41,6 +41,7 @@ public:
   SourceSurfaceSharedDataWrapper()
     : mStride(0)
     , mConsumers(0)
+    , mProducerRef(true)
     , mFormat(SurfaceFormat::UNKNOWN)
     , mCreatorPid(0)
   { }
@@ -79,9 +80,13 @@ public:
     return ++mConsumers == 1;
   }
 
-  bool RemoveConsumer()
+  bool RemoveConsumer(bool aByProducer)
   {
     MOZ_ASSERT(mConsumers > 0);
+    if (aByProducer) {
+      MOZ_ASSERT(mProducerRef);
+      mProducerRef = false;
+    }
     return --mConsumers == 0;
   }
 
@@ -89,6 +94,11 @@ public:
   {
     MOZ_ASSERT(mConsumers > 0);
     return mConsumers;
+  }
+
+  bool GetProducerRef() const
+  {
+    return mProducerRef;
   }
 
 private:
@@ -104,6 +114,7 @@ private:
 
   int32_t mStride;
   uint32_t mConsumers;
+  bool mProducerRef;
   IntSize mSize;
   RefPtr<SharedMemoryBasic> mBuf;
   SurfaceFormat mFormat;

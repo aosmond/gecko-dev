@@ -39,6 +39,7 @@ public:
     gfx::IntSize mSize;
     int32_t mStride;
     uint32_t mConsumers;
+    bool mProducerRef;
   };
 
   nsTArray<SurfaceEntry> mSurfaces;
@@ -52,6 +53,7 @@ public:
     gfx::IntSize mSize;
     int32_t mStride;
     uint32_t mConsumers;
+    bool mProducerRef;
   };
 
   explicit SharedSurfacesMemoryTable(base::ProcessId aGPUPid)
@@ -66,7 +68,7 @@ public:
     SharedSurfacesMemoryReport report(std::move(aReport));
     for (const auto& s : report.mSurfaces) {
       mSurfaces.Put(wr::AsUint64(s.mId), SurfaceEntry {
-        s.mSize, s.mStride, s.mConsumers });
+        s.mSize, s.mStride, s.mConsumers, s.mProducerRef });
     }
   }
 
@@ -88,7 +90,8 @@ public:
   static already_AddRefed<gfx::DataSourceSurface>
   Acquire(const wr::ExternalImageId& aId);
 
-  static bool Release(const wr::ExternalImageId& aId);
+  static bool Release(const wr::ExternalImageId& aId,
+                      bool aByProducer = false);
 
   static void Add(const wr::ExternalImageId& aId,
                   const SurfaceDescriptorShared& aDesc,
