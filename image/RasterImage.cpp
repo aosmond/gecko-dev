@@ -1707,7 +1707,7 @@ RasterImage::NotifyProgress(Progress aProgress,
 
   if (!aInvalidRect.IsEmpty() && wasDefaultFlags) {
     // Update our image container since we're invalidating.
-    UpdateImageContainer();
+    UpdateImageContainer(Some(aInvalidRect));
   }
 
   if (!(aDecoderFlags & DecoderFlags::FIRST_FRAME_ONLY)) {
