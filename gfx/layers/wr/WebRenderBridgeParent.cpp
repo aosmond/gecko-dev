@@ -179,6 +179,21 @@ protected:
   bool mIsActive;
 };
 
+class ScheduleSharedSurfaceRelease final : public wr::NotificationHandler {
+public:
+  ScheduleSharedSurfaceRelease(const wr::ExternalImageId& aId)
+    : mId(aId)
+  { }
+
+  void Notify(wr::Checkpoint) override
+  {
+    SharedSurfacesParent::Release(mId);
+  }
+
+private:
+  wr::ExternalImageId mId;
+};
+
 class MOZ_STACK_CLASS AutoWebRenderBridgeParentAsyncMessageSender
 {
 public:
@@ -595,8 +610,10 @@ WebRenderBridgeParent::UpdateExternalImage(wr::ExternalImageId aExtId,
 
   if (!(it->second == aExtId)) {
     // We already have a mapping for this image key, so ensure we release the
-    // previous external image ID.
-    mAsyncImageManager->HoldExternalImage(mPipelineId, mWrEpoch, it->second);
+    // previous external image ID. This can happen when an image is animated,
+    // and it is changing the external image that the animation points to.
+    aResources.Notify(wr::Checkpoint::FrameRendered,
+                      MakeUnique<ScheduleSharedSurfaceRelease>(it->second));
     it->second = aExtId;
   }
 
