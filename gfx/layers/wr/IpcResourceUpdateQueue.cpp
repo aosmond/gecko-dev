@@ -128,6 +128,13 @@ ShmSegmentsWriter::AllocLargeChunk(size_t aSize)
 }
 
 void
+ShmSegmentsWriter::Append(ShmSegmentsWriter&& aOther)
+{
+  mSmallAllocs.AppendElements(std::move(aOther.mSmallAllocs));
+  mLargeAllocs.AppendElements(std::move(aOther.mLargeAllocs));
+}
+
+void
 ShmSegmentsWriter::Flush(nsTArray<RefCountedShmem>& aSmallAllocs, nsTArray<ipc::Shmem>& aLargeAllocs)
 {
   MOZ_ASSERT(aSmallAllocs.IsEmpty());
@@ -389,6 +396,13 @@ void
 IpcResourceUpdateQueue::DeleteFontInstance(wr::FontInstanceKey aKey)
 {
   mUpdates.AppendElement(layers::OpDeleteFontInstance(aKey));
+}
+
+void
+IpcResourceUpdateQueue::Append(IpcResourceUpdateQueue&& aOther)
+{
+  mUpdates.AppendElements(std::move(aOther.mUpdates));
+  mWriter.Append(std::move(aOther.mWriter));
 }
 
 void

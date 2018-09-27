@@ -96,7 +96,8 @@ WebRenderBridgeChild::BeginTransaction()
 }
 
 void
-WebRenderBridgeChild::UpdateResources(wr::IpcResourceUpdateQueue& aResources)
+WebRenderBridgeChild::UpdateResources(wr::IpcResourceUpdateQueue& aResources,
+                                      bool aScheduleComposite /* = false */)
 {
   if (!IPCOpen()) {
     aResources.Clear();
@@ -112,7 +113,8 @@ WebRenderBridgeChild::UpdateResources(wr::IpcResourceUpdateQueue& aResources)
   nsTArray<ipc::Shmem> largeShmems;
   aResources.Flush(resourceUpdates, smallShmems, largeShmems);
 
-  this->SendUpdateResources(resourceUpdates, std::move(smallShmems), largeShmems);
+  this->SendUpdateResources(resourceUpdates, std::move(smallShmems),
+                            largeShmems, aScheduleComposite);
 }
 
 void
@@ -157,6 +159,7 @@ WebRenderBridgeChild::EndTransaction(const wr::LayoutSize& aContentSize,
 void
 WebRenderBridgeChild::EndEmptyTransaction(const FocusTarget& aFocusTarget,
                                           const ScrollUpdatesMap& aUpdates,
+                                          Maybe<wr::IpcResourceUpdateQueue>& aResources,
                                           uint32_t aPaintSequenceNumber,
                                           TransactionId aTransactionId,
                                           const mozilla::TimeStamp& aRefreshStartTime,
@@ -170,9 +173,18 @@ WebRenderBridgeChild::EndEmptyTransaction(const FocusTarget& aFocusTarget,
   fwdTime = TimeStamp::Now();
 #endif
 
+  nsTArray<OpUpdateResource> resourceUpdates;
+  nsTArray<RefCountedShmem> smallShmems;
+  nsTArray<ipc::Shmem> largeShmems;
+  if (aResources) {
+    aResources->Flush(resourceUpdates, smallShmems, largeShmems);
+    aResources.reset();
+  }
+
   this->SendEmptyTransaction(aFocusTarget, aUpdates, aPaintSequenceNumber,
                              mParentCommands, mDestroyedActors,
                              GetFwdTransactionId(), aTransactionId,
+                             std::move(resourceUpdates), std::move(smallShmems), largeShmems,
                              mIdNamespace, aRefreshStartTime, aTxnStartTime, fwdTime);
   mParentCommands.Clear();
   mDestroyedActors.Clear();
