@@ -14,7 +14,6 @@
 #include "mozilla/dom/TabGroup.h"
 #include "mozilla/gfx/DrawEventRecorder.h"
 #include "mozilla/layers/CompositorBridgeChild.h"
-#include "mozilla/layers/IpcResourceUpdateQueue.h"
 #include "mozilla/layers/StackingContextHelper.h"
 #include "mozilla/layers/TextureClient.h"
 #include "mozilla/layers/WebRenderBridgeChild.h"
@@ -239,7 +238,8 @@ WebRenderLayerManager::EndEmptyTransaction(EndTransactionFlags aFlags)
   }
 
   WrBridge()->EndEmptyTransaction(mFocusTarget, mPendingScrollUpdates,
-      mPaintSequenceNumber, mLatestTransactionId, refreshStart, mTransactionStart);
+      mAsyncResourceUpdates, mPaintSequenceNumber, mLatestTransactionId,
+      refreshStart, mTransactionStart);
   ClearPendingScrollInfoUpdate();
 
   mTransactionStart = TimeStamp();
@@ -333,6 +333,11 @@ WebRenderLayerManager::EndTransactionWithoutLayer(nsDisplayList* aDisplayList,
 
   mLatestTransactionId = mTransactionIdAllocator->GetTransactionId(/*aThrottle*/ true);
   TimeStamp refreshStart = mTransactionIdAllocator->GetTransactionStart();
+
+  if (mAsyncResourceUpdates) {
+    resourceUpdates.Append(std::move(mAsyncResourceUpdates.ref()));
+    mAsyncResourceUpdates.reset();
+  }
 
   for (const auto& key : mImageKeysToDelete) {
     resourceUpdates.DeleteImage(key);
@@ -695,6 +700,40 @@ WebRenderLayerManager::CreatePersistentBufferProvider(const gfx::IntSize& aSize,
     }
   }
   return LayerManager::CreatePersistentBufferProvider(aSize, aFormat);
+}
+
+wr::IpcResourceUpdateQueue&
+WebRenderLayerManager::AsyncResourceUpdates()
+{
+  MOZ_ASSERT(NS_IsMainThread());
+
+  if (!mAsyncResourceUpdates) {
+    mAsyncResourceUpdates.emplace(WrBridge());
+
+    RefPtr<Runnable> task = NewRunnableMethod(
+      "WebRenderLayerManager::FlushAsyncResourceUpdates",
+      this, &WebRenderLayerManager::FlushAsyncResourceUpdates);
+    NS_DispatchToMainThread(task.forget());
+  }
+
+  return mAsyncResourceUpdates.ref();
+}
+
+void
+WebRenderLayerManager::FlushAsyncResourceUpdates()
+{
+  MOZ_ASSERT(NS_IsMainThread());
+
+  if (!mAsyncResourceUpdates) {
+    return;
+  }
+
+  if (!IsDestroyed() && WrBridge()) {
+    WrBridge()->UpdateResources(mAsyncResourceUpdates.ref(),
+                                /* aScheduleComposite */ true);
+  }
+
+  mAsyncResourceUpdates.reset();
 }
 
 } // namespace layers
