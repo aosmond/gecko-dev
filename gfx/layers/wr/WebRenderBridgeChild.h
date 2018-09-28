@@ -209,6 +209,8 @@ private:
 
   mozilla::ipc::IPCResult RecvWrUpdated(const wr::IdNamespace& aNewIdNamespace,
                                         const TextureFactoryIdentifier& textureFactoryIdentifier) override;
+  mozilla::ipc::IPCResult RecvSharedSurfaceRelease(const wr::ImageKey& aKey,
+                                                   const wr::ExternalImageId& aId) override;
 
   void AddIPDLReference() {
     MOZ_ASSERT(mIPCOpen == false);

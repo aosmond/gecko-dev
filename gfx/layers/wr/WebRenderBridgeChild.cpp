@@ -575,6 +575,16 @@ WebRenderBridgeChild::RecvWrUpdated(const wr::IdNamespace& aNewIdNamespace,
   return IPC_OK();
 }
 
+mozilla::ipc::IPCResult
+WebRenderBridgeChild::RecvSharedSurfaceRelease(const wr::ImageKey& aKey, 
+                                               const wr::ExternalImageId& aId)
+{
+  if (mManager) {
+    mManager->SharedSurfaceRelease(aKey, aId);
+  }
+  return IPC_OK();
+}
+
 void
 WebRenderBridgeChild::BeginClearCachedResources()
 {

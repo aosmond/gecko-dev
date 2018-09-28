@@ -22,6 +22,7 @@
 #include "mozilla/gfx/gfxVars.h"
 #include "mozilla/gfx/Tools.h"
 #include "mozilla/gfx/SourceSurfaceRawData.h"
+#include "mozilla/image/RecyclingSourceSurface.h"
 #include "mozilla/layers/SourceSurfaceSharedData.h"
 #include "mozilla/layers/SourceSurfaceVolatileData.h"
 #include "mozilla/Likely.h"
@@ -174,62 +175,6 @@ static bool AllowedImageAndFrameDimensions(const nsIntSize& aImageSize,
   }
   return true;
 }
-
-/**
- * This surface subclass will prevent the underlying surface from being recycled
- * as long as it is still alive. We will create this surface to wrap imgFrame's
- * mLockedSurface, if we are accessing it on a path that will keep the surface
- * alive for an indeterminate period of time (e.g. imgFrame::GetSourceSurface,
- * imgFrame::Draw with a recording or capture DrawTarget).
- */
-class imgFrame::RecyclingSourceSurface final : public DataSourceSurface
-{
-public:
-  RecyclingSourceSurface(imgFrame* aParent, DataSourceSurface* aSurface)
-    : mParent(aParent)
-    , mSurface(aSurface)
-  {
-    mParent->mMonitor.AssertCurrentThreadOwns();
-    ++mParent->mRecycleLockCount;
-  }
-
-  MOZ_DECLARE_REFCOUNTED_VIRTUAL_TYPENAME(RecyclingSourceSurface, override);
-
-  uint8_t* GetData() override { return mSurface->GetData(); }
-  int32_t Stride() override { return mSurface->Stride(); }
-  SurfaceType GetType() const override { return SurfaceType::DATA; }
-  IntSize GetSize() const override { return mSurface->GetSize(); }
-  SurfaceFormat GetFormat() const override { return mSurface->GetFormat(); }
-
-  void AddSizeOfExcludingThis(MallocSizeOf aMallocSizeOf,
-                              size_t& aHeapSizeOut,
-                              size_t& aNonHeapSizeOut,
-                              size_t& aExtHandlesOut,
-                              uint64_t& aExtIdOut) const override
-  { }
-
-  bool OnHeap() const override { return mSurface->OnHeap(); }
-  bool Map(MapType aType, MappedSurface* aMappedSurface) override
-  {
-    return mSurface->Map(aType, aMappedSurface);
-  }
-  void Unmap() override { mSurface->Unmap(); }
-
-protected:
-  void GuaranteePersistance() override { }
-
-  ~RecyclingSourceSurface() override
-  {
-    MonitorAutoLock lock(mParent->mMonitor);
-    MOZ_ASSERT(mParent->mRecycleLockCount > 0);
-    if (--mParent->mRecycleLockCount == 0) {
-      mParent->mMonitor.NotifyAll();
-    }
-  }
-
-  RefPtr<imgFrame> mParent;
-  RefPtr<DataSourceSurface> mSurface;
-};
 
 imgFrame::imgFrame()
   : mMonitor("imgFrame")
@@ -419,12 +364,15 @@ imgFrame::InitForDecoderRecycle(const AnimationParams& aAnimParams)
       if (delta >= timeout) {
         // We couldn't secure the frame for recycling. It will allocate a new
         // frame instead.
+        printf_stderr("[AO] failed to recycle surface\n");
         return NS_ERROR_NOT_AVAILABLE;
       }
 
       timeout -= delta;
     }
   }
+
+  //printf_stderr("[AO] recycling surface\n");
 
   mBlendRect = aAnimParams.mBlendRect;
   mTimeout = aAnimParams.mTimeout;
@@ -1123,6 +1071,28 @@ imgFrame::AddSizeOfExcludingThis(MallocSizeOf aMallocSizeOf,
   }
 
   aCallback(metadata);
+}
+
+RecyclingSourceSurface::RecyclingSourceSurface(imgFrame* aParent, gfx::DataSourceSurface* aSurface)
+  : mParent(aParent)
+  , mSurface(aSurface)
+  , mType(gfx::SurfaceType::DATA_RECYCLING)
+{
+  mParent->mMonitor.AssertCurrentThreadOwns();
+  ++mParent->mRecycleLockCount;
+
+  if (aSurface->GetType() == gfx::SurfaceType::DATA_SHARED) {
+    mType = gfx::SurfaceType::DATA_SHARED_RECYCLING;
+  }
+}
+
+RecyclingSourceSurface::~RecyclingSourceSurface()
+{
+  MonitorAutoLock lock(mParent->mMonitor);
+  MOZ_ASSERT(mParent->mRecycleLockCount > 0);
+  if (--mParent->mRecycleLockCount == 0) {
+    mParent->mMonitor.NotifyAll();
+  }
 }
 
 } // namespace image

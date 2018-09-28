@@ -81,6 +81,7 @@ parent:
   sync ShutdownSync();
 child:
   async WrUpdated(IdNamespace aNewIdNamespace, TextureFactoryIdentifier textureFactoryIdentifier);
+  async SharedSurfaceRelease(ImageKey aKey, ExternalImageId aId);
   async __delete__();
 };
 

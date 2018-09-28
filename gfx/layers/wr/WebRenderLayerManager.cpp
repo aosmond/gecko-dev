@@ -18,6 +18,7 @@
 #include "mozilla/layers/TextureClient.h"
 #include "mozilla/layers/WebRenderBridgeChild.h"
 #include "mozilla/layers/UpdateImageHelper.h"
+#include "mozilla/layers/SharedSurfacesChild.h"
 #include "nsDisplayList.h"
 #include "WebRenderCanvasRenderer.h"
 
@@ -729,6 +730,26 @@ WebRenderLayerManager::FlushAsyncResourceUpdates()
   }
 
   mAsyncResourceUpdates.reset();
+}
+
+void
+WebRenderLayerManager::RegisterAsyncListener(const wr::ImageKey& aKey,
+                                             SharedSurfacesAnimationListener* aListener)
+{
+  auto it = mAsyncListeners.find(wr::AsUint64(aKey));
+  if (it == mAsyncListeners.end()) {
+    mAsyncListeners.insert(std::make_pair(wr::AsUint64(aKey), RefPtr<SharedSurfacesAnimationListener>(aListener)));
+  }
+}
+
+void
+WebRenderLayerManager::SharedSurfaceRelease(const wr::ImageKey& aKey,
+                                            const wr::ExternalImageId& aId)
+{
+  auto it = mAsyncListeners.find(wr::AsUint64(aKey));
+  if (it != mAsyncListeners.end()) {
+    it->second->ReleaseLastFrame(aId);
+  }
 }
 
 } // namespace layers

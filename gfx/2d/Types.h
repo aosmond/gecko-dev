@@ -33,7 +33,9 @@ enum class SurfaceType : int8_t {
   RECORDING, /* Surface used for recording */
   TILED, /* Surface from a tiled DrawTarget */
   DATA_SHARED, /* Data surface using shared memory */
-  CAPTURE /* Data from a DrawTargetCapture */
+  CAPTURE, /* Data from a DrawTargetCapture */
+  DATA_RECYCLING, /* Data surface in memory which will be reused */
+  DATA_SHARED_RECYCLING /* Data surface using shared memory which will be reused */
 };
 
 enum class SurfaceFormat : int8_t {

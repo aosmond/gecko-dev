@@ -7,6 +7,7 @@
 #ifndef MOZILLA_GFX_SHAREDSURFACESCHILD_H
 #define MOZILLA_GFX_SHAREDSURFACESCHILD_H
 
+#include <deque>
 #include <stdint.h>                     // for uint32_t, uint64_t
 #include "mozilla/Attributes.h"         // for override
 #include "mozilla/Maybe.h"              // for Maybe
@@ -15,6 +16,7 @@
 #include "mozilla/gfx/UserData.h"       // for UserDataKey
 #include "mozilla/webrender/WebRenderTypes.h" // for wr::ImageKey
 #include "nsTArray.h"                   // for AutoTArray
+#include "mozilla/layers/SourceSurfaceSharedData.h"
 
 namespace mozilla {
 namespace gfx {
@@ -165,6 +167,8 @@ private:
     bool mShared : 1;
   };
 
+  static gfx::SourceSurfaceSharedData* Upcast(gfx::SourceSurface* aSurface);
+
   static nsresult ShareInternal(gfx::SourceSurfaceSharedData* aSurface,
                                 SharedUserData** aUserData);
 
@@ -177,6 +181,23 @@ private:
   static gfx::UserDataKey sSharedKey;
 };
 
+class SharedSurfacesAnimationListener final
+{
+public:
+  NS_INLINE_DECL_THREADSAFE_REFCOUNTING(SharedSurfacesAnimationListener);
+
+  SharedSurfacesAnimationListener()
+  { }
+
+  void AppendNextFrame(gfx::SourceSurfaceSharedData* aSurface);
+  void ReleaseLastFrame(const wr::ExternalImageId& aId);
+
+private:
+  ~SharedSurfacesAnimationListener() = default;
+
+  std::deque<RefPtr<gfx::SourceSurfaceSharedData>> mSurfaces;
+};
+
 /**
  * This helper class owns a single ImageKey which will map to different external
  * image IDs representing different frames in an animation.
@@ -185,6 +206,7 @@ class SharedSurfacesAnimation final : private SharedSurfacesChild::SharedUserDat
 {
 public:
   SharedSurfacesAnimation()
+    : mListener(new SharedSurfacesAnimationListener())
   { }
 
   /**
@@ -207,6 +229,9 @@ public:
                      WebRenderLayerManager* aManager,
                      wr::IpcResourceUpdateQueue& aResources,
                      wr::ImageKey& aKey);
+
+private:
+  RefPtr<SharedSurfacesAnimationListener> mListener;
 };
 
 } // namespace layers

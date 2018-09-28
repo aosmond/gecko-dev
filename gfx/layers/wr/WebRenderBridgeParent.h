@@ -196,6 +196,9 @@ public:
 
   void RemoveEpochDataPriorTo(const wr::Epoch& aRenderedEpoch);
 
+  void ObserveSharedSurfaceRelease(const wr::ImageKey& aKey,
+                                   const wr::ExternalImageId& aId);
+
 private:
   explicit WebRenderBridgeParent(const wr::PipelineId& aPipelineId);
   virtual ~WebRenderBridgeParent();

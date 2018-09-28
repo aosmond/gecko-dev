@@ -8,6 +8,7 @@
 #define GFX_WEBRENDERLAYERMANAGER_H
 
 #include <unordered_set>
+#include <unordered_map>
 #include <vector>
 
 #include "gfxPrefs.h"
@@ -43,6 +44,7 @@ class KnowsCompositor;
 class PCompositorBridgeChild;
 class WebRenderBridgeChild;
 class WebRenderParentCommand;
+class SharedSurfacesAnimationListener;
 
 class WebRenderLayerManager final : public LayerManager
 {
@@ -138,6 +140,10 @@ public:
   wr::IpcResourceUpdateQueue& AsyncResourceUpdates();
   void FlushAsyncResourceUpdates();
 
+  void RegisterAsyncListener(const wr::ImageKey& aKey,
+                             SharedSurfacesAnimationListener* aListener);
+  void SharedSurfaceRelease(const wr::ImageKey& aKey, const wr::ExternalImageId& aId);
+
   // Methods to manage the compositor animation ids. Active animations are still
   // going, and when they end we discard them and remove them from the active
   // list.
@@ -226,6 +232,8 @@ private:
   size_t mLastDisplayListSize;
 
   Maybe<wr::IpcResourceUpdateQueue> mAsyncResourceUpdates;
+
+  std::unordered_map<uint64_t, RefPtr<SharedSurfacesAnimationListener>> mAsyncListeners;
 };
 
 } // namespace layers

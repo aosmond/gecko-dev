@@ -307,8 +307,7 @@ private: // data
   friend class DrawableFrameRef;
   friend class RawAccessFrameRef;
   friend class UnlockImageDataRunnable;
-
-  class RecyclingSourceSurface;
+  friend class RecyclingSourceSurface;
 
   //////////////////////////////////////////////////////////////////////////////
   // Thread-safe mutable data, protected by mMonitor.

@@ -181,18 +181,46 @@ protected:
 
 class ScheduleSharedSurfaceRelease final : public wr::NotificationHandler {
 public:
-  ScheduleSharedSurfaceRelease(const wr::ExternalImageId& aId)
-    : mId(aId)
+  ScheduleSharedSurfaceRelease(WebRenderBridgeParent* aWrBridge, const wr::ImageKey& aKey, const wr::ExternalImageId& aId)
+    : mWrBridge(aWrBridge)
+    , mKey(aKey)
+    , mId(aId)
   { }
 
   void Notify(wr::Checkpoint) override
   {
-    SharedSurfacesParent::Release(mId);
+    CompositorThreadHolder::Loop()->PostTask(
+      NewRunnableMethod<wr::ImageKey, wr::ExternalImageId>(
+        "ObserveSharedSurfaceRelease",
+        mWrBridge,
+        &WebRenderBridgeParent::ObserveSharedSurfaceRelease,
+        mKey, mId
+      )
+    );
+  }
+
+  ~ScheduleSharedSurfaceRelease() override
+  {
+    MOZ_ASSERT(!mWrBridge);
   }
 
 private:
+  RefPtr<WebRenderBridgeParent> mWrBridge;
+  wr::ImageKey mKey;
   wr::ExternalImageId mId;
 };
+
+void
+WebRenderBridgeParent::ObserveSharedSurfaceRelease(const wr::ImageKey& aKey,
+                                                   const wr::ExternalImageId& aId)
+{
+  if (mDestroyed) {
+    return;
+  }
+
+  SendSharedSurfaceRelease(aKey, aId);
+  SharedSurfacesParent::Release(aId);
+}
 
 class MOZ_STACK_CLASS AutoWebRenderBridgeParentAsyncMessageSender
 {
@@ -613,7 +641,7 @@ WebRenderBridgeParent::UpdateExternalImage(wr::ExternalImageId aExtId,
     // previous external image ID. This can happen when an image is animated,
     // and it is changing the external image that the animation points to.
     aResources.Notify(wr::Checkpoint::FrameRendered,
-                      MakeUnique<ScheduleSharedSurfaceRelease>(it->second));
+                      MakeUnique<ScheduleSharedSurfaceRelease>(this, aKey, it->second));
     it->second = aExtId;
   }
 
