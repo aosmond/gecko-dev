@@ -708,7 +708,7 @@ private:
   // asynchronusly using the ImageBridge IPDL protocol.
   RefPtr<ImageClient> mImageClient;
 
-  nsAutoPtr<SharedSurfacesAnimation> mSharedAnimation;
+  RefPtr<SharedSurfacesAnimation> mSharedAnimation;
 
   bool mIsAsync;
   CompositableHandle mAsyncContainerHandle;

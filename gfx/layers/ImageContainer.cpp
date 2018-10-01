@@ -240,6 +240,9 @@ ImageContainer::~ImageContainer()
       imageBridge->ForgetImageContainer(mAsyncContainerHandle);
     }
   }
+  if (mSharedAnimation) {
+    mSharedAnimation->Destroy();
+  }
 }
 
 RefPtr<PlanarYCbCrImage>

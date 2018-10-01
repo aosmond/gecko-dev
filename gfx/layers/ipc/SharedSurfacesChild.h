@@ -124,7 +124,7 @@ private:
       , mShared(false)
     { }
 
-    ~SharedUserData();
+    virtual ~SharedUserData();
 
     SharedUserData(const SharedUserData& aOther) = delete;
     SharedUserData& operator=(const SharedUserData& aOther) = delete;
@@ -140,7 +140,7 @@ private:
     void SetId(const wr::ExternalImageId& aId)
     {
       mId = aId;
-      mKeys.Clear();
+      ClearKeys();
       mShared = false;
     }
 
@@ -160,6 +160,22 @@ private:
                            const Maybe<gfx::IntRect>& aDirtyRect);
 
   protected:
+    void ClearKeys()
+    {
+      for (const auto& entry : mKeys) {
+        RemoveKey(entry);
+      }
+      mKeys.Clear();
+    }
+
+    void RemoveKeyElement(const ImageKeyData& aKeyData, size_t aIndex)
+    {
+      RemoveKey(aKeyData);
+      mKeys.RemoveElementAt(aIndex);
+    }
+
+    virtual void RemoveKey(const ImageKeyData& aKeyData) { }
+
     AutoTArray<ImageKeyData, 1> mKeys;
     wr::ExternalImageId mId;
     bool mShared : 1;
@@ -183,9 +199,13 @@ private:
  */
 class SharedSurfacesAnimation final : private SharedSurfacesChild::SharedUserData
 {
+  NS_INLINE_DECL_THREADSAFE_REFCOUNTING(SharedSurfacesAnimation)
+
 public:
   SharedSurfacesAnimation()
   { }
+
+  void Destroy();
 
   /**
    * Set the animation to display the given frame.
@@ -207,6 +227,11 @@ public:
                      WebRenderLayerManager* aManager,
                      wr::IpcResourceUpdateQueue& aResources,
                      wr::ImageKey& aKey);
+
+private:
+  ~SharedSurfacesAnimation() override;
+
+  void RemoveKey(const SharedSurfacesChild::ImageKeyData& aKeyData) override;
 };
 
 } // namespace layers

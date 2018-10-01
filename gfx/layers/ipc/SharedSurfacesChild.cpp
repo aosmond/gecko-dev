@@ -114,7 +114,7 @@ SharedSurfacesChild::SharedUserData::UpdateKey(WebRenderLayerManager* aManager,
     --i;
     ImageKeyData& entry = mKeys[i];
     if (entry.mManager->IsDestroyed()) {
-      mKeys.RemoveElementAt(i);
+      RemoveKeyElement(entry, i);
     } else if (entry.mManager == aManager) {
       WebRenderBridgeChild* wrBridge = aManager->WrBridge();
       MOZ_ASSERT(wrBridge);
@@ -124,6 +124,7 @@ SharedSurfacesChild::SharedUserData::UpdateKey(WebRenderLayerManager* aManager,
       // already been discarded.
       bool ownsKey = wrBridge->GetNamespace() == entry.mImageKey.mNamespace;
       if (!ownsKey) {
+        RemoveKey(entry);
         entry.mImageKey = wrBridge->GetNextImageKey();
         entry.TakeDirtyRect();
         aResources.AddExternalImage(mId, entry.mImageKey);
@@ -456,6 +457,31 @@ SharedSurfacesChild::UpdateAnimation(ImageContainer* aContainer,
   return anim->SetCurrentFrame(sharedSurface, aDirtyRect);
 }
 
+SharedSurfacesAnimation::~SharedSurfacesAnimation()
+{
+  MOZ_ASSERT(NS_IsMainThread());
+  MOZ_ASSERT(mKeys.IsEmpty());
+}
+
+void
+SharedSurfacesAnimation::Destroy()
+{
+  if (!NS_IsMainThread()) {
+    RefPtr<Runnable> task =
+      NewRunnableMethod("SharedSurfacesAnimation::Destroy", this,
+                        &SharedSurfacesAnimation::Destroy);
+    NS_DispatchToMainThread(task.forget());
+    return;
+  }
+
+  ClearKeys();
+}
+
+void
+SharedSurfacesAnimation::RemoveKey(const SharedSurfacesChild::ImageKeyData& aKeyData)
+{
+}
+
 nsresult
 SharedSurfacesAnimation::SetCurrentFrame(SourceSurfaceSharedData* aSurface,
                                          const gfx::IntRect& aDirtyRect)
@@ -476,7 +502,7 @@ SharedSurfacesAnimation::SetCurrentFrame(SourceSurfaceSharedData* aSurface,
     --i;
     SharedSurfacesChild::ImageKeyData& entry = mKeys[i];
     if (entry.mManager->IsDestroyed()) {
-      mKeys.RemoveElementAt(i);
+      RemoveKeyElement(entry, i);
       continue;
     }
 
@@ -507,7 +533,7 @@ SharedSurfacesAnimation::UpdateKey(SourceSurfaceSharedData* aSurface,
 
   MOZ_ASSERT(data);
   if (mId.mHandle != data->Id().mHandle) {
-    mKeys.Clear();
+    ClearKeys();
     mId = data->Id();
   }
 
