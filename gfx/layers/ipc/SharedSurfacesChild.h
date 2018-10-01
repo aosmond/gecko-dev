@@ -214,7 +214,8 @@ public:
    *                    and the previous frame. We will request only the delta
    *                    be reuploaded by WebRender.
    */
-  nsresult SetCurrentFrame(gfx::SourceSurfaceSharedData* aSurface,
+  nsresult SetCurrentFrame(gfx::SourceSurface* aParentSurface,
+                           gfx::SourceSurfaceSharedData* aSurface,
                            const gfx::IntRect& aDirtyRect);
 
   /**
@@ -223,7 +224,8 @@ public:
    *                  SetCurrentFrame, but if it does not, it will need to
    *                  regenerate the cached ImageKey.
    */
-  nsresult UpdateKey(gfx::SourceSurfaceSharedData* aSurface,
+  nsresult UpdateKey(gfx::SourceSurface* aParentSurface,
+                     gfx::SourceSurfaceSharedData* aSurface,
                      WebRenderLayerManager* aManager,
                      wr::IpcResourceUpdateQueue& aResources,
                      wr::ImageKey& aKey);
