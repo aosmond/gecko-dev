@@ -493,6 +493,34 @@ SharedSurfacesAnimation::RemoveKey(const SharedSurfacesChild::ImageKeyData& aKey
 {
 }
 
+void
+SharedSurfacesAnimation::ReleasePreviousFrame(const wr::ExternalImageId& aId)
+{
+  MOZ_ASSERT(NS_IsMainThread());
+
+  size_t i;
+  for (i = 0; i < mPendingRelease.size(); ++i) {
+    auto sharedSurface = SharedSurfacesChild::Upcast(mPendingRelease[i]);
+    MOZ_ASSERT(sharedSurface);
+
+    Maybe<wr::ExternalImageId> extId =
+      SharedSurfacesChild::GetExternalId(sharedSurface);
+    if (extId && extId.ref() == aId) {
+      break;
+    }
+  }
+
+  if (i < mPendingRelease.size()) {
+    while (true) {
+      mPendingRelease.pop_front();
+      if (i == 0) {
+        break;
+      }
+      --i;
+    }
+  }
+}
+
 nsresult
 SharedSurfacesAnimation::SetCurrentFrame(SourceSurface* aParentSurface,
                                          SourceSurfaceSharedData* aSurface,
@@ -508,6 +536,7 @@ SharedSurfacesAnimation::SetCurrentFrame(SourceSurface* aParentSurface,
 
   MOZ_ASSERT(data);
   mId = data->Id();
+  mPendingRelease.push_back(aParentSurface);
 
   auto i = mKeys.Length();
   while (i > 0) {
@@ -548,6 +577,7 @@ SharedSurfacesAnimation::UpdateKey(SourceSurface* aParentSurface,
   if (mId.mHandle != data->Id().mHandle) {
     ClearKeys();
     mId = data->Id();
+    mPendingRelease.push_back(aParentSurface);
   }
 
   aKey = SharedSurfacesChild::SharedUserData::UpdateKey(aManager,

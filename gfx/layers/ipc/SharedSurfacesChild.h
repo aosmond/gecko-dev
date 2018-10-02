@@ -8,6 +8,7 @@
 #define MOZILLA_GFX_SHAREDSURFACESCHILD_H
 
 #include <stdint.h>                     // for uint32_t, uint64_t
+#include <deque>                        // for deque
 #include "mozilla/Attributes.h"         // for override
 #include "mozilla/Maybe.h"              // for Maybe
 #include "mozilla/RefPtr.h"             // for already_AddRefed
@@ -232,10 +233,14 @@ public:
                      wr::IpcResourceUpdateQueue& aResources,
                      wr::ImageKey& aKey);
 
+  void ReleasePreviousFrame(const wr::ExternalImageId& aId);
+
 private:
   ~SharedSurfacesAnimation() override;
 
   void RemoveKey(const SharedSurfacesChild::ImageKeyData& aKeyData) override;
+
+  std::deque<RefPtr<gfx::SourceSurface>> mPendingRelease;
 };
 
 } // namespace layers
